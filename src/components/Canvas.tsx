@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import type { Point, Shape } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { createShapeId } from '../types';
@@ -22,6 +22,9 @@ interface CanvasProps {
   screenToWorld: (point: Point) => Point;
 }
 
+// Type for drag update function (optimized approach)
+type DragUpdateFn = (dx: number, dy: number) => void;
+
 export function Canvas({
   canvasRef,
   shapes,
@@ -43,10 +46,18 @@ export function Canvas({
   const engineRef = useRef<CanvasEngine | null>(null);
   const startPointRef = useRef<Point | null>(null);
   const currentShapeRef = useRef<Shape | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false);
   const lastPanPointRef = useRef<Point | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isPanningRef.current = isPanning;
+  }, [isPanning]);
   const dragStartRef = useRef<Point | null>(null);
   const selectedShapesStartRef = useRef<Map<string, Point>>(new Map());
+  // OPTIMIZED: Pre-computed drag update functions
+  const dragUpdateFnsRef = useRef<Map<string, DragUpdateFn>>(new Map());
   const isDraggingRef = useRef(isDragging);
   const isDrawingRef = useRef(isDrawing);
   const toolRef = useRef(tool);
@@ -156,6 +167,7 @@ export function Canvas({
         });
       case 'image':
       case 'audio':
+      case 'text':
         return (
           point.x >= shape.bounds.x &&
           point.x <= shape.bounds.x + shape.bounds.width &&
@@ -166,6 +178,89 @@ export function Canvas({
         return false;
     }
   };
+
+  // OPTIMIZED: Create drag update function for a shape
+  const createDragUpdateFn = useCallback(
+    (shape: Shape, startPos: Point): DragUpdateFn => {
+      // Capture original values at creation time to avoid re-renders affecting closure
+      const id = shape.id;
+      const originalBounds = shape.bounds;
+
+      switch (shape.type) {
+        case 'circle': {
+          const originalCenter = shape.center;
+          return (dx: number, dy: number) => {
+            onShapeUpdate(id, {
+              center: {
+                x: originalCenter.x + dx,
+                y: originalCenter.y + dy,
+              },
+              bounds: {
+                ...originalBounds,
+                x: startPos.x + dx,
+                y: startPos.y + dy,
+              },
+            });
+          };
+        }
+
+        case 'line': {
+          const originalStart = shape.start;
+          const originalEnd = shape.end;
+          return (dx: number, dy: number) => {
+            onShapeUpdate(id, {
+              start: {
+                x: originalStart.x + dx,
+                y: originalStart.y + dy,
+              },
+              end: {
+                x: originalEnd.x + dx,
+                y: originalEnd.y + dy,
+              },
+              bounds: {
+                ...originalBounds,
+                x: startPos.x + dx,
+                y: startPos.y + dy,
+              },
+            });
+          };
+        }
+
+        case 'freehand': {
+          const originalPoints = shape.points;
+          return (dx: number, dy: number) => {
+            onShapeUpdate(id, {
+              points: originalPoints.map((p) => ({
+                x: p.x + dx,
+                y: p.y + dy,
+              })),
+              bounds: {
+                ...originalBounds,
+                x: startPos.x + dx,
+                y: startPos.y + dy,
+              },
+            });
+          };
+        }
+
+        case 'rectangle':
+        case 'image':
+        case 'audio':
+        case 'text':
+        default:
+          return (dx: number, dy: number) => {
+            onShapeUpdate(id, {
+              bounds: {
+                ...originalBounds,
+                x: startPos.x + dx,
+                y: startPos.y + dy,
+              },
+            });
+          };
+      }
+    },
+    [onShapeUpdate]
+  );
 
   // Toggle audio playback
   const toggleAudio = useCallback(
@@ -188,8 +283,8 @@ export function Canvas({
         audio.pause();
         onShapeUpdate(shape.id, { isPlaying: false });
       } else {
-        audio.play().catch((err) => {
-          console.error('Failed to play audio:', err);
+        audio.play().catch(() => {
+          // Silent fail
         });
         onShapeUpdate(shape.id, { isPlaying: true });
       }
@@ -205,7 +300,7 @@ export function Canvas({
 
       // Middle mouse or Space + drag for panning
       if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
-        isPanningRef.current = true;
+        setIsPanning(true);
         lastPanPointRef.current = screenPoint;
         return;
       }
@@ -213,7 +308,7 @@ export function Canvas({
       // Left click for tools
       if (e.button === 0) {
         if (toolRef.current === 'pan') {
-          isPanningRef.current = true;
+          setIsPanning(true);
           lastPanPointRef.current = screenPoint;
           return;
         } else if (toolRef.current === 'select') {
@@ -234,16 +329,17 @@ export function Canvas({
             }
             onDraggingChange(true);
             dragStartRef.current = worldPoint;
-            // Store initial positions of selected shapes
-            selectedShapesStartRef.current = new Map(
-              selectedIdsRef.current.map((id) => {
-                const shape = shapesRef.current.find((s) => s.id === id);
-                if (shape) {
-                  return [id, { x: shape.bounds.x, y: shape.bounds.y }];
-                }
-                return [id, { x: 0, y: 0 }];
-              })
-            );
+
+            // OPTIMIZED: Pre-compute drag update functions
+            dragUpdateFnsRef.current.clear();
+            selectedIdsRef.current.forEach((id) => {
+              const shape = shapesRef.current.find((s) => s.id === id);
+              if (shape) {
+                const startPos = { x: shape.bounds.x, y: shape.bounds.y };
+                selectedShapesStartRef.current.set(id, startPos);
+                dragUpdateFnsRef.current.set(id, createDragUpdateFn(shape, startPos));
+              }
+            });
           } else {
             onSelectionChange([]);
           }
@@ -270,6 +366,31 @@ export function Canvas({
           if (clickedShape) {
             onShapeDelete(clickedShape.id);
           }
+        } else if (toolRef.current === 'text') {
+          // Create text shape at click position
+          const newShape: Shape = {
+            id: createShapeId(),
+            type: 'text',
+            bounds: {
+              x: worldPoint.x,
+              y: worldPoint.y,
+              width: 200,
+              height: 100,
+            },
+            text: 'Double-click to edit',
+            fontSize: styleRef.current.fontSize,
+            fontFamily: styleRef.current.fontFamily,
+            fontWeight: styleRef.current.fontWeight,
+            fontStyle: styleRef.current.fontStyle,
+            textAlign: styleRef.current.textAlign,
+            style: { ...styleRef.current },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          onShapeAdd(newShape);
+          onSelectionChange([newShape.id]);
+          // Switch back to select tool after adding text
+          // The parent component should handle this
         }
       }
     },
@@ -280,8 +401,10 @@ export function Canvas({
       onDrawingChange,
       onShapeDelete,
       onShapeUpdate,
+      onShapeAdd,
       toggleAudio,
       getPointerPoint,
+      createDragUpdateFn,
     ]
   );
 
@@ -305,20 +428,9 @@ export function Canvas({
           const dx = worldPoint.x - dragStartRef.current.x;
           const dy = worldPoint.y - dragStartRef.current.y;
 
-          selectedIdsRef.current.forEach((id) => {
-            const startPos = selectedShapesStartRef.current.get(id);
-            if (startPos) {
-              const shape = shapesRef.current.find((s) => s.id === id);
-              if (shape) {
-                onShapeUpdate(id, {
-                  bounds: {
-                    ...shape.bounds,
-                    x: startPos.x + dx,
-                    y: startPos.y + dy,
-                  },
-                });
-              }
-            }
+          // OPTIMIZED: Use pre-computed drag update functions
+          dragUpdateFnsRef.current.forEach((updateFn) => {
+            updateFn(dx, dy);
           });
         }
       } else if (isDrawingRef.current) {
@@ -350,7 +462,7 @@ export function Canvas({
         }
       }
     },
-    [screenToWorld, onPan, onShapeUpdate, render, getPointerPoint]
+    [screenToWorld, onPan, render, getPointerPoint]
   );
 
   const handlePointerUp = useCallback(
@@ -358,7 +470,7 @@ export function Canvas({
       e.preventDefault();
 
       if (isPanningRef.current) {
-        isPanningRef.current = false;
+        setIsPanning(false);
         lastPanPointRef.current = null;
         return;
       }
@@ -367,6 +479,7 @@ export function Canvas({
         onDraggingChange(false);
         dragStartRef.current = null;
         selectedShapesStartRef.current.clear();
+        dragUpdateFnsRef.current.clear();
       } else if (isDrawingRef.current) {
         onDrawingChange(false);
         if (currentShapeRef.current) {
@@ -417,7 +530,7 @@ export function Canvas({
           tool === 'select'
             ? 'default'
             : tool === 'pan'
-              ? isPanningRef.current
+              ? isPanning
                 ? 'grabbing'
                 : 'grab'
               : tool === 'eraser'

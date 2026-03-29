@@ -47,7 +47,7 @@ export function AudioUploadDialog({ isOpen, onClose, onAudioAdd, style }: AudioU
       onClose();
       setIsLoading(false);
       setDuration(null);
-    } catch (err) {
+    } catch {
       setError('Failed to process audio file');
       setIsLoading(false);
     }
@@ -103,7 +103,7 @@ export function AudioUploadDialog({ isOpen, onClose, onAudioAdd, style }: AudioU
       setIsLoading(false);
       setDuration(null);
       setUrl('');
-    } catch (err) {
+    } catch {
       setError('Failed to load audio from URL');
       setIsLoading(false);
     }

@@ -1,6 +1,7 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import type { Point, Shape, ShapeStyle, EditorState } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
+import { useWorkspaceStore } from '../stores/workspaceStore';
 
 interface HistoryState {
   shapes: Shape[];
@@ -32,7 +33,7 @@ interface UseCanvasReturn {
 
 const MAX_HISTORY_SIZE = 50;
 
-const initialEditorState: EditorState = {
+const defaultEditorState: EditorState = {
   tool: 'select',
   selectedShapeIds: [],
   camera: { x: 0, y: 0, zoom: 1 },
@@ -45,23 +46,82 @@ const initialEditorState: EditorState = {
     strokeStyle: 'solid',
     fillStyle: 'none',
     opacity: 1,
+    fontSize: 16,
+    fontFamily: 'sans-serif',
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    textAlign: 'left',
   },
 };
 
-export function useCanvas(): UseCanvasReturn {
+export function useCanvas(workspaceId: string): UseCanvasReturn {
+  const workspaceStore = useWorkspaceStore();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
+  const previousWorkspaceIdRef = useRef(workspaceId);
+  const isFirstRenderRef = useRef(true);
+  const currentShapeRef = useRef<Shape | null>(null);
+
+  // Get current workspace data
+  const workspace = workspaceStore.getWorkspace(workspaceId);
+
+  // Compute initial state only when workspaceId changes
+  const initialData = useMemo(
+    () => ({
+      shapes: workspace?.shapes || [],
+      editorState: workspace?.state || defaultEditorState,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspaceId]
+  );
 
   // History management
   const [past, setPast] = useState<HistoryState[]>([]);
-  const [present, setPresent] = useState<HistoryState>({
-    shapes: [],
-    editorState: initialEditorState,
-  });
+  const [present, setPresent] = useState<HistoryState>(initialData);
   const [future, setFuture] = useState<HistoryState[]>([]);
 
   const shapes = present.shapes;
   const editorState = present.editorState;
+
+  // Handle workspace switching
+  useEffect(() => {
+    // Skip on first render since initialData is already set
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      previousWorkspaceIdRef.current = workspaceId;
+      return;
+    }
+
+    // Only reset if workspaceId actually changed
+    if (workspaceId !== previousWorkspaceIdRef.current) {
+      const newWorkspace = workspaceStore.getWorkspace(workspaceId);
+      const newShapes = newWorkspace?.shapes || [];
+      const newState = newWorkspace?.state || defaultEditorState;
+
+      // Use requestAnimationFrame to defer state updates to next frame
+      requestAnimationFrame(() => {
+        setPast([]);
+        setPresent({ shapes: newShapes, editorState: newState });
+        setFuture([]);
+        previousWorkspaceIdRef.current = workspaceId;
+      });
+    }
+  }, [workspaceId, workspaceStore]);
+
+  // Auto-save to workspace store
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      workspaceStore.updateWorkspaceShapes(workspaceId, shapes);
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [shapes, workspaceId, workspaceStore]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      workspaceStore.updateWorkspaceState(workspaceId, editorState);
+    }, 100);
+    return () => clearTimeout(timeoutId);
+  }, [editorState, workspaceId, workspaceStore]);
 
   // Helper to save current state to history
   const saveToHistory = useCallback(
@@ -96,10 +156,15 @@ export function useCanvas(): UseCanvasReturn {
       engine.drawShape(shape, isSelected);
     });
 
+    // Draw preview shape while drawing
+    if (currentShapeRef.current) {
+      engine.drawShape(currentShapeRef.current, false);
+    }
+
     engine.restoreCamera();
   }, [shapes, editorState.camera, editorState.selectedShapeIds]);
 
-  // Initialize canvas engine
+  // Initialize engine
   useEffect(() => {
     if (canvasRef.current && !engineRef.current) {
       engineRef.current = new CanvasEngine(canvasRef.current);

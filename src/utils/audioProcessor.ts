@@ -1,6 +1,16 @@
+interface WindowWithWebkitAudioContext extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 export async function extractWaveform(audioSrc: string, numBars: number = 50): Promise<number[]> {
   return new Promise((resolve, reject) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AudioContextClass =
+      window.AudioContext || (window as WindowWithWebkitAudioContext).webkitAudioContext;
+    if (!AudioContextClass) {
+      reject(new Error('AudioContext not supported'));
+      return;
+    }
+    const audioContext = new AudioContextClass();
 
     fetch(audioSrc)
       .then((response) => response.arrayBuffer())

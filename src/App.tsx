@@ -1,19 +1,33 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useCanvas } from './hooks/useCanvas';
 import { useKeyboard } from './hooks/useKeyboard';
 import { Toolbar } from './components/Toolbar';
 import { PropertiesPanel } from './components/PropertiesPanel';
 import { ZoomControls } from './components/ZoomControls';
 import { Canvas } from './components/Canvas';
+import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { ImageUploadDialog } from './components/ImageUploadDialog';
 import { AudioUploadDialog } from './components/AudioUploadDialog';
+import { useWorkspaceStore } from './stores/workspaceStore';
 import type { ToolType, Shape, ShapeStyle } from './types';
 import { createShapeId } from './types';
 import './App.css';
 
+const MAX_WORKSPACES = 10;
+
 function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showAudioDialog, setShowAudioDialog] = useState(false);
+  const workspaceStore = useWorkspaceStore();
+
+  // Initialize with default workspace if none exists
+  useEffect(() => {
+    if (workspaceStore.workspaces.length === 0) {
+      workspaceStore.addWorkspace(); // Creates "Workspace 1"
+    }
+  }, []);
+
+  const activeWorkspace = workspaceStore.getActiveWorkspace();
 
   const {
     canvasRef,
@@ -36,7 +50,24 @@ function App() {
     redo,
     canUndo,
     canRedo,
-  } = useCanvas();
+  } = useCanvas(activeWorkspace.id);
+
+  // Check if any selected shape is text
+  const hasTextSelection = shapes.some(
+    (s) => editorState.selectedShapeIds.includes(s.id) && s.type === 'text'
+  );
+
+  // Track previous shapes count to detect when text is added
+  const prevShapesLengthRef = useRef(shapes.length);
+
+  // Switch back to select tool after adding text
+  useEffect(() => {
+    if (editorState.tool === 'text' && shapes.length > prevShapesLengthRef.current) {
+      // Text was added, switch back to select
+      setEditorState((prev) => ({ ...prev, tool: 'select' }));
+    }
+    prevShapesLengthRef.current = shapes.length;
+  }, [shapes.length, editorState.tool, setEditorState]);
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -137,6 +168,26 @@ function App() {
     [addShape, setEditorState]
   );
 
+  const handleAddWorkspace = useCallback(() => {
+    if (workspaceStore.workspaces.length < MAX_WORKSPACES) {
+      workspaceStore.addWorkspace();
+    }
+  }, [workspaceStore]);
+
+  const handleDeleteWorkspace = useCallback(
+    (id: string) => {
+      workspaceStore.deleteWorkspace(id);
+    },
+    [workspaceStore]
+  );
+
+  const handleRenameWorkspace = useCallback(
+    (id: string, name: string) => {
+      workspaceStore.renameWorkspace(id, name);
+    },
+    [workspaceStore]
+  );
+
   // Use centralized keyboard management
   useKeyboard({
     undo,
@@ -216,9 +267,23 @@ function App() {
             onZoomOut={zoomOut}
             onReset={resetZoom}
           />
+
+          <WorkspaceTabs
+            workspaces={workspaceStore.workspaces}
+            activeId={workspaceStore.activeWorkspaceId}
+            onSwitch={workspaceStore.switchWorkspace}
+            onAdd={handleAddWorkspace}
+            onDelete={handleDeleteWorkspace}
+            onRename={handleRenameWorkspace}
+            maxWorkspaces={MAX_WORKSPACES}
+          />
         </div>
 
-        <PropertiesPanel style={editorState.shapeStyle} onChange={updateShapeStyle} />
+        <PropertiesPanel
+          style={editorState.shapeStyle}
+          onChange={updateShapeStyle}
+          hasTextSelection={hasTextSelection}
+        />
       </main>
 
       <ImageUploadDialog

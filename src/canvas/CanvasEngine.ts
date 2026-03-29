@@ -8,6 +8,7 @@ import type {
   Bounds,
   CameraState,
   ShapeStyle,
+  TextShape,
 } from '../types';
 
 export class CanvasEngine {
@@ -111,6 +112,9 @@ export class CanvasEngine {
         break;
       case 'audio':
         this.drawAudio(shape);
+        break;
+      case 'text':
+        this.drawText(shape);
         break;
     }
 
@@ -253,6 +257,67 @@ export class CanvasEngine {
     this.ctx.fillText(timeText, x + width - 5, y + height - 5);
   }
 
+  private drawText(shape: TextShape) {
+    const { x, y, width, height } = shape.bounds;
+
+    // Set font properties
+    this.ctx.font = `${shape.fontStyle} ${shape.fontWeight} ${shape.fontSize}px ${shape.fontFamily}`;
+    this.ctx.fillStyle = shape.style.color;
+    this.ctx.textAlign = shape.textAlign;
+    this.ctx.textBaseline = 'top';
+    this.ctx.globalAlpha = shape.style.opacity;
+
+    // Calculate line height
+    const lineHeight = shape.fontSize * 1.2;
+
+    // Word wrap function
+    const wrapText = (text: string, maxWidth: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let currentLine = words[0];
+
+      for (let i = 1; i < words.length; i++) {
+        const word = words[i];
+        const testLine = currentLine + ' ' + word;
+        const metrics = this.ctx.measureText(testLine);
+        const testWidth = metrics.width;
+
+        if (testWidth > maxWidth && i > 0) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      lines.push(currentLine);
+      return lines;
+    };
+
+    // Handle multiline text with wrapping
+    const lines = shape.text.includes('\n')
+      ? shape.text.split('\n').flatMap((line) => wrapText(line, width - 10))
+      : wrapText(shape.text, width - 10);
+
+    // Draw each line
+    lines.forEach((line, index) => {
+      // Calculate x position based on text alignment
+      let lineX = x;
+      if (shape.textAlign === 'center') {
+        lineX = x + width / 2;
+      } else if (shape.textAlign === 'right') {
+        lineX = x + width;
+      }
+
+      // Only draw if within bounds
+      if (index * lineHeight < height) {
+        this.ctx.fillText(line, lineX, y + index * lineHeight);
+      }
+    });
+
+    // Reset global alpha
+    this.ctx.globalAlpha = 1;
+  }
+
   private drawSelectionIndicator(shape: Shape) {
     const bounds = this.getShapeBounds(shape);
     const padding = 4;
@@ -317,6 +382,7 @@ export class CanvasEngine {
       }
       case 'image':
       case 'audio':
+      case 'text':
         return shape.bounds;
     }
   }
@@ -442,6 +508,8 @@ export class CanvasEngine {
       case 'image':
       case 'audio':
         throw new Error(`Cannot create ${type} shape from points. Use file upload instead.`);
+      case 'text':
+        throw new Error('Cannot create text shape from points. Use text tool instead.');
     }
   }
 }

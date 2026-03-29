@@ -57,7 +57,7 @@ export function ImageUploadDialog({ isOpen, onClose, onImageAdd, style }: ImageU
         img.src = src;
       };
       reader.readAsDataURL(file);
-    } catch (err) {
+    } catch {
       setError('Failed to read file');
       setIsLoading(false);
     }
@@ -86,7 +86,7 @@ export function ImageUploadDialog({ isOpen, onClose, onImageAdd, style }: ImageU
         setIsLoading(false);
       };
       img.src = url;
-    } catch (err) {
+    } catch {
       setError('Failed to load image');
       setIsLoading(false);
     }

@@ -7,7 +7,8 @@ export type ToolType =
   | 'freehand'
   | 'eraser'
   | 'image'
-  | 'audio';
+  | 'audio'
+  | 'text';
 
 export interface Point {
   x: number;
@@ -28,11 +29,17 @@ export interface ShapeStyle {
   strokeStyle: 'solid' | 'dashed' | 'dotted';
   fillStyle: 'none' | 'solid' | 'pattern';
   opacity: number;
+  // Text-specific properties
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textAlign: 'left' | 'center' | 'right';
 }
 
 export interface BaseShape {
   id: string;
-  type: 'rectangle' | 'circle' | 'line' | 'freehand' | 'image' | 'audio';
+  type: 'rectangle' | 'circle' | 'line' | 'freehand' | 'image' | 'audio' | 'text';
   bounds: Bounds;
   style: ShapeStyle;
   createdAt: number;
@@ -78,13 +85,24 @@ export interface AudioShape extends BaseShape {
   loop?: boolean;
 }
 
+export interface TextShape extends BaseShape {
+  type: 'text';
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textAlign: 'left' | 'center' | 'right';
+}
+
 export type Shape =
   | RectangleShape
   | CircleShape
   | LineShape
   | FreehandShape
   | ImageShape
-  | AudioShape;
+  | AudioShape
+  | TextShape;
 
 export interface CameraState {
   x: number;
@@ -113,6 +131,12 @@ export const DEFAULT_STYLE: ShapeStyle = {
   strokeStyle: 'solid',
   fillStyle: 'none',
   opacity: 1,
+  // Text defaults
+  fontSize: 16,
+  fontFamily: 'sans-serif',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  textAlign: 'left',
 };
 
 export const COLORS = [
@@ -130,6 +154,16 @@ export const COLORS = [
 ] as const;
 
 export const STROKE_WIDTHS = [1, 2, 4, 8, 12] as const;
+
+export const FONT_SIZES = [12, 14, 16, 18, 20, 24, 32, 48] as const;
+export const FONT_FAMILIES = [
+  'sans-serif',
+  'serif',
+  'monospace',
+  'Arial',
+  'Georgia',
+  'Times New Roman',
+] as const;
 
 export function createShapeId(): string {
   return `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -174,6 +208,15 @@ export function isPointInShape(point: Point, shape: Shape): boolean {
         const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2);
         return d <= 10;
       });
+    case 'image':
+    case 'audio':
+    case 'text':
+      return (
+        point.x >= shape.bounds.x &&
+        point.x <= shape.bounds.x + shape.bounds.width &&
+        point.y >= shape.bounds.y &&
+        point.y <= shape.bounds.y + shape.bounds.height
+      );
     default:
       return false;
   }

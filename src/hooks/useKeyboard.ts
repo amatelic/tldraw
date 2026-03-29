@@ -109,6 +109,11 @@ export function useKeyboard(actions: KeyboardActions) {
           handler: () => actions.setTool('audio'),
           description: 'Audio tool',
         },
+        {
+          key: 't',
+          handler: () => actions.setTool('text'),
+          description: 'Text tool',
+        },
       ];
 
       for (const shortcut of shortcuts) {
@@ -145,6 +150,7 @@ export const keyboardShortcuts = [
   { keys: ['E'], description: 'Eraser tool' },
   { keys: ['I'], description: 'Image tool' },
   { keys: ['A'], description: 'Audio tool' },
+  { keys: ['T'], description: 'Text tool' },
   { keys: ['Ctrl', 'Z'], description: 'Undo' },
   { keys: ['Ctrl', 'Y'], description: 'Redo' },
   { keys: ['Delete'], description: 'Delete selected' },
