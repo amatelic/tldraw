@@ -32,6 +32,84 @@ npx vitest run src/path/to/test.test.ts
 npx vitest run --reporter=verbose
 ```
 
+## Testing Requirements
+
+### Test Types by Task Category
+
+Choose the appropriate test type based on what you're implementing:
+
+**Unit Tests** (Required for):
+- Utility functions (`src/utils/`)
+- Store actions and state logic (`src/stores/`)
+- Type guards and validation functions
+- Business logic without UI dependencies
+- Math calculations and data transformations
+
+**Integration Tests** (Required for):
+- Custom hooks (`src/hooks/`)
+- Store interactions between multiple slices
+- Component logic with state management
+- Multi-step operations
+
+**E2E/Component Tests** (Required when):
+- Task acceptance criteria explicitly requires E2E tests
+- Complex user workflows (drawing, undo/redo, selections)
+- Dialog and modal interactions
+- Feature-level acceptance testing
+
+### Test File Organization
+
+- Co-locate tests with source files
+- Naming: `<source>.test.ts` or `<source>.spec.ts`
+- Examples:
+  - `src/utils/audioProcessor.ts` → `src/utils/audioProcessor.test.ts`
+  - `src/stores/workspaceStore.ts` → `src/stores/workspaceStore.test.ts`
+  - `src/hooks/useCanvas.ts` → `src/hooks/useCanvas.test.ts`
+
+### Testing Standards
+
+1. **Minimum Coverage**: 80% for new code
+2. **Test Naming**: Describe behavior clearly (e.g., `should calculate correct bounds for rectangle`)
+3. **Arrange-Act-Assert**: Structure tests clearly
+4. **Mock External Dependencies**: Use mocks for browser APIs, localStorage, etc.
+5. **Test Edge Cases**: Include error cases and boundary conditions
+
+### Test Template
+
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { myFunction } from './myModule';
+
+describe('myFunction', () => {
+  it('should return expected result for valid input', () => {
+    // Arrange
+    const input = { x: 10, y: 20 };
+    
+    // Act
+    const result = myFunction(input);
+    
+    // Assert
+    expect(result).toBe(30);
+  });
+  
+  it('should handle edge case', () => {
+    // Test edge case
+  });
+  
+  it('should throw error for invalid input', () => {
+    // Test error handling
+  });
+});
+```
+
+### Pre-commit Checklist
+
+Before committing, ensure:
+- [ ] All new functions have corresponding tests
+- [ ] Tests pass: `npx vitest run`
+- [ ] Coverage meets 80% threshold
+- [ ] No test warnings or errors
+
 ## Tech Stack
 
 - **Framework**: React 19 + TypeScript 5.9
@@ -153,7 +231,6 @@ src/
 
 ## Notes
 
-- No test framework is currently configured
 - Port 5175 is hardcoded in Vite config
 - Uses localStorage for persistence via Zustand
 - Canvas rendering uses custom `CanvasEngine` class
