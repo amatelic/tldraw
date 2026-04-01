@@ -157,3 +157,40 @@ src/
 - Port 5175 is hardcoded in Vite config
 - Uses localStorage for persistence via Zustand
 - Canvas rendering uses custom `CanvasEngine` class
+
+## Active Tasks Workflow
+
+See [specs/SPECS.md](./specs/SPECS.md) for active tasks and [specs/TASK_WORKFLOW.md](./specs/TASK_WORKFLOW.md) for detailed workflow.
+
+### Quick Task Commands
+
+```bash
+# List all active (not started) tasks
+grep -A 2 "^### Task" specs/SPECS.md | grep -E "(Task|Status:)" | grep -B 1 "🔴 Not Started"
+
+# Count remaining tasks
+grep -c "Status: 🔴 Not Started" specs/SPECS.md
+```
+
+## Task Completion & Commit Workflow
+
+When you finish a task:
+
+1. **Mark task complete in SPECS.md** - Change status to ✅ Completed
+2. **Run all checks**:
+   ```bash
+   npx vitest run
+   npm run lint
+   npm run build
+   ```
+3. **Stage changes**: `git add .`
+4. **Create commit with descriptive message** following format:
+   ```
+   <type>: <task name> - <brief description>
+   
+   - Implemented: <what was done>
+   - Tests: <test coverage>
+   - Closes Task #<number>
+   ```
+5. **Show commit to user for approval** - Do NOT push without user confirmation
+6. **After approval**: Push branch and create PR (if applicable)
