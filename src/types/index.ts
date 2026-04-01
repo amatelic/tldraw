@@ -117,6 +117,7 @@ export interface EditorState {
   isDragging: boolean;
   isDrawing: boolean;
   shapeStyle: ShapeStyle;
+  editingTextId: string | null;
 }
 
 export interface CanvasState {

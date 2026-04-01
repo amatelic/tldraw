@@ -5,42 +5,75 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 ## Active Tasks
 
 ### Task 1: Add Vitest Testing Framework
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Set up Vitest testing framework and create basic test infrastructure
 **Acceptance Criteria**:
-- Install vitest and @testing-library/react as dev dependencies
-- Create `vitest.config.ts` configuration file
-- Add test scripts to package.json
-- Create example test file `src/utils/audioProcessor.test.ts`
-- All tests should pass with `npm test`
+- ✅ Install vitest and @testing-library/react as dev dependencies
+- ✅ Create `vitest.config.ts` configuration file
+- ✅ Add test scripts to package.json
+- ✅ Create example test file `src/utils/audioProcessor.test.ts`
+- ✅ All tests should pass with `npm test`
 
-**Files to Modify**:
-- `package.json` - add vitest dependencies and scripts
-- `vite.config.ts` - add vitest configuration
-- Create `src/utils/audioProcessor.test.ts`
+**Files Modified**:
+- `package.json` - added vitest dependencies and scripts
+- `vitest.config.ts` - created Vitest configuration
+- `src/test/setup.ts` - created test setup file
+- `src/utils/audioProcessor.test.ts` - created comprehensive test suite (11 tests, 100% coverage)
+- `tsconfig.app.json` - excluded test files from build
+
+**Notes**:
+- Installed: vitest, @testing-library/react, @testing-library/jest-dom, jsdom
+- Added test commands: `npm test`, `npm run test:watch`, `npm run test:coverage`
+- Tests cover both formatDuration (4 tests) and extractWaveform (7 tests)
+- Mocked AudioContext and fetch APIs for browser environment
 
 ---
 
 ### Task 2: Implement Text Shape In-Place Editing
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Currently text tool adds a new shape each time. Allow editing existing text shapes by double-clicking.
+
 **Acceptance Criteria**:
-- Double-clicking a text shape enters edit mode
-- User can modify the text content inline
-- Pressing Enter or clicking outside saves changes
-- Pressing Escape cancels editing
-- Text shape updates with new content
-- Undo/redo works with text edits
+- ✅ Double-clicking a text shape enters edit mode
+- ✅ User can modify the text content inline
+- ✅ Pressing Enter or clicking outside saves changes
+- ✅ Pressing Escape cancels editing
+- ✅ Text shape updates with new content
+- ✅ Undo/redo works with text edits
 
-**Files to Modify**:
-- `src/types/index.ts` - may need to add editing state
-- `src/components/Canvas.tsx` - handle double-click events
-- `src/hooks/useCanvas.ts` - add text editing methods
-- `src/App.tsx` - manage edit mode state
+**Detailed Specification**:
+1. **Multiline Support**: Use `<textarea>` element to support `\n` newlines in text
+2. **Auto-grow Behavior**: Shape bounds (width and height) automatically expand as user types to accommodate content
+3. **Empty Text Handling**: If text becomes empty when committing changes, delete the shape entirely
+4. **Click-Switching**: Clicking another text shape while editing switches edit focus to that shape (commits current, enters edit on new)
+5. **Styling Match**: The textarea overlay must match canvas font rendering (font-family, font-size, font-weight, font-style, text-align, color)
+6. **Camera Transform**: Handle zoom/pan correctly - textarea positioned using `worldToScreen()` math
+7. **Default Text**: Change placeholder from "Double-click to edit" to empty string ("")
 
-**Related Bug**: Issue 1 in PROGRESS.md - Text tool auto-switches too quickly
+**Files Modified**:
+- `src/types/index.ts` - added `editingTextId: string | null` to EditorState
+- `src/stores/workspaceStore.ts` - added `editingTextId` to WorkspaceState and createInitialState
+- `src/hooks/useCanvas.ts` - added text editing methods (startTextEdit, commitTextEdit, cancelTextEdit) and worldToScreen function
+- `src/components/Canvas.tsx` - implemented double-click handler, textarea overlay, auto-grow, keyboard shortcuts
+- `src/App.tsx` - removed auto-switch behavior, added text editing props to Canvas
+
+**Files Created**:
+- `src/components/Canvas.text-editing.test.tsx` - comprehensive test suite (23 tests)
+
+**Test Coverage**: 23 tests covering all functionality:
+- Double-click to enter edit mode
+- Textarea styling matches canvas
+- Auto-grow behavior (width and height)
+- Keyboard interactions (Enter, Shift+Enter, Escape)
+- Click outside to commit
+- Empty text deletion
+- Click-switching between text shapes
+- Camera transform handling
+- Undo/Redo integration
+- Focus management
+- Default text behavior
 
 ---
 

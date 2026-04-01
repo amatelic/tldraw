@@ -23,6 +23,16 @@ export interface KeyboardActions {
 export function useKeyboard(actions: KeyboardActions) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in input, textarea, or contenteditable
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
       const shortcuts: KeyboardShortcut[] = [
         {
           key: 'z',

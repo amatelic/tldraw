@@ -20,6 +20,7 @@ interface UseCanvasReturn {
   selectShapes: (ids: string[]) => void;
   clearSelection: () => void;
   screenToWorld: (point: Point) => Point;
+  worldToScreen: (point: Point) => Point;
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
@@ -29,6 +30,9 @@ interface UseCanvasReturn {
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  startTextEdit: (id: string) => void;
+  commitTextEdit: () => void;
+  cancelTextEdit: () => void;
 }
 
 const MAX_HISTORY_SIZE = 50;
@@ -52,6 +56,7 @@ const defaultEditorState: EditorState = {
     fontStyle: 'normal',
     textAlign: 'left',
   },
+  editingTextId: null,
 };
 
 export function useCanvas(workspaceId: string): UseCanvasReturn {
@@ -188,6 +193,14 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     (point: Point): Point => {
       if (!engineRef.current) return point;
       return engineRef.current.screenToWorld(point, editorState.camera);
+    },
+    [editorState.camera]
+  );
+
+  const worldToScreen = useCallback(
+    (point: Point): Point => {
+      if (!engineRef.current) return point;
+      return engineRef.current.worldToScreen(point, editorState.camera);
     },
     [editorState.camera]
   );
@@ -398,6 +411,42 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;
 
+  // Text editing methods
+  const startTextEdit = useCallback((id: string) => {
+    setPresent((prev) => ({
+      ...prev,
+      editorState: {
+        ...prev.editorState,
+        editingTextId: id,
+        selectedShapeIds: [id],
+      },
+    }));
+  }, []);
+
+  const commitTextEdit = useCallback(() => {
+    setPresent((prev) => {
+      // Save to history when committing text edit
+      saveToHistory(prev.shapes, prev.editorState);
+      return {
+        ...prev,
+        editorState: {
+          ...prev.editorState,
+          editingTextId: null,
+        },
+      };
+    });
+  }, [saveToHistory]);
+
+  const cancelTextEdit = useCallback(() => {
+    setPresent((prev) => ({
+      ...prev,
+      editorState: {
+        ...prev.editorState,
+        editingTextId: null,
+      },
+    }));
+  }, []);
+
   return {
     canvasRef,
     shapes,
@@ -415,6 +464,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     selectShapes,
     clearSelection,
     screenToWorld,
+    worldToScreen,
     zoomIn,
     zoomOut,
     resetZoom,
@@ -424,5 +474,8 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     redo,
     canUndo,
     canRedo,
+    startTextEdit,
+    commitTextEdit,
+    cancelTextEdit,
   };
 }

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import type { Point, Shape } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { createShapeId } from '../types';
@@ -12,6 +12,7 @@ interface CanvasProps {
   camera: { x: number; y: number; zoom: number };
   isDragging: boolean;
   isDrawing: boolean;
+  editingTextId: string | null;
   onShapeAdd: (shape: Shape) => void;
   onShapeUpdate: (id: string, updates: Partial<Shape>) => void;
   onShapeDelete: (id: string) => void;
@@ -20,6 +21,10 @@ interface CanvasProps {
   onDrawingChange: (drawing: boolean) => void;
   onPan: (dx: number, dy: number) => void;
   screenToWorld: (point: Point) => Point;
+  worldToScreen: (point: Point) => Point;
+  onTextEditStart: (id: string) => void;
+  onTextEditCommit: () => void;
+  onTextEditCancel: () => void;
 }
 
 // Type for drag update function (optimized approach)
@@ -34,6 +39,7 @@ export function Canvas({
   camera,
   isDragging,
   isDrawing,
+  editingTextId,
   onShapeAdd,
   onShapeUpdate,
   onShapeDelete,
@@ -42,6 +48,10 @@ export function Canvas({
   onDrawingChange,
   onPan,
   screenToWorld,
+  worldToScreen,
+  onTextEditStart,
+  onTextEditCommit,
+  onTextEditCancel,
 }: CanvasProps) {
   const engineRef = useRef<CanvasEngine | null>(null);
   const startPointRef = useRef<Point | null>(null);
@@ -49,11 +59,6 @@ export function Canvas({
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false);
   const lastPanPointRef = useRef<Point | null>(null);
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    isPanningRef.current = isPanning;
-  }, [isPanning]);
   const dragStartRef = useRef<Point | null>(null);
   const selectedShapesStartRef = useRef<Map<string, Point>>(new Map());
   // OPTIMIZED: Pre-computed drag update functions
@@ -65,7 +70,10 @@ export function Canvas({
   const shapesRef = useRef(shapes);
   const styleRef = useRef(style);
   const cameraRef = useRef(camera);
+  const editingTextIdRef = useRef(editingTextId);
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [originalText, setOriginalText] = useState<string>('');
 
   // Update refs when props change
   useEffect(() => {
@@ -76,7 +84,30 @@ export function Canvas({
     shapesRef.current = shapes;
     styleRef.current = style;
     cameraRef.current = camera;
-  }, [isDragging, isDrawing, tool, selectedIds, shapes, style, camera]);
+    editingTextIdRef.current = editingTextId;
+  }, [isDragging, isDrawing, tool, selectedIds, shapes, style, camera, editingTextId]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isPanningRef.current = isPanning;
+  }, [isPanning]);
+
+  // Compute editing shape directly from props
+  const editingShape = useMemo(() => {
+    if (!editingTextId) return null;
+    const shape = shapes.find((s) => s.id === editingTextId);
+    if (shape && shape.type === 'text') {
+      return shape as Extract<Shape, { type: 'text' }>;
+    }
+    return null;
+  }, [editingTextId, shapes]);
+
+  // Update original text when entering edit mode
+  useEffect(() => {
+    if (editingTextId && editingShape) {
+      setOriginalText(editingShape.text);
+    }
+  }, [editingTextId, editingShape]);
 
   // Render function - defined before use
   const render = useCallback(() => {
@@ -86,9 +117,14 @@ export function Canvas({
     engine.drawGrid(cameraRef.current);
     engine.applyCamera(cameraRef.current);
 
-    shapesRef.current.forEach((shape) => {
-      const isSelected = selectedIdsRef.current.includes(shape.id);
-      engine.drawShape(shape, isSelected);
+    // Use the shapes prop directly instead of ref to avoid stale data
+    shapes.forEach((shape) => {
+      const isSelected = selectedIds.includes(shape.id);
+      const isEditing = editingTextId === shape.id;
+      // Don't render the shape being edited (show textarea instead)
+      if (!isEditing) {
+        engine.drawShape(shape, isSelected);
+      }
     });
 
     // Draw preview shape while drawing
@@ -97,7 +133,7 @@ export function Canvas({
     }
 
     engine.restoreCamera();
-  }, []);
+  }, [shapes, selectedIds, editingTextId]);
 
   // Initialize engine
   useEffect(() => {
@@ -113,12 +149,17 @@ export function Canvas({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [render]);
+  }, [canvasRef, render]);
 
   // Re-render when shapes change
   useEffect(() => {
     render();
   }, [shapes, render]);
+
+  // Re-render when entering/exiting edit mode to hide/show text shapes
+  useEffect(() => {
+    render();
+  }, [editingTextId, render]);
 
   const getPointerPoint = useCallback(
     (e: React.PointerEvent): Point => {
@@ -298,6 +339,12 @@ export function Canvas({
       const screenPoint = getPointerPoint(e);
       const worldPoint = screenToWorld(screenPoint);
 
+      // If currently editing text, commit the changes
+      if (editingTextIdRef.current) {
+        onTextEditCommit();
+        return;
+      }
+
       // Middle mouse or Space + drag for panning
       if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
         setIsPanning(true);
@@ -367,7 +414,7 @@ export function Canvas({
             onShapeDelete(clickedShape.id);
           }
         } else if (toolRef.current === 'text') {
-          // Create text shape at click position
+          // Create text shape at click position with empty text
           const newShape: Shape = {
             id: createShapeId(),
             type: 'text',
@@ -377,7 +424,7 @@ export function Canvas({
               width: 200,
               height: 100,
             },
-            text: 'Double-click to edit',
+            text: '',
             fontSize: styleRef.current.fontSize,
             fontFamily: styleRef.current.fontFamily,
             fontWeight: styleRef.current.fontWeight,
@@ -389,8 +436,8 @@ export function Canvas({
           };
           onShapeAdd(newShape);
           onSelectionChange([newShape.id]);
-          // Switch back to select tool after adding text
-          // The parent component should handle this
+          // Immediately enter edit mode for new text shape
+          onTextEditStart(newShape.id);
         }
       }
     },
@@ -402,10 +449,34 @@ export function Canvas({
       onShapeDelete,
       onShapeUpdate,
       onShapeAdd,
+      onTextEditStart,
+      onTextEditCommit,
       toggleAudio,
       getPointerPoint,
       createDragUpdateFn,
     ]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      const screenPoint = getPointerPoint(e as unknown as React.PointerEvent);
+      const worldPoint = screenToWorld(screenPoint);
+
+      // Check if double-clicking on a text shape
+      const clickedShape = [...shapesRef.current]
+        .reverse()
+        .find((s) => isPointInShape(worldPoint, s));
+
+      if (clickedShape && clickedShape.type === 'text') {
+        // If already editing another text, commit it first
+        if (editingTextIdRef.current && editingTextIdRef.current !== clickedShape.id) {
+          onTextEditCommit();
+        }
+        onTextEditStart(clickedShape.id);
+      }
+    },
+    [screenToWorld, onTextEditStart, onTextEditCommit, getPointerPoint]
   );
 
   const handlePointerMove = useCallback(
@@ -516,27 +587,150 @@ export function Canvas({
     [onPan]
   );
 
+  // Handle textarea keyboard events
+  const handleTextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Stop propagation to prevent global keyboard shortcuts
+    e.stopPropagation();
+    
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      commitTextEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelTextEdit();
+    }
+  };
+
+  // Handle textarea changes with auto-grow
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (!editingShape) return;
+
+    const newText = e.target.value;
+
+    // Calculate new bounds based on text content
+    const engine = engineRef.current;
+    if (engine) {
+      const ctx = (engine as unknown as { ctx: CanvasRenderingContext2D }).ctx;
+      ctx.font = `${editingShape.fontStyle} ${editingShape.fontWeight} ${editingShape.fontSize}px ${editingShape.fontFamily}`;
+
+      const lines = newText.split('\n');
+      let maxWidth = 200; // Minimum width
+      let totalHeight = editingShape.fontSize * 1.2; // At least one line height
+
+      lines.forEach((line) => {
+        const metrics = ctx.measureText(line);
+        maxWidth = Math.max(maxWidth, metrics.width + 20); // Add padding
+        totalHeight += editingShape.fontSize * 1.2;
+      });
+
+      // Update shape with new text and bounds
+      onShapeUpdate(editingShape.id, {
+        text: newText,
+        bounds: {
+          ...editingShape.bounds,
+          width: maxWidth,
+          height: Math.max(100, totalHeight),
+        },
+      });
+    }
+  };
+
+  // Commit text edit
+  const commitTextEdit = () => {
+    if (!editingShape) return;
+
+    const trimmedText = editingShape.text.trim();
+
+    if (trimmedText === '') {
+      // Delete empty text shape
+      onShapeDelete(editingShape.id);
+    }
+
+    onTextEditCommit();
+  };
+
+  // Cancel text edit
+  const cancelTextEdit = () => {
+    if (!editingShape) return;
+
+    // Restore original text
+    onShapeUpdate(editingShape.id, {
+      text: originalText,
+    });
+
+    onTextEditCancel();
+  };
+
+  // Calculate textarea position and size
+  const getTextareaStyle = (): React.CSSProperties => {
+    if (!editingShape) return { display: 'none' };
+
+    const screenPos = worldToScreen({ x: editingShape.bounds.x, y: editingShape.bounds.y });
+
+    return {
+      position: 'absolute',
+      left: `${screenPos.x}px`,
+      top: `${screenPos.y}px`,
+      width: `${editingShape.bounds.width * camera.zoom}px`,
+      height: `${editingShape.bounds.height * camera.zoom}px`,
+      fontSize: `${editingShape.fontSize * camera.zoom}px`,
+      fontFamily: editingShape.fontFamily,
+      fontWeight: editingShape.fontWeight,
+      fontStyle: editingShape.fontStyle,
+      textAlign: editingShape.textAlign,
+      color: editingShape.style.color,
+      backgroundColor: 'transparent',
+      border: 'none',
+      outline: 'none',
+      resize: 'none',
+      overflow: 'hidden',
+      padding: '0',
+      margin: '0',
+      lineHeight: '1.2',
+      whiteSpace: 'pre-wrap',
+      wordWrap: 'break-word',
+      zIndex: 1000,
+    };
+  };
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="canvas"
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      onWheel={handleWheel}
-      style={{
-        cursor:
-          tool === 'select'
-            ? 'default'
-            : tool === 'pan'
-              ? isPanning
-                ? 'grabbing'
-                : 'grab'
-              : tool === 'eraser'
-                ? 'not-allowed'
-                : 'crosshair',
-      }}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <canvas
+        ref={canvasRef}
+        className="canvas"
+        onPointerDown={handlePointerDown}
+        onDoubleClick={handleDoubleClick}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        onWheel={handleWheel}
+        style={{
+          cursor:
+            tool === 'select'
+              ? 'default'
+              : tool === 'pan'
+                ? isPanning
+                  ? 'grabbing'
+                  : 'grab'
+                : tool === 'eraser'
+                  ? 'not-allowed'
+                  : 'crosshair',
+        }}
+      />
+      {editingShape && (
+        <textarea
+          ref={textareaRef}
+          value={editingShape.text}
+          onChange={handleTextChange}
+          onKeyDown={handleTextKeyDown}
+          onKeyUp={(e) => e.stopPropagation()}
+          onKeyPress={(e) => e.stopPropagation()}
+          style={getTextareaStyle()}
+          role="textbox"
+          aria-label="Edit text"
+          autoFocus
+        />
+      )}
+    </div>
   );
 }

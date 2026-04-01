@@ -10,6 +10,7 @@ export interface WorkspaceState {
   isDragging: boolean;
   isDrawing: boolean;
   shapeStyle: ShapeStyle;
+  editingTextId: string | null;
 }
 
 export interface Workspace {
@@ -49,6 +50,7 @@ const createInitialState = (): WorkspaceState => ({
   isDragging: false,
   isDrawing: false,
   shapeStyle: { ...DEFAULT_STYLE },
+  editingTextId: null,
 });
 
 const createNewWorkspace = (id: string, name: string): Workspace => ({

@@ -74,6 +74,44 @@ Choose the appropriate test type based on what you're implementing:
 4. **Mock External Dependencies**: Use mocks for browser APIs, localStorage, etc.
 5. **Test Edge Cases**: Include error cases and boundary conditions
 
+### Testing Functions with Browser Dependencies
+
+When testing functions that depend on browser APIs (AudioContext, Canvas, fetch, etc.):
+
+**Prefer extracting pure logic** - Separate browser-dependent code from pure data transformation logic:
+
+```typescript
+// Bad: Everything in one function - hard to test
+export async function processAudio(audioSrc: string) {
+  const audioContext = new AudioContext(); // Browser API
+  const buffer = await fetch(audioSrc).then(r => r.arrayBuffer());
+  const audioBuffer = await audioContext.decodeAudioData(buffer);
+  const data = audioBuffer.getChannelData(0);
+  // ... complex processing logic that's hard to test
+}
+
+// Good: Extract pure logic
+export function processAudioData(data: Float32Array): number[] {
+  // Pure function - easy to test with real data
+  return data.map(v => Math.abs(v));
+}
+
+export async function processAudio(audioSrc: string) {
+  const audioContext = new AudioContext();
+  const buffer = await fetch(audioSrc).then(r => r.arrayBuffer());
+  const audioBuffer = await audioContext.decodeAudioData(buffer);
+  const data = audioBuffer.getChannelData(0);
+  return processAudioData(data); // Use the pure function
+}
+```
+
+**Guidelines:**
+- Extract data transformation logic into pure functions
+- Export pure functions so they can be tested directly
+- Minimize mocking - test real data transformations
+- Mock only browser APIs, not your own logic
+- Example: See `src/utils/audioProcessor.ts` and its tests
+
 ### Test Template
 
 ```typescript

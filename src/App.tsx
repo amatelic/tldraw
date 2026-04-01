@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useCanvas } from './hooks/useCanvas';
 import { useKeyboard } from './hooks/useKeyboard';
 import { Toolbar } from './components/Toolbar';
@@ -41,6 +41,7 @@ function App() {
     selectShapes,
     clearSelection,
     screenToWorld,
+    worldToScreen,
     zoomIn,
     zoomOut,
     resetZoom,
@@ -50,24 +51,15 @@ function App() {
     redo,
     canUndo,
     canRedo,
+    startTextEdit,
+    commitTextEdit,
+    cancelTextEdit,
   } = useCanvas(activeWorkspace.id);
 
   // Check if any selected shape is text
   const hasTextSelection = shapes.some(
     (s) => editorState.selectedShapeIds.includes(s.id) && s.type === 'text'
   );
-
-  // Track previous shapes count to detect when text is added
-  const prevShapesLengthRef = useRef(shapes.length);
-
-  // Switch back to select tool after adding text
-  useEffect(() => {
-    if (editorState.tool === 'text' && shapes.length > prevShapesLengthRef.current) {
-      // Text was added, switch back to select
-      setEditorState((prev) => ({ ...prev, tool: 'select' }));
-    }
-    prevShapesLengthRef.current = shapes.length;
-  }, [shapes.length, editorState.tool, setEditorState]);
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -251,6 +243,7 @@ function App() {
             camera={editorState.camera}
             isDragging={editorState.isDragging}
             isDrawing={editorState.isDrawing}
+            editingTextId={editorState.editingTextId}
             onShapeAdd={addShape}
             onShapeUpdate={updateShape}
             onShapeDelete={deleteShape}
@@ -259,6 +252,10 @@ function App() {
             onDrawingChange={handleDrawingChange}
             onPan={pan}
             screenToWorld={screenToWorld}
+            worldToScreen={worldToScreen}
+            onTextEditStart={startTextEdit}
+            onTextEditCommit={commitTextEdit}
+            onTextEditCancel={cancelTextEdit}
           />
 
           <ZoomControls
