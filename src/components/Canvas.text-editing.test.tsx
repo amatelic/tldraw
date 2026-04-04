@@ -69,6 +69,7 @@ describe('Canvas Text Editing', () => {
     onDraggingChange: vi.fn(),
     onDrawingChange: vi.fn(),
     onPan: vi.fn(),
+    onZoomAt: vi.fn(),
     screenToWorld: vi.fn((point) => point),
     worldToScreen: vi.fn((point) => point),
     onTextEditStart: vi.fn(),

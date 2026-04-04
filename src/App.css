@@ -159,12 +159,18 @@ body {
 }
 
 /* Properties Panel */
+.properties-panel-wrapper {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
 .properties-panel {
   width: 240px;
   padding: 20px;
   background-color: #ffffff;
   border-left: 1px solid #e0e0e0;
   overflow-y: auto;
+  height: 100%;
 }
 
 .properties-panel h3 {
@@ -385,6 +391,10 @@ body {
 
   .toolbar-content {
     flex-direction: row;
+  }
+
+  .properties-panel-wrapper {
+    width: 100%;
   }
 
   .properties-panel {

@@ -20,6 +20,7 @@ interface CanvasProps {
   onDraggingChange: (dragging: boolean) => void;
   onDrawingChange: (drawing: boolean) => void;
   onPan: (dx: number, dy: number) => void;
+  onZoomAt: (screenPoint: Point, factor: number) => void;
   screenToWorld: (point: Point) => Point;
   worldToScreen: (point: Point) => Point;
   onTextEditStart: (id: string) => void;
@@ -47,6 +48,7 @@ export function Canvas({
   onDraggingChange,
   onDrawingChange,
   onPan,
+  onZoomAt,
   screenToWorld,
   worldToScreen,
   onTextEditStart,
@@ -576,15 +578,22 @@ export function Canvas({
     (e: React.WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        // Zoom with Ctrl/Cmd + wheel
-        // const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        // TODO: Zoom at mouse position
+        // Zoom with Ctrl/Cmd + wheel at mouse position
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        };
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        onZoomAt(screenPoint, factor);
       } else {
         // Pan with wheel
         onPan(-e.deltaX, -e.deltaY);
       }
     },
-    [onPan]
+    [onPan, onZoomAt, canvasRef]
   );
 
   // Handle textarea keyboard events

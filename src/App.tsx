@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useCanvas } from './hooks/useCanvas';
 import { useKeyboard } from './hooks/useKeyboard';
 import { Toolbar } from './components/Toolbar';
@@ -45,6 +46,7 @@ function App() {
     zoomIn,
     zoomOut,
     resetZoom,
+    zoomAt,
     pan,
     updateShapeStyle,
     undo,
@@ -251,6 +253,7 @@ function App() {
             onDraggingChange={handleDraggingChange}
             onDrawingChange={handleDrawingChange}
             onPan={pan}
+            onZoomAt={zoomAt}
             screenToWorld={screenToWorld}
             worldToScreen={worldToScreen}
             onTextEditStart={startTextEdit}
@@ -276,11 +279,28 @@ function App() {
           />
         </div>
 
-        <PropertiesPanel
-          style={editorState.shapeStyle}
-          onChange={updateShapeStyle}
-          hasTextSelection={hasTextSelection}
-        />
+        <AnimatePresence mode="popLayout">
+          {editorState.selectedShapeIds.length > 0 && (
+            <motion.div
+              initial={{ x: 240, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 240, opacity: 0 }}
+              transition={{
+                type: 'spring',
+                stiffness: 300,
+                damping: 30,
+                mass: 1,
+              }}
+              className="properties-panel-wrapper"
+            >
+              <PropertiesPanel
+                style={editorState.shapeStyle}
+                onChange={updateShapeStyle}
+                hasTextSelection={hasTextSelection}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       <ImageUploadDialog

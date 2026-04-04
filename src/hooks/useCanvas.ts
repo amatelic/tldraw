@@ -24,6 +24,7 @@ interface UseCanvasReturn {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
+  zoomAt: (screenPoint: Point, factor: number) => void;
   pan: (deltaX: number, deltaY: number) => void;
   updateShapeStyle: (updates: Partial<ShapeStyle>) => void;
   undo: () => void;
@@ -332,6 +333,31 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     }));
   }, []);
 
+  const zoomAt = useCallback((screenPoint: Point, factor: number) => {
+    setPresent((prev) => {
+      const currentCamera = prev.editorState.camera;
+      const worldPos = {
+        x: (screenPoint.x - currentCamera.x) / currentCamera.zoom,
+        y: (screenPoint.y - currentCamera.y) / currentCamera.zoom,
+      };
+      const newZoom = Math.min(Math.max(currentCamera.zoom * factor, 0.1), 5);
+      const newCameraX = screenPoint.x - worldPos.x * newZoom;
+      const newCameraY = screenPoint.y - worldPos.y * newZoom;
+
+      return {
+        ...prev,
+        editorState: {
+          ...prev.editorState,
+          camera: {
+            x: newCameraX,
+            y: newCameraY,
+            zoom: newZoom,
+          },
+        },
+      };
+    });
+  }, []);
+
   const pan = useCallback((deltaX: number, deltaY: number) => {
     setPresent((prev) => ({
       ...prev,
@@ -468,6 +494,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     zoomIn,
     zoomOut,
     resetZoom,
+    zoomAt,
     pan,
     updateShapeStyle,
     undo,
