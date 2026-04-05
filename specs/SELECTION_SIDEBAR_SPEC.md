@@ -1,5 +1,5 @@
 : "### Task 11: Conditional Right Sidebar with Animation
-**Status**: 🟡 In Progress
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Show the properties panel only when an element is selected with a smooth slide in/out animation
 
@@ -32,6 +32,39 @@
 
 **Files to Create**:
 - `src/components/PropertiesPanel.test.tsx` - Test conditional rendering and animations
+
+---
+
+### New Requirement: Context-Aware Properties Panel
+
+**Status**: ✅ Completed
+
+The PropertiesPanel should show only relevant properties based on the type of selected shape(s):
+
+1. **For all shapes (basic properties):**
+   - Stroke Color
+   - Fill Color  
+   - Stroke Width
+   - Stroke Style
+   - Opacity
+
+2. **For text shapes only (text-specific properties):**
+   - Font Size
+   - Font Family
+   - Font Weight (bold/normal)
+   - Font Style (italic/normal)
+   - Text Align
+   - These should ONLY appear when a text shape is selected
+
+3. **For image/audio shapes:**
+   - No additional properties beyond basic
+
+4. **Implementation approach:**
+   - Determine the type of selected shape(s)
+   - If single text shape selected: show basic + text properties
+   - If single non-text shape selected: show basic properties only
+   - If multiple shapes selected (mixed or same): show only shared applicable properties
+   - If multiple text shapes selected: show basic + text properties
 
 ---
 

@@ -575,7 +575,7 @@ export function Canvas({
   );
 
   const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
+    (e: WheelEvent) => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         // Zoom with Ctrl/Cmd + wheel at mouse position
@@ -595,6 +595,18 @@ export function Canvas({
     },
     [onPan, onZoomAt, canvasRef]
   );
+
+  // Attach native wheel event listener with passive: false to allow preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel, canvasRef]);
 
   // Handle textarea keyboard events
   const handleTextKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -712,7 +724,6 @@ export function Canvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        onWheel={handleWheel}
         style={{
           cursor:
             tool === 'select'

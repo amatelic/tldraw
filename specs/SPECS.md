@@ -241,6 +241,116 @@ const initialData = useMemo(
 
 ---
 
+### Task 11: Workspace Name Truncation & Long-Press Menu
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Add workspace name truncation with tooltips and long-press dropdown menu for rename/delete operations
+
+**Acceptance Criteria**:
+
+**1. Name Truncation:**
+- ✅ Show full workspace name if ≤ 15 characters
+- ✅ Truncate to first 15 chars + "..." if 16+ characters
+- ✅ Example: "My Project Name" (15 chars) → shown in full
+- ✅ Example: "My Project Name 123" (18 chars) → "My Project Name..."
+
+**2. Tooltip on Truncated Names:**
+- ✅ Tooltip shows full name when hovering for 3 seconds
+- ✅ Tooltip does NOT appear if name is NOT truncated
+- ✅ Tooltip positioned above the workspace tab
+- ✅ Smooth fade-in animation (150ms)
+- ✅ Disappears on mouse leave
+
+**3. Long-Press Dropdown Menu:**
+- ✅ Long-press workspace tab for 3 seconds to show dropdown
+- ✅ Circular progress indicator fills around tab border during long-press
+- ✅ Progress indicator starts at 0%, reaches 100% at 3s
+- ✅ Dropdown appears when long-press completes
+- ✅ Long-press canceled if mouse leaves or releases early
+- ✅ Keep existing right-click context menu as alternative
+
+**4. Dropdown Contents:**
+- ✅ Option 1: "Rename" (enters edit mode)
+- ✅ Option 2: "Delete" (disabled if last workspace)
+- ✅ Same styling as current context menu
+- ✅ Click outside to dismiss
+
+**Technical Implementation**:
+
+**Truncation Logic:**
+```typescript
+const TRUNCATE_LENGTH = 15;
+
+const getDisplayName = (name: string): string => {
+  return name.length > TRUNCATE_LENGTH 
+    ? name.substring(0, TRUNCATE_LENGTH) + '...' 
+    : name;
+};
+
+const isNameTruncated = (name: string): boolean => {
+  return name.length > TRUNCATE_LENGTH;
+};
+```
+
+**Long-Press Detection:**
+- Use `onMouseDown` to start timer
+- Use `onMouseUp` and `onMouseLeave` to cancel
+- Show circular progress using SVG circle with `stroke-dasharray` animation
+- Or CSS `conic-gradient` background
+- Clear timer on unmount
+
+**Tooltip Behavior:**
+- Only render tooltip component if `isNameTruncated(name)` is true
+- Start 3s timer on `onMouseEnter`
+- Clear timer on `onMouseLeave`
+- Position: `top: -40px`, `left: 50%`, `transform: translateX(-50%)`
+
+**Circular Progress Indicator:**
+- Use SVG circle with `stroke-dasharray` animation or CSS `conic-gradient`
+- Color: `#1976d2` (active tab color)
+- Size: 2px border width around tab
+
+**Files to Modify**:
+- `src/components/WorkspaceTab.tsx` - add truncation, tooltip, long-press detection, circular progress
+- `src/App.css` - add tooltip styles, circular progress indicator styles
+- `src/components/WorkspaceTab.test.tsx` - create comprehensive test suite
+
+**Test Coverage Requirements** (8 tests minimum):
+1. ✅ Name truncates at 16+ characters
+2. ✅ Name shows full at ≤15 characters
+3. ✅ Tooltip appears after 3s on truncated name
+4. ✅ Tooltip does NOT appear on short name
+5. ✅ Long-press progress starts at 0%
+6. ✅ Long-press reaches 100% after 3s
+7. ✅ Long-press canceled on mouse leave
+8. ✅ Dropdown shows after successful long-press
+
+**Visual Design**:
+
+**Tooltip:**
+```
+┌────────────────────────┐
+│ My Project Name 123    │  ← Full name
+└────────────────────────┘
+        ▼
+   [My Project Na...]    ← Truncated tab
+```
+
+**Long-Press Progress:**
+```
+0%: [Tab]              50%: [◐Tab]           100%: [●Tab]
+    (no border)            (half circle)        (full circle)
+```
+
+**Notes**:
+- Tooltip trigger: Hover only (not click)
+- Long-press visual feedback: Circular progress around tab
+- Keep both right-click AND long-press for dropdown access
+- Edge case: Exactly 15 characters → show full name (no truncation)
+- Estimated effort: 2-3 hours implementation + testing
+
+---
+
 ## Task Selection Workflow
 
 When working on tasks:
