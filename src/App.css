@@ -606,9 +606,43 @@ body {
 }
 
 .workspace-tab-text {
-  max-width: 60px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.workspace-tab-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1001;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.workspace-tab-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+}
+
+.workspace-tab-progress {
+  position: absolute;
+  inset: -3px;
+  border-radius: 7px;
+  pointer-events: none;
+  z-index: -1;
 }
 
 /* Close button */

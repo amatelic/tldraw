@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import type { Workspace } from '../stores/workspaceStore';
 
 interface WorkspaceTabProps {
@@ -11,7 +11,8 @@ interface WorkspaceTabProps {
   onRename: (name: string) => void;
 }
 
-// Damped spring animation configuration
+const TRUNCATE_LENGTH = 15;
+
 const smoothSpring = {
   type: 'spring' as const,
   stiffness: 300,
@@ -42,6 +43,14 @@ const tabVariants = {
   },
 };
 
+function getDisplayName(name: string): string {
+  return name.length > TRUNCATE_LENGTH ? name.substring(0, TRUNCATE_LENGTH) + '...' : name;
+}
+
+function isNameTruncated(name: string): boolean {
+  return name.length > TRUNCATE_LENGTH;
+}
+
 export function WorkspaceTab({
   workspace,
   isActive,
@@ -53,8 +62,18 @@ export function WorkspaceTab({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(workspace.name);
   const [showMenu, setShowMenu] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [isLongPressing, setIsLongPressing] = useState(false);
+  const [longPressProgress, setLongPressProgress] = useState(0);
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const displayName = getDisplayName(workspace.name);
+  const nameIsTruncated = isNameTruncated(workspace.name);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -72,6 +91,14 @@ export function WorkspaceTab({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      if (longPressIntervalRef.current) clearInterval(longPressIntervalRef.current);
+    };
   }, []);
 
   const handleDoubleClick = () => {
@@ -99,11 +126,81 @@ export function WorkspaceTab({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     setShowMenu(true);
+    cancelLongPress();
   };
 
   const handleCloseClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onClose();
+  };
+
+  const startTooltipTimer = useCallback(() => {
+    if (!nameIsTruncated) return;
+    
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    
+    tooltipTimerRef.current = setTimeout(() => {
+      setShowTooltip(true);
+    }, 3000);
+  }, [nameIsTruncated]);
+
+  const cancelTooltipTimer = useCallback(() => {
+    if (tooltipTimerRef.current) {
+      clearTimeout(tooltipTimerRef.current);
+      tooltipTimerRef.current = null;
+    }
+    setShowTooltip(false);
+  }, []);
+
+  const startLongPress = useCallback(() => {
+    setIsLongPressing(true);
+    setLongPressProgress(0);
+    
+    const startTime = Date.now();
+    const duration = 3000;
+    
+    longPressIntervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min((elapsed / duration) * 100, 100);
+      setLongPressProgress(progress);
+      
+      if (elapsed >= duration) {
+        setShowMenu(true);
+        setIsLongPressing(false);
+        if (longPressIntervalRef.current) {
+          clearInterval(longPressIntervalRef.current);
+          longPressIntervalRef.current = null;
+        }
+      }
+    }, 50);
+  }, []);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressIntervalRef.current) {
+      clearInterval(longPressIntervalRef.current);
+      longPressIntervalRef.current = null;
+    }
+    setIsLongPressing(false);
+    setLongPressProgress(0);
+  }, []);
+
+  const handleMouseEnter = () => {
+    startTooltipTimer();
+  };
+
+  const handleMouseLeave = () => {
+    cancelTooltipTimer();
+    cancelLongPress();
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0) {
+      startLongPress();
+    }
+  };
+
+  const handleMouseUp = () => {
+    cancelLongPress();
   };
 
   return (
@@ -117,6 +214,10 @@ export function WorkspaceTab({
       onClick={onClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
       layoutId={workspace.id}
     >
       {isEditing ? (
@@ -132,7 +233,7 @@ export function WorkspaceTab({
         />
       ) : (
         <>
-          <span className="workspace-tab-text">{workspace.name}</span>
+          <span className="workspace-tab-text">{displayName}</span>
 
           {canDelete && (
             <button
@@ -154,6 +255,26 @@ export function WorkspaceTab({
           )}
         </>
       )}
+
+      {isLongPressing && (
+        <div className="workspace-tab-progress" style={{ 
+          background: `conic-gradient(#1976d2 ${longPressProgress}%, transparent ${longPressProgress}%)`
+        }} />
+      )}
+
+      <AnimatePresence>
+        {showTooltip && nameIsTruncated && !isEditing && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            transition={{ duration: 0.15 }}
+            className="workspace-tab-tooltip"
+          >
+            {workspace.name}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showMenu && (

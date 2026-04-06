@@ -242,7 +242,7 @@ const initialData = useMemo(
 ---
 
 ### Task 11: Workspace Name Truncation & Long-Press Menu
-**Status**: 🔴 Not Started
+**Status**: 🟡 In Progress
 **Priority**: MEDIUM
 **Description**: Add workspace name truncation with tooltips and long-press dropdown menu for rename/delete operations
 
@@ -324,6 +324,8 @@ const isNameTruncated = (name: string): boolean => {
 6. ✅ Long-press reaches 100% after 3s
 7. ✅ Long-press canceled on mouse leave
 8. ✅ Dropdown shows after successful long-press
+9. ✅ Motion library renders components correctly
+10. ✅ AnimatePresence handles enter/exit animations
 
 **Visual Design**:
 
@@ -341,6 +343,12 @@ const isNameTruncated = (name: string): boolean => {
 0%: [Tab]              50%: [◐Tab]           100%: [●Tab]
     (no border)            (half circle)        (full circle)
 ```
+
+**Library Migration**:
+- Migrated from `framer-motion` to `motion/react` (official rebrand)
+- All components using motion library verified to work correctly
+- Import paths updated: `import { motion, AnimatePresence } from 'motion/react'`
+- Package dependency updated in package.json: `"motion": "^12.38.0"`
 
 **Notes**:
 - Tooltip trigger: Hover only (not click)
