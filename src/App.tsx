@@ -9,6 +9,7 @@ import { Canvas } from './components/Canvas';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { ImageUploadDialog } from './components/ImageUploadDialog';
 import { AudioUploadDialog } from './components/AudioUploadDialog';
+import { EmbedDialog } from './components/EmbedDialog';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { ToolType, Shape, ShapeStyle } from './types';
 import { createShapeId } from './types';
@@ -19,6 +20,7 @@ const MAX_WORKSPACES = 10;
 function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showAudioDialog, setShowAudioDialog] = useState(false);
+  const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const workspaceStore = useWorkspaceStore();
 
   // Initialize with default workspace if none exists
@@ -73,6 +75,10 @@ function App() {
         setShowAudioDialog(true);
         return;
       }
+      if (tool === 'embed') {
+        setShowEmbedDialog(true);
+        return;
+      }
 
       setEditorState((prev) => ({ ...prev, tool }));
       if (tool !== 'select') {
@@ -96,20 +102,27 @@ function App() {
     [setEditorState]
   );
 
+  const getViewportCenter = useCallback((): { x: number; y: number } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 100, y: 100 };
+    const rect = canvas.getBoundingClientRect();
+    return screenToWorld({ x: rect.width / 2, y: rect.height / 2 });
+  }, [canvasRef, screenToWorld]);
+
   const handleImageAdd = useCallback(
     (src: string, isBase64: boolean, width: number, height: number, style: ShapeStyle) => {
-      // Calculate size maintaining aspect ratio, max 300px width
       const maxWidth = 300;
       const scale = Math.min(1, maxWidth / width);
       const newWidth = width * scale;
       const newHeight = height * scale;
+      const center = getViewportCenter();
 
       const shape: Shape = {
         id: createShapeId(),
         type: 'image',
         bounds: {
-          x: 100,
-          y: 100,
+          x: center.x - newWidth / 2,
+          y: center.y - newHeight / 2,
           width: newWidth,
           height: newHeight,
         },
@@ -125,7 +138,7 @@ function App() {
       addShape(shape);
       setEditorState((prev) => ({ ...prev, tool: 'select' }));
     },
-    [addShape, setEditorState]
+    [addShape, setEditorState, getViewportCenter]
   );
 
   const handleAudioAdd = useCallback(
@@ -136,12 +149,13 @@ function App() {
       waveformData: number[],
       style: ShapeStyle
     ) => {
+      const center = getViewportCenter();
       const shape: Shape = {
         id: createShapeId(),
         type: 'audio',
         bounds: {
-          x: 100,
-          y: 100,
+          x: center.x - 150,
+          y: center.y - 40,
           width: 300,
           height: 80,
         },
@@ -159,7 +173,38 @@ function App() {
       addShape(shape);
       setEditorState((prev) => ({ ...prev, tool: 'select' }));
     },
-    [addShape, setEditorState]
+    [addShape, setEditorState, getViewportCenter]
+  );
+
+  const handleEmbedAdd = useCallback(
+    (
+      url: string,
+      embedType: 'youtube' | 'website',
+      embedSrc: string,
+      shapeStyle: ShapeStyle
+    ) => {
+      const center = getViewportCenter();
+      const shape: Shape = {
+        id: createShapeId(),
+        type: 'embed',
+        bounds: {
+          x: center.x - 240,
+          y: center.y - 135,
+          width: 480,
+          height: 270,
+        },
+        url,
+        embedType,
+        embedSrc,
+        style: { ...shapeStyle },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      addShape(shape);
+      setEditorState((prev) => ({ ...prev, tool: 'select' }));
+    },
+    [addShape, setEditorState, getViewportCenter]
   );
 
   const handleAddWorkspace = useCallback(() => {
@@ -314,6 +359,13 @@ function App() {
         isOpen={showAudioDialog}
         onClose={() => setShowAudioDialog(false)}
         onAudioAdd={handleAudioAdd}
+        style={editorState.shapeStyle}
+      />
+
+      <EmbedDialog
+        isOpen={showEmbedDialog}
+        onClose={() => setShowEmbedDialog(false)}
+        onEmbedAdd={handleEmbedAdd}
         style={editorState.shapeStyle}
       />
     </div>

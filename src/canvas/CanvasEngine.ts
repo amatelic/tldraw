@@ -4,6 +4,7 @@ import type {
   CircleShape,
   LineShape,
   FreehandShape,
+  EmbedShape,
   Point,
   Bounds,
   CameraState,
@@ -115,6 +116,9 @@ export class CanvasEngine {
         break;
       case 'text':
         this.drawText(shape);
+        break;
+      case 'embed':
+        this.drawEmbed(shape);
         break;
     }
 
@@ -318,6 +322,64 @@ export class CanvasEngine {
     this.ctx.globalAlpha = 1;
   }
 
+  private drawEmbed(shape: EmbedShape) {
+    const { x, y, width, height } = shape.bounds;
+
+    this.ctx.fillStyle = '#f0f0f0';
+    this.ctx.fillRect(x, y, width, height);
+
+    this.ctx.strokeStyle = '#999';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    this.ctx.strokeRect(x, y, width, height);
+
+    const iconSize = Math.min(width, height) * 0.15;
+    const centerX = x + width / 2;
+    const centerY = y + height / 2 - iconSize;
+
+    this.ctx.fillStyle = '#666';
+    if (shape.embedType === 'youtube') {
+      this.ctx.beginPath();
+      this.ctx.moveTo(centerX - iconSize / 2, centerY - iconSize / 2);
+      this.ctx.lineTo(centerX + iconSize / 2, centerY);
+      this.ctx.lineTo(centerX - iconSize / 2, centerY + iconSize / 2);
+      this.ctx.closePath();
+      this.ctx.fill();
+    } else {
+      this.ctx.fillRect(centerX - iconSize / 2, centerY - iconSize / 3, iconSize, iconSize / 3);
+      this.ctx.fillRect(centerX - iconSize / 2, centerY + iconSize / 6, iconSize, iconSize / 3);
+    }
+
+    const label = shape.embedType === 'youtube' ? 'YouTube' : 'Website';
+    const maxTextWidth = width - 20;
+    const fontSize = Math.max(10, Math.min(14, height * 0.1));
+    this.ctx.font = `${fontSize}px sans-serif`;
+    this.ctx.fillStyle = '#333';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(label, x + width / 2, y + height / 2 + iconSize, maxTextWidth);
+
+    const urlFontSize = Math.max(8, fontSize - 2);
+    this.ctx.font = `${urlFontSize}px sans-serif`;
+    this.ctx.fillStyle = '#999';
+    this.ctx.fillText(shape.url, x + width / 2, y + height - 15, maxTextWidth);
+  }
+
+  drawEmbedBounds(shape: EmbedShape, isSelected: boolean) {
+    const { x, y, width, height } = shape.bounds;
+
+    this.ctx.fillStyle = '#e8e8e8';
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = '#bbb';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([]);
+    this.ctx.strokeRect(x, y, width, height);
+
+    if (isSelected) {
+      this.drawSelectionIndicator(shape);
+    }
+  }
+
   private drawSelectionIndicator(shape: Shape) {
     const bounds = this.getShapeBounds(shape);
     const padding = 4;
@@ -383,6 +445,7 @@ export class CanvasEngine {
       case 'image':
       case 'audio':
       case 'text':
+      case 'embed':
         return shape.bounds;
     }
   }
@@ -510,6 +573,8 @@ export class CanvasEngine {
         throw new Error(`Cannot create ${type} shape from points. Use file upload instead.`);
       case 'text':
         throw new Error('Cannot create text shape from points. Use text tool instead.');
+      case 'embed':
+        throw new Error('Cannot create embed shape from points. Use embed dialog instead.');
     }
   }
 }

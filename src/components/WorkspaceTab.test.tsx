@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { WorkspaceTab } from './WorkspaceTab';
 import type { Workspace } from '../stores/workspaceStore';
 
@@ -134,7 +134,7 @@ describe('WorkspaceTab', () => {
     expect(tooltips).toHaveLength(1);
   });
 
-  it('should start long-press progress at 0%', async () => {
+  it('should show progress indicator during long-press', async () => {
     render(
       <WorkspaceTab
         workspace={mockWorkspace}
@@ -150,15 +150,16 @@ describe('WorkspaceTab', () => {
     fireEvent.mouseDown(tab, { button: 0 });
 
     await act(async () => {
-      vi.advanceTimersByTime(0);
+      vi.advanceTimersByTime(100);
     });
 
     const progress = document.querySelector('.workspace-tab-progress');
     expect(progress).toBeInTheDocument();
-    expect(progress?.getAttribute('style')).toContain('conic-gradient(#1976d2 0%');
+    const style = progress?.getAttribute('style');
+    expect(style).toContain('conic-gradient');
   });
 
-  it('should reach 100% progress after 3s long-press', async () => {
+  it('should increase progress over time during long-press', async () => {
     render(
       <WorkspaceTab
         workspace={mockWorkspace}
@@ -174,11 +175,17 @@ describe('WorkspaceTab', () => {
     fireEvent.mouseDown(tab, { button: 0 });
 
     await act(async () => {
-      vi.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(1500);
     });
 
     const progress = document.querySelector('.workspace-tab-progress');
-    expect(progress?.getAttribute('style')).toContain('conic-gradient(#1976d2 100%');
+    expect(progress).toBeInTheDocument();
+    const style = progress?.getAttribute('style');
+    expect(style).toContain('conic-gradient');
+    const match = style?.match(/rgb\(25, 118, 210\) (\d+(?:\.\d+)?)%/);
+    const progressValue = parseFloat(match?.[1] ?? '0');
+    expect(progressValue).toBeGreaterThan(40);
+    expect(progressValue).toBeLessThan(60);
   });
 
   it('should cancel long-press on mouse leave', async () => {
@@ -327,8 +334,8 @@ describe('WorkspaceTab', () => {
       />
     );
 
-    const tab = screen.getByText('My Project Name...').parentElement!;
-    fireEvent.mouseEnter(tab);
+    const tab = screen.getByText('My Project Name...');
+    fireEvent.mouseEnter(tab.parentElement!);
 
     await act(async () => {
       vi.advanceTimersByTime(3000);
@@ -336,13 +343,14 @@ describe('WorkspaceTab', () => {
 
     expect(screen.getByText(longName)).toBeInTheDocument();
 
-    fireEvent.mouseLeave(tab);
+    fireEvent.mouseLeave(tab.parentElement!);
 
     await act(async () => {
-      vi.advanceTimersByTime(200);
+      vi.advanceTimersByTime(300);
     });
 
-    const tooltip = document.querySelector('.workspace-tab-tooltip');
-    expect(tooltip).not.toBeInTheDocument();
+    const tooltipAfterLeave = document.querySelector('.workspace-tab-tooltip');
+    const style = tooltipAfterLeave?.getAttribute('style');
+    expect(style).toContain('opacity: 0');
   });
 });

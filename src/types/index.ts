@@ -8,7 +8,8 @@ export type ToolType =
   | 'eraser'
   | 'image'
   | 'audio'
-  | 'text';
+  | 'text'
+  | 'embed';
 
 export interface Point {
   x: number;
@@ -39,7 +40,7 @@ export interface ShapeStyle {
 
 export interface BaseShape {
   id: string;
-  type: 'rectangle' | 'circle' | 'line' | 'freehand' | 'image' | 'audio' | 'text';
+  type: 'rectangle' | 'circle' | 'line' | 'freehand' | 'image' | 'audio' | 'text' | 'embed';
   bounds: Bounds;
   style: ShapeStyle;
   createdAt: number;
@@ -95,6 +96,13 @@ export interface TextShape extends BaseShape {
   textAlign: 'left' | 'center' | 'right';
 }
 
+export interface EmbedShape extends BaseShape {
+  type: 'embed';
+  url: string;
+  embedType: 'youtube' | 'website';
+  embedSrc: string;
+}
+
 export type Shape =
   | RectangleShape
   | CircleShape
@@ -102,7 +110,8 @@ export type Shape =
   | FreehandShape
   | ImageShape
   | AudioShape
-  | TextShape;
+  | TextShape
+  | EmbedShape;
 
 export interface CameraState {
   x: number;
@@ -212,6 +221,7 @@ export function isPointInShape(point: Point, shape: Shape): boolean {
     case 'image':
     case 'audio':
     case 'text':
+    case 'embed':
       return (
         point.x >= shape.bounds.x &&
         point.x <= shape.bounds.x + shape.bounds.width &&

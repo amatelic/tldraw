@@ -123,9 +123,10 @@ export function Canvas({
     shapes.forEach((shape) => {
       const isSelected = selectedIds.includes(shape.id);
       const isEditing = editingTextId === shape.id;
-      // Don't render the shape being edited (show textarea instead)
-      if (!isEditing) {
+      if (!isEditing && shape.type !== 'embed') {
         engine.drawShape(shape, isSelected);
+      } else if (shape.type === 'embed') {
+        engine.drawEmbedBounds(shape, isSelected);
       }
     });
 
@@ -714,6 +715,32 @@ export function Canvas({
     };
   };
 
+  const getEmbedOverlays = useCallback(() => {
+    const embedShapes = shapes.filter(
+      (s): s is Extract<Shape, { type: 'embed' }> => s.type === 'embed'
+    );
+
+    return embedShapes.map((shape) => {
+      const screenTopLeft = worldToScreen({ x: shape.bounds.x, y: shape.bounds.y });
+      const screenBottomRight = worldToScreen({
+        x: shape.bounds.x + shape.bounds.width,
+        y: shape.bounds.y + shape.bounds.height,
+      });
+      const screenWidth = screenBottomRight.x - screenTopLeft.x;
+      const screenHeight = screenBottomRight.y - screenTopLeft.y;
+
+      return {
+        shape,
+        left: screenTopLeft.x,
+        top: screenTopLeft.y,
+        width: screenWidth,
+        height: screenHeight,
+      };
+    });
+  }, [shapes, worldToScreen]);
+
+  const embedOverlays = getEmbedOverlays();
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas
@@ -751,6 +778,43 @@ export function Canvas({
           autoFocus
         />
       )}
+      {embedOverlays.map(({ shape, left, top, width, height }) => (
+        <div
+          key={shape.id}
+          className="embed-overlay"
+          style={{
+            position: 'absolute',
+            left: `${left}px`,
+            top: `${top}px`,
+            width: `${width}px`,
+            height: `${height}px`,
+            pointerEvents: tool === 'select' ? 'auto' : 'none',
+            zIndex: 10,
+            borderRadius: '4px',
+            overflow: 'hidden',
+            border: selectedIds.includes(shape.id) ? '2px solid #2563eb' : '1px solid #999',
+          }}
+          onPointerDown={(e) => {
+            if (tool === 'select') {
+              e.stopPropagation();
+            }
+          }}
+        >
+          <iframe
+            src={shape.embedSrc}
+            title={shape.url}
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              pointerEvents: tool === 'select' ? 'auto' : 'none',
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            sandbox="allow-scripts allow-same-origin allow-presentation"
+          />
+        </div>
+      ))}
     </div>
   );
 }
