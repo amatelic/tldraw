@@ -123,10 +123,9 @@ export function Canvas({
     shapes.forEach((shape) => {
       const isSelected = selectedIds.includes(shape.id);
       const isEditing = editingTextId === shape.id;
-      if (!isEditing && shape.type !== 'embed') {
+      if (shape.type === 'embed') return;
+      if (!isEditing) {
         engine.drawShape(shape, isSelected);
-      } else if (shape.type === 'embed') {
-        engine.drawEmbedBounds(shape, isSelected);
       }
     });
 
@@ -741,6 +740,53 @@ export function Canvas({
 
   const embedOverlays = getEmbedOverlays();
 
+  const embedDragRef = useRef<{
+    shapeId: string;
+    startX: number;
+    startY: number;
+    origBounds: { x: number; y: number; width: number; height: number };
+  } | null>(null);
+
+  const handleEmbedDragStart = useCallback(
+    (e: React.PointerEvent, shape: Extract<Shape, { type: 'embed' }>) => {
+      if (tool !== 'select') return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      embedDragRef.current = {
+        shapeId: shape.id,
+        startX: e.clientX,
+        startY: e.clientY,
+        origBounds: { ...shape.bounds },
+      };
+
+      onSelectionChange([shape.id]);
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        if (!embedDragRef.current) return;
+        const dx = (moveEvent.clientX - embedDragRef.current.startX) / camera.zoom;
+        const dy = (moveEvent.clientY - embedDragRef.current.startY) / camera.zoom;
+        onShapeUpdate(embedDragRef.current.shapeId, {
+          bounds: {
+            ...embedDragRef.current.origBounds,
+            x: embedDragRef.current.origBounds.x + dx,
+            y: embedDragRef.current.origBounds.y + dy,
+          },
+        });
+      };
+
+      const handleUp = () => {
+        embedDragRef.current = null;
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+      };
+
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+    },
+    [tool, camera.zoom, onSelectionChange, onShapeUpdate]
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas
@@ -793,19 +839,42 @@ export function Canvas({
             borderRadius: '4px',
             overflow: 'hidden',
             border: selectedIds.includes(shape.id) ? '2px solid #2563eb' : '1px solid #999',
-          }}
-          onPointerDown={(e) => {
-            if (tool === 'select') {
-              e.stopPropagation();
-            }
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
+          <div
+            className="embed-drag-handle"
+            onPointerDown={(e) => handleEmbedDragStart(e, shape)}
+            style={{
+              width: '100%',
+              height: '24px',
+              minHeight: '24px',
+              background: selectedIds.includes(shape.id) ? '#2563eb' : '#666',
+              cursor: 'grab',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '3px',
+              padding: '0 8px',
+              flexShrink: 0,
+              userSelect: 'none',
+            }}
+            title="Drag to move"
+          >
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+            <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {shape.embedType === 'youtube' ? 'YouTube' : 'Website'}
+            </span>
+          </div>
           <iframe
             src={shape.embedSrc}
             title={shape.url}
             style={{
               width: '100%',
-              height: '100%',
+              flex: 1,
               border: 'none',
               pointerEvents: tool === 'select' ? 'auto' : 'none',
             }}

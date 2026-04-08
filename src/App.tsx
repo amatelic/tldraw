@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCanvas } from './hooks/useCanvas';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -16,19 +16,36 @@ import { createShapeId } from './types';
 import './App.css';
 
 const MAX_WORKSPACES = 10;
+const TOOL_LABELS: Record<ToolType, string> = {
+  select: 'Select',
+  pan: 'Pan',
+  rectangle: 'Rectangle',
+  circle: 'Circle',
+  line: 'Line',
+  freehand: 'Freehand',
+  eraser: 'Eraser',
+  image: 'Image',
+  audio: 'Audio',
+  text: 'Text',
+  embed: 'Embed',
+};
 
 function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showAudioDialog, setShowAudioDialog] = useState(false);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const workspaceStore = useWorkspaceStore();
+  const hasInitializedWorkspaceRef = useRef(false);
 
   // Initialize with default workspace if none exists
   useEffect(() => {
+    if (hasInitializedWorkspaceRef.current) return;
+    hasInitializedWorkspaceRef.current = true;
+
     if (workspaceStore.workspaces.length === 0) {
       workspaceStore.addWorkspace(); // Creates "Workspace 1"
     }
-  }, []);
+  }, [workspaceStore]);
 
   const activeWorkspace = workspaceStore.getActiveWorkspace();
 
@@ -239,7 +256,33 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>TLDraw Clone</h1>
+        <div className="app-header-brand">
+          <div className="app-header-mark">TD</div>
+          <div className="app-header-copy">
+            <span className="app-header-eyebrow">Canvas Studio</span>
+            <h1>TLDraw Clone</h1>
+          </div>
+        </div>
+
+        <div className="app-header-center">
+          <div className="app-header-status">
+            <span className="status-pill status-pill-strong">{activeWorkspace.name}</span>
+            <span className="status-pill">{TOOL_LABELS[editorState.tool]} tool</span>
+            <span className="status-pill">{shapes.length} shapes</span>
+            <span className="status-pill">{workspaceStore.workspaces.length} boards</span>
+          </div>
+
+          <WorkspaceTabs
+            workspaces={workspaceStore.workspaces}
+            activeId={workspaceStore.activeWorkspaceId}
+            onSwitch={workspaceStore.switchWorkspace}
+            onAdd={handleAddWorkspace}
+            onDelete={handleDeleteWorkspace}
+            onRename={handleRenameWorkspace}
+            maxWorkspaces={MAX_WORKSPACES}
+          />
+        </div>
+
         <div className="header-actions">
           <button
             className="action-button"
@@ -278,50 +321,80 @@ function App() {
       </header>
 
       <main className="app-main">
-        <Toolbar currentTool={editorState.tool} onToolChange={handleToolChange} />
+        <aside className="app-sidebar">
+          <div className="sidebar-card sidebar-tools-card">
+            <div className="sidebar-card-header">
+              <span className="sidebar-card-eyebrow">Tools</span>
+              <h2>Build and edit faster</h2>
+              <p>Keep your most-used actions visible, grouped, and one click away.</p>
+            </div>
 
-        <div className="canvas-container">
-          <Canvas
-            canvasRef={canvasRef}
-            shapes={shapes}
-            selectedIds={editorState.selectedShapeIds}
-            tool={editorState.tool}
-            style={editorState.shapeStyle}
-            camera={editorState.camera}
-            isDragging={editorState.isDragging}
-            isDrawing={editorState.isDrawing}
-            editingTextId={editorState.editingTextId}
-            onShapeAdd={addShape}
-            onShapeUpdate={updateShape}
-            onShapeDelete={deleteShape}
-            onSelectionChange={selectShapes}
-            onDraggingChange={handleDraggingChange}
-            onDrawingChange={handleDrawingChange}
-            onPan={pan}
-            onZoomAt={zoomAt}
-            screenToWorld={screenToWorld}
-            worldToScreen={worldToScreen}
-            onTextEditStart={startTextEdit}
-            onTextEditCommit={commitTextEdit}
-            onTextEditCancel={cancelTextEdit}
-          />
+            <Toolbar currentTool={editorState.tool} onToolChange={handleToolChange} />
+          </div>
 
-          <ZoomControls
-            zoom={editorState.camera.zoom}
-            onZoomIn={zoomIn}
-            onZoomOut={zoomOut}
-            onReset={resetZoom}
-          />
+          <div className="sidebar-card sidebar-insights-card">
+            <div className="sidebar-card-header">
+              <span className="sidebar-card-eyebrow">Board Snapshot</span>
+              <h2>Stay oriented</h2>
+            </div>
 
-          <WorkspaceTabs
-            workspaces={workspaceStore.workspaces}
-            activeId={workspaceStore.activeWorkspaceId}
-            onSwitch={workspaceStore.switchWorkspace}
-            onAdd={handleAddWorkspace}
-            onDelete={handleDeleteWorkspace}
-            onRename={handleRenameWorkspace}
-            maxWorkspaces={MAX_WORKSPACES}
-          />
+            <div className="sidebar-stats">
+              <div className="sidebar-stat">
+                <span className="sidebar-stat-label">Selected</span>
+                <strong>{editorState.selectedShapeIds.length}</strong>
+              </div>
+              <div className="sidebar-stat">
+                <span className="sidebar-stat-label">Zoom</span>
+                <strong>{Math.round(editorState.camera.zoom * 100)}%</strong>
+              </div>
+              <div className="sidebar-stat">
+                <span className="sidebar-stat-label">Mode</span>
+                <strong>{TOOL_LABELS[editorState.tool]}</strong>
+              </div>
+            </div>
+
+            <div className="sidebar-tips">
+              <p>Shift + drag to pan quickly.</p>
+              <p>Ctrl/Cmd + wheel zooms at the cursor.</p>
+              <p>Double-click text to edit inline.</p>
+            </div>
+          </div>
+        </aside>
+
+        <div className="canvas-stage">
+          <div className="canvas-container">
+            <Canvas
+              canvasRef={canvasRef}
+              shapes={shapes}
+              selectedIds={editorState.selectedShapeIds}
+              tool={editorState.tool}
+              style={editorState.shapeStyle}
+              camera={editorState.camera}
+              isDragging={editorState.isDragging}
+              isDrawing={editorState.isDrawing}
+              editingTextId={editorState.editingTextId}
+              onShapeAdd={addShape}
+              onShapeUpdate={updateShape}
+              onShapeDelete={deleteShape}
+              onSelectionChange={selectShapes}
+              onDraggingChange={handleDraggingChange}
+              onDrawingChange={handleDrawingChange}
+              onPan={pan}
+              onZoomAt={zoomAt}
+              screenToWorld={screenToWorld}
+              worldToScreen={worldToScreen}
+              onTextEditStart={startTextEdit}
+              onTextEditCommit={commitTextEdit}
+              onTextEditCancel={cancelTextEdit}
+            />
+
+            <ZoomControls
+              zoom={editorState.camera.zoom}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
+              onReset={resetZoom}
+            />
+          </div>
         </div>
 
         <AnimatePresence mode="popLayout">
