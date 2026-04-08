@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { useCallback } from 'react';
 import type { Workspace } from '../stores/workspaceStore';
 import { WorkspaceTab } from './WorkspaceTab';
 
@@ -66,6 +67,51 @@ export function WorkspaceTabs({
   const isMaxReached = workspaces.length >= maxWorkspaces;
   const canDeleteAny = workspaces.length > 1;
 
+  const focusWorkspaceTab = useCallback((workspaceId: string) => {
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`workspace-tab-${workspaceId}`);
+      if (element instanceof HTMLButtonElement) {
+        element.focus();
+      }
+    });
+  }, []);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const currentIndex = workspaces.findIndex((workspace) => workspace.id === activeId);
+      if (currentIndex === -1) return;
+
+      let nextIndex = currentIndex;
+
+      switch (event.key) {
+        case 'ArrowLeft':
+        case 'ArrowUp':
+          nextIndex = currentIndex === 0 ? workspaces.length - 1 : currentIndex - 1;
+          break;
+        case 'ArrowRight':
+        case 'ArrowDown':
+          nextIndex = currentIndex === workspaces.length - 1 ? 0 : currentIndex + 1;
+          break;
+        case 'Home':
+          nextIndex = 0;
+          break;
+        case 'End':
+          nextIndex = workspaces.length - 1;
+          break;
+        default:
+          return;
+      }
+
+      event.preventDefault();
+      const nextWorkspace = workspaces[nextIndex];
+      if (!nextWorkspace) return;
+
+      onSwitch(nextWorkspace.id);
+      focusWorkspaceTab(nextWorkspace.id);
+    },
+    [activeId, focusWorkspaceTab, onSwitch, workspaces]
+  );
+
   return (
     <motion.div
       className="workspace-tabs-container"
@@ -73,19 +119,22 @@ export function WorkspaceTabs({
       initial="hidden"
       animate="visible"
     >
-      <AnimatePresence mode="popLayout">
-        {workspaces.map((workspace) => (
-          <WorkspaceTab
-            key={workspace.id}
-            workspace={workspace}
-            isActive={workspace.id === activeId}
-            canDelete={canDeleteAny}
-            onClick={() => onSwitch(workspace.id)}
-            onClose={() => onDelete(workspace.id)}
-            onRename={(name) => onRename(workspace.id, name)}
-          />
-        ))}
-      </AnimatePresence>
+      <div className="workspace-tabs-list" role="tablist" aria-label="Workspaces" onKeyDown={handleKeyDown}>
+        <AnimatePresence mode="popLayout">
+          {workspaces.map((workspace) => (
+            <WorkspaceTab
+              key={workspace.id}
+              tabButtonId={`workspace-tab-${workspace.id}`}
+              workspace={workspace}
+              isActive={workspace.id === activeId}
+              canDelete={canDeleteAny}
+              onClick={() => onSwitch(workspace.id)}
+              onClose={() => onDelete(workspace.id)}
+              onRename={(name) => onRename(workspace.id, name)}
+            />
+          ))}
+        </AnimatePresence>
+      </div>
 
       <motion.button
         className="workspace-add-btn"

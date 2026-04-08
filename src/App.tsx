@@ -16,19 +16,6 @@ import { createShapeId } from './types';
 import './App.css';
 
 const MAX_WORKSPACES = 10;
-const TOOL_LABELS: Record<ToolType, string> = {
-  select: 'Select',
-  pan: 'Pan',
-  rectangle: 'Rectangle',
-  circle: 'Circle',
-  line: 'Line',
-  freehand: 'Freehand',
-  eraser: 'Eraser',
-  image: 'Image',
-  audio: 'Audio',
-  text: 'Text',
-  embed: 'Embed',
-};
 
 function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -256,145 +243,94 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="app-header-brand">
-          <div className="app-header-mark">TD</div>
-          <div className="app-header-copy">
-            <span className="app-header-eyebrow">Canvas Studio</span>
+        <div className="header-top">
+          <div className="header-title">
             <h1>TLDraw Clone</h1>
           </div>
-        </div>
 
-        <div className="app-header-center">
-          <div className="app-header-status">
-            <span className="status-pill status-pill-strong">{activeWorkspace.name}</span>
-            <span className="status-pill">{TOOL_LABELS[editorState.tool]} tool</span>
-            <span className="status-pill">{shapes.length} shapes</span>
-            <span className="status-pill">{workspaceStore.workspaces.length} boards</span>
+          <div className="header-actions">
+            <button
+              className="action-button"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Undo (Ctrl+Z)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 7v6h6M3 13c0-4.97 4.03-9 9-9 4.97 0 9 4.03 9 9s-4.03 9-9 9c-2.39 0-4.68-.94-6.36-2.64L3 13" />
+              </svg>
+              Undo
+            </button>
+            <button
+              className="action-button"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Redo (Ctrl+Y)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 7v6h-6M21 13c0-4.97-4.03-9-9-9-4.97 0-9 4.03-9 9s4.03 9 9 9c2.39 0 4.68-.94 6.36-2.64L21 13" />
+              </svg>
+              Redo
+            </button>
+            <button
+              className="action-button delete"
+              onClick={deleteSelectedShapes}
+              disabled={editorState.selectedShapeIds.length === 0}
+              title="Delete Selected (Delete)"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </button>
           </div>
-
-          <WorkspaceTabs
-            workspaces={workspaceStore.workspaces}
-            activeId={workspaceStore.activeWorkspaceId}
-            onSwitch={workspaceStore.switchWorkspace}
-            onAdd={handleAddWorkspace}
-            onDelete={handleDeleteWorkspace}
-            onRename={handleRenameWorkspace}
-            maxWorkspaces={MAX_WORKSPACES}
-          />
         </div>
 
-        <div className="header-actions">
-          <button
-            className="action-button"
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 7v6h6M3 13c0-4.97 4.03-9 9-9 4.97 0 9 4.03 9 9s-4.03 9-9 9c-2.39 0-4.68-.94-6.36-2.64L3 13" />
-            </svg>
-            Undo
-          </button>
-          <button
-            className="action-button"
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y)"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 7v6h-6M21 13c0-4.97-4.03-9-9-9-4.97 0-9 4.03-9 9s4.03 9 9 9c2.39 0 4.68-.94 6.36-2.64L21 13" />
-            </svg>
-            Redo
-          </button>
-          <button
-            className="action-button delete"
-            onClick={deleteSelectedShapes}
-            disabled={editorState.selectedShapeIds.length === 0}
-            title="Delete Selected (Delete)"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </button>
-        </div>
+        <WorkspaceTabs
+          workspaces={workspaceStore.workspaces}
+          activeId={workspaceStore.activeWorkspaceId}
+          onSwitch={workspaceStore.switchWorkspace}
+          onAdd={handleAddWorkspace}
+          onDelete={handleDeleteWorkspace}
+          onRename={handleRenameWorkspace}
+          maxWorkspaces={MAX_WORKSPACES}
+        />
       </header>
 
       <main className="app-main">
-        <aside className="app-sidebar">
-          <div className="sidebar-card sidebar-tools-card">
-            <div className="sidebar-card-header">
-              <span className="sidebar-card-eyebrow">Tools</span>
-              <h2>Build and edit faster</h2>
-              <p>Keep your most-used actions visible, grouped, and one click away.</p>
-            </div>
+        <Toolbar currentTool={editorState.tool} onToolChange={handleToolChange} />
 
-            <Toolbar currentTool={editorState.tool} onToolChange={handleToolChange} />
-          </div>
+        <div className="canvas-container">
+          <Canvas
+            canvasRef={canvasRef}
+            shapes={shapes}
+            selectedIds={editorState.selectedShapeIds}
+            tool={editorState.tool}
+            style={editorState.shapeStyle}
+            camera={editorState.camera}
+            isDragging={editorState.isDragging}
+            isDrawing={editorState.isDrawing}
+            editingTextId={editorState.editingTextId}
+            onShapeAdd={addShape}
+            onShapeUpdate={updateShape}
+            onShapeDelete={deleteShape}
+            onSelectionChange={selectShapes}
+            onDraggingChange={handleDraggingChange}
+            onDrawingChange={handleDrawingChange}
+            onPan={pan}
+            onZoomAt={zoomAt}
+            screenToWorld={screenToWorld}
+            worldToScreen={worldToScreen}
+            onTextEditStart={startTextEdit}
+            onTextEditCommit={commitTextEdit}
+            onTextEditCancel={cancelTextEdit}
+          />
 
-          <div className="sidebar-card sidebar-insights-card">
-            <div className="sidebar-card-header">
-              <span className="sidebar-card-eyebrow">Board Snapshot</span>
-              <h2>Stay oriented</h2>
-            </div>
-
-            <div className="sidebar-stats">
-              <div className="sidebar-stat">
-                <span className="sidebar-stat-label">Selected</span>
-                <strong>{editorState.selectedShapeIds.length}</strong>
-              </div>
-              <div className="sidebar-stat">
-                <span className="sidebar-stat-label">Zoom</span>
-                <strong>{Math.round(editorState.camera.zoom * 100)}%</strong>
-              </div>
-              <div className="sidebar-stat">
-                <span className="sidebar-stat-label">Mode</span>
-                <strong>{TOOL_LABELS[editorState.tool]}</strong>
-              </div>
-            </div>
-
-            <div className="sidebar-tips">
-              <p>Shift + drag to pan quickly.</p>
-              <p>Ctrl/Cmd + wheel zooms at the cursor.</p>
-              <p>Double-click text to edit inline.</p>
-            </div>
-          </div>
-        </aside>
-
-        <div className="canvas-stage">
-          <div className="canvas-container">
-            <Canvas
-              canvasRef={canvasRef}
-              shapes={shapes}
-              selectedIds={editorState.selectedShapeIds}
-              tool={editorState.tool}
-              style={editorState.shapeStyle}
-              camera={editorState.camera}
-              isDragging={editorState.isDragging}
-              isDrawing={editorState.isDrawing}
-              editingTextId={editorState.editingTextId}
-              onShapeAdd={addShape}
-              onShapeUpdate={updateShape}
-              onShapeDelete={deleteShape}
-              onSelectionChange={selectShapes}
-              onDraggingChange={handleDraggingChange}
-              onDrawingChange={handleDrawingChange}
-              onPan={pan}
-              onZoomAt={zoomAt}
-              screenToWorld={screenToWorld}
-              worldToScreen={worldToScreen}
-              onTextEditStart={startTextEdit}
-              onTextEditCommit={commitTextEdit}
-              onTextEditCancel={cancelTextEdit}
-            />
-
-            <ZoomControls
-              zoom={editorState.camera.zoom}
-              onZoomIn={zoomIn}
-              onZoomOut={zoomOut}
-              onReset={resetZoom}
-            />
-          </div>
+          <ZoomControls
+            zoom={editorState.camera.zoom}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onReset={resetZoom}
+          />
         </div>
 
         <AnimatePresence mode="popLayout">

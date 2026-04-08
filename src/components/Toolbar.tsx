@@ -59,64 +59,24 @@ const tools: { id: ToolType; label: string; icon: string; shortcut: string }[] =
   },
 ];
 
-const toolGroups: { title: string; description: string; toolIds: ToolType[] }[] = [
-  {
-    title: 'Navigate',
-    description: 'Move around the board and pick shapes.',
-    toolIds: ['select', 'pan'],
-  },
-  {
-    title: 'Draw',
-    description: 'Create marks, structure, and annotations.',
-    toolIds: ['rectangle', 'circle', 'line', 'freehand', 'text'],
-  },
-  {
-    title: 'Media',
-    description: 'Bring in rich content and cleanup tools.',
-    toolIds: ['image', 'audio', 'embed', 'eraser'],
-  },
-];
-
 export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
   return (
     <div className="toolbar">
-      {toolGroups.map((group) => (
-        <section key={group.title} className="toolbar-group">
-          <div className="toolbar-group-header">
-            <h3>{group.title}</h3>
-            <p>{group.description}</p>
-          </div>
-
-          <div className="toolbar-content">
-            {group.toolIds.map((toolId) => {
-              const tool = tools.find((item) => item.id === toolId);
-              if (!tool) return null;
-
-              return (
-                <button
-                  key={tool.id}
-                  className={`toolbar-button ${currentTool === tool.id ? 'active' : ''}`}
-                  onClick={() => onToolChange(tool.id)}
-                  title={tool.label}
-                >
-                  <span className="toolbar-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d={tool.icon} />
-                    </svg>
-                  </span>
-
-                  <span className="toolbar-copy">
-                    <span className="toolbar-label">{tool.label.split(' ')[0]}</span>
-                    <span className="toolbar-description">{tool.label}</span>
-                  </span>
-
-                  <span className="toolbar-shortcut">{tool.shortcut}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+      <div className="toolbar-content">
+        {tools.map((tool) => (
+          <button
+            key={tool.id}
+            className={`toolbar-button ${currentTool === tool.id ? 'active' : ''}`}
+            onClick={() => onToolChange(tool.id)}
+            title={tool.label}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d={tool.icon} />
+            </svg>
+            <span className="toolbar-label">{tool.label.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

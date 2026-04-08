@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Workspace } from '../stores/workspaceStore';
 
 interface WorkspaceTabProps {
+  tabButtonId: string;
   workspace: Workspace;
   isActive: boolean;
   canDelete: boolean;
@@ -52,6 +53,7 @@ function isNameTruncated(name: string): boolean {
 }
 
 export function WorkspaceTab({
+  tabButtonId,
   workspace,
   isActive,
   canDelete,
@@ -65,11 +67,10 @@ export function WorkspaceTab({
   const [showTooltip, setShowTooltip] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
   const [longPressProgress, setLongPressProgress] = useState(0);
-  
+
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const displayName = getDisplayName(workspace.name);
@@ -96,7 +97,6 @@ export function WorkspaceTab({
   useEffect(() => {
     return () => {
       if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
       if (longPressIntervalRef.current) clearInterval(longPressIntervalRef.current);
     };
   }, []);
@@ -136,9 +136,9 @@ export function WorkspaceTab({
 
   const startTooltipTimer = useCallback(() => {
     if (!nameIsTruncated) return;
-    
+
     if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
-    
+
     tooltipTimerRef.current = setTimeout(() => {
       setShowTooltip(true);
     }, 3000);
@@ -155,15 +155,15 @@ export function WorkspaceTab({
   const startLongPress = useCallback(() => {
     setIsLongPressing(true);
     setLongPressProgress(0);
-    
+
     const startTime = Date.now();
     const duration = 3000;
-    
+
     longPressIntervalRef.current = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min((elapsed / duration) * 100, 100);
       setLongPressProgress(progress);
-      
+
       if (elapsed >= duration) {
         setShowMenu(true);
         setIsLongPressing(false);
@@ -211,13 +211,6 @@ export function WorkspaceTab({
       exit="exit"
       layout
       className={`workspace-tab ${isActive ? 'active' : ''}`}
-      onClick={onClick}
-      onDoubleClick={handleDoubleClick}
-      onContextMenu={handleContextMenu}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
       layoutId={workspace.id}
     >
       {isEditing ? (
@@ -233,10 +226,27 @@ export function WorkspaceTab({
         />
       ) : (
         <>
-          <span className="workspace-tab-text">{displayName}</span>
+          <button
+            id={tabButtonId}
+            type="button"
+            className="workspace-tab-trigger"
+            role="tab"
+            aria-selected={isActive}
+            tabIndex={isActive ? 0 : -1}
+            onClick={onClick}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={handleContextMenu}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+          >
+            <span className="workspace-tab-text">{displayName}</span>
+          </button>
 
           {canDelete && (
             <button
+              type="button"
               className="workspace-tab-close"
               onClick={handleCloseClick}
               title="Close workspace"
