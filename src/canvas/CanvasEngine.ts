@@ -3,7 +3,8 @@ import type {
   RectangleShape,
   CircleShape,
   LineShape,
-  FreehandShape,
+  ArrowShape,
+  PencilShape,
   EmbedShape,
   Point,
   Bounds,
@@ -105,8 +106,11 @@ export class CanvasEngine {
       case 'line':
         this.drawLine(shape);
         break;
-      case 'freehand':
-        this.drawFreehand(shape);
+      case 'arrow':
+        this.drawArrow(shape);
+        break;
+      case 'pencil':
+        this.drawPencil(shape);
         break;
       case 'image':
         this.drawImage(shape);
@@ -162,7 +166,36 @@ export class CanvasEngine {
     this.ctx.stroke();
   }
 
-  private drawFreehand(shape: FreehandShape) {
+  private drawArrow(shape: ArrowShape) {
+    const { start, end } = shape;
+    const arrowLength = 10;
+    const arrowAngle = Math.PI / 6;
+    
+    // Calculate arrowhead angle
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    
+    // Draw line
+    this.ctx.beginPath();
+    this.ctx.moveTo(start.x, start.y);
+    this.ctx.lineTo(end.x, end.y);
+    this.ctx.stroke();
+    
+    // Draw arrowhead
+    this.ctx.beginPath();
+    this.ctx.moveTo(end.x, end.y);
+    this.ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - arrowAngle),
+      end.y - arrowLength * Math.sin(angle - arrowAngle)
+    );
+    this.ctx.moveTo(end.x, end.y);
+    this.ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + arrowAngle),
+      end.y - arrowLength * Math.sin(angle + arrowAngle)
+    );
+    this.ctx.stroke();
+  }
+
+  private drawPencil(shape: PencilShape) {
     const { points } = shape;
     if (points.length < 2) return;
 
@@ -432,7 +465,15 @@ export class CanvasEngine {
           height: Math.abs(shape.end.y - shape.start.y),
         };
       }
-      case 'freehand': {
+      case 'arrow': {
+        return {
+          x: Math.min(shape.start.x, shape.end.x),
+          y: Math.min(shape.start.y, shape.end.y),
+          width: Math.abs(shape.end.x - shape.start.x),
+          height: Math.abs(shape.end.y - shape.start.y),
+        };
+      }
+      case 'pencil': {
         const xs = shape.points.map((p) => p.x);
         const ys = shape.points.map((p) => p.y);
         return {
@@ -553,10 +594,26 @@ export class CanvasEngine {
           createdAt: now,
           updatedAt: now,
         };
-      case 'freehand':
+      case 'arrow':
         return {
           id,
-          type: 'freehand',
+          type: 'arrow',
+          bounds: {
+            x: Math.min(start.x, end.x),
+            y: Math.min(start.y, end.y),
+            width: Math.abs(end.x - start.x),
+            height: Math.abs(end.y - start.y),
+          },
+          start,
+          end,
+          style: { ...style },
+          createdAt: now,
+          updatedAt: now,
+        };
+      case 'pencil':
+        return {
+          id,
+          type: 'pencil',
           bounds: {
             x: Math.min(start.x, end.x),
             y: Math.min(start.y, end.y),

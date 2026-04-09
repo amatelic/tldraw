@@ -100,9 +100,9 @@ export function useKeyboard(actions: KeyboardActions) {
           description: 'Line tool',
         },
         {
-          key: 'f',
-          handler: () => actions.setTool('freehand'),
-          description: 'Freehand tool',
+          key: 'd',
+          handler: () => actions.setTool('pencil'),
+          description: 'Pencil tool',
         },
         {
           key: 'e',
@@ -110,14 +110,14 @@ export function useKeyboard(actions: KeyboardActions) {
           description: 'Eraser tool',
         },
         {
+          key: 'a',
+          handler: () => actions.setTool('arrow'),
+          description: 'Arrow tool',
+        },
+        {
           key: 'i',
           handler: () => actions.setTool('image'),
           description: 'Image tool',
-        },
-        {
-          key: 'a',
-          handler: () => actions.setTool('audio'),
-          description: 'Audio tool',
         },
         {
           key: 't',
@@ -156,10 +156,10 @@ export const keyboardShortcuts = [
   { keys: ['R'], description: 'Rectangle tool' },
   { keys: ['C'], description: 'Circle tool' },
   { keys: ['L'], description: 'Line tool' },
-  { keys: ['F'], description: 'Freehand tool' },
+  { keys: ['A'], description: 'Arrow tool' },
+  { keys: ['D'], description: 'Pencil tool' },
   { keys: ['E'], description: 'Eraser tool' },
   { keys: ['I'], description: 'Image tool' },
-  { keys: ['A'], description: 'Audio tool' },
   { keys: ['T'], description: 'Text tool' },
   { keys: ['Ctrl', 'Z'], description: 'Undo' },
   { keys: ['Ctrl', 'Y'], description: 'Redo' },

@@ -203,7 +203,19 @@ export function Canvas({
         const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
         return distance <= 5;
       }
-      case 'freehand':
+      case 'arrow': {
+        const { start, end } = shape;
+        const arrowLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+        if (arrowLength === 0) return false;
+        const t =
+          ((point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y)) /
+          arrowLength ** 2;
+        const closestX = start.x + t * (end.x - start.x);
+        const closestY = start.y + t * (end.y - start.y);
+        const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
+        return distance <= 5;
+      }
+      case 'pencil':
         return shape.points.some((p) => {
           const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2);
           return d <= 10;
@@ -269,7 +281,29 @@ export function Canvas({
           };
         }
 
-        case 'freehand': {
+        case 'arrow': {
+          const originalStart = shape.start;
+          const originalEnd = shape.end;
+          return (dx: number, dy: number) => {
+            onShapeUpdate(id, {
+              start: {
+                x: originalStart.x + dx,
+                y: originalStart.y + dy,
+              },
+              end: {
+                x: originalEnd.x + dx,
+                y: originalEnd.y + dy,
+              },
+              bounds: {
+                ...originalBounds,
+                x: startPos.x + dx,
+                y: startPos.y + dy,
+              },
+            });
+          };
+        }
+
+        case 'pencil': {
           const originalPoints = shape.points;
           return (dx: number, dy: number) => {
             onShapeUpdate(id, {
@@ -392,14 +426,14 @@ export function Canvas({
           } else {
             onSelectionChange([]);
           }
-        } else if (['rectangle', 'circle', 'line', 'freehand'].includes(toolRef.current)) {
+        } else if (['rectangle', 'circle', 'line', 'arrow', 'pencil'].includes(toolRef.current)) {
           onDrawingChange(true);
           startPointRef.current = worldPoint;
 
-          if (toolRef.current === 'freehand') {
+          if (toolRef.current === 'pencil') {
             const newShape: Shape = {
               id: createShapeId(),
-              type: 'freehand',
+              type: 'pencil',
               bounds: { x: worldPoint.x, y: worldPoint.y, width: 0, height: 0 },
               points: [worldPoint],
               style: { ...styleRef.current },
@@ -507,13 +541,13 @@ export function Canvas({
           });
         }
       } else if (isDrawingRef.current) {
-        if (toolRef.current === 'freehand' && currentShapeRef.current) {
-          const freehandShape = currentShapeRef.current as Extract<Shape, { type: 'freehand' }>;
-          freehandShape.points.push(worldPoint);
+        if (toolRef.current === 'pencil' && currentShapeRef.current) {
+          const pencilShape = currentShapeRef.current as Extract<Shape, { type: 'pencil' }>;
+          pencilShape.points.push(worldPoint);
           // Update bounds
-          const xs = freehandShape.points.map((p) => p.x);
-          const ys = freehandShape.points.map((p) => p.y);
-          freehandShape.bounds = {
+          const xs = pencilShape.points.map((p) => p.x);
+          const ys = pencilShape.points.map((p) => p.y);
+          pencilShape.bounds = {
             x: Math.min(...xs),
             y: Math.min(...ys),
             width: Math.max(...xs) - Math.min(...xs),
@@ -559,8 +593,8 @@ export function Canvas({
           const shape = currentShapeRef.current;
           // Only add shapes with meaningful size
           if (
-            shape.type === 'freehand'
-              ? (shape as Extract<Shape, { type: 'freehand' }>).points.length > 1
+            shape.type === 'pencil'
+              ? (shape as Extract<Shape, { type: 'pencil' }>).points.length > 1
               : shape.bounds.width > 5 || shape.bounds.height > 5
           ) {
             onShapeAdd(shape);

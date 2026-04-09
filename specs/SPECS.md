@@ -359,6 +359,208 @@ const isNameTruncated = (name: string): boolean => {
 
 ---
 
+### Task 12: Add Agent Domain Model & Orchestrator Foundation
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Create the structured agent contracts and orchestration layer required for all Phase 1 agent workflows.
+
+**Acceptance Criteria**:
+- Add agent-specific types for workflow requests, proposals, findings, and canvas mutations
+- Add an orchestrator that packages board context from the current workspace
+- Support context scopes: current selection, visible board, full board
+- Validate agent proposals before they can be shown in the UI
+- Support a provider abstraction so the UI is not coupled to one model implementation
+- Include a mock/local provider for development until real model wiring is added
+
+**Implementation Details**:
+1. Add `src/types/agents.ts` with structured contracts:
+   - `AgentWorkflowType`
+   - `AgentContextScope`
+   - `AgentRequest`
+   - `AgentProposal`
+   - `AgentAction`
+   - `AgentReviewFinding`
+2. Add `src/agents/agentOrchestrator.ts`
+3. Add helpers that serialize:
+   - workspace metadata
+   - selected shapes
+   - visible shapes
+   - text-bearing shapes
+   - style and bounds information
+4. Add proposal validation:
+   - target ids must exist
+   - action payloads must match shape capabilities
+   - invalid proposals fail safely
+
+**Files to Create**:
+- `src/types/agents.ts`
+- `src/agents/agentOrchestrator.ts`
+- `src/agents/agentOrchestrator.test.ts`
+
+**Files to Modify**:
+- `src/types/index.ts` - export agent types if needed
+- `src/hooks/useCanvas.ts` - expose any missing board context helpers if needed
+
+**Testing Requirements**:
+- Unit tests for context packaging
+- Unit tests for proposal validation
+- Tests for invalid action rejection
+
+---
+
+### Task 13: Add Agent Entry Point & Panel Shell
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Add the initial UI shell for agent workflows, including a header entry point, workflow picker, prompt area, and preview-ready panel states.
+
+**Acceptance Criteria**:
+- Add an `Agents` entry point in the header
+- Open an agent panel or modal from the header
+- Show workflow picker for:
+  - Review Mode
+  - Cleanup Suggestions
+  - Selection Rewrite
+- Show current context scope in the UI
+- Show lifecycle states:
+  - idle
+  - collecting-context
+  - generating
+  - preview-ready
+  - failed
+- Support cancel/close without mutating the board
+
+**Implementation Details**:
+1. The panel should not apply any mutations yet unless a valid proposal is available
+2. If selection exists, default the scope to selection
+3. If no selection exists, default to visible board and explain that in the UI
+4. The panel should render both review-only and mutating workflows
+
+**Files to Create**:
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+
+**Files to Modify**:
+- `src/App.tsx` - add `Agents` button and panel mounting
+- `src/App.css` - add agent panel styles
+
+**Testing Requirements**:
+- Component tests for open/close behavior
+- Component tests for workflow switching
+- Component tests for context scope messaging
+
+---
+
+### Task 14: Implement Agent Review Mode
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Implement the first non-mutating workflow where the agent reviews the board and returns clarity/style findings without changing shapes.
+
+**Acceptance Criteria**:
+- User can run Review Mode from the agent panel
+- Review Mode can target the current selection or visible board
+- The result displays grouped findings:
+  - clarity issues
+  - missing information
+  - consistency issues
+  - suggested next edits
+- Review Mode must not mutate the board
+- Empty findings state should be handled gracefully
+
+**Implementation Details**:
+1. Use the orchestrator/provider pipeline introduced in Task 12
+2. Return findings in structured form, not free-form markdown only
+3. The panel should visually distinguish Review Mode from mutating workflows
+
+**Files to Create**:
+- `src/agents/providers/reviewModeProvider.ts`
+- `src/agents/providers/reviewModeProvider.test.ts`
+
+**Files to Modify**:
+- `src/components/AgentPanel.tsx`
+- `src/agents/agentOrchestrator.ts`
+
+**Testing Requirements**:
+- Unit tests for provider output mapping
+- Component tests for findings rendering
+- Regression test confirming no board mutation occurs
+
+---
+
+### Task 15: Implement Cleanup Suggestions With Preview/Apply
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Implement a workflow that suggests low-risk board cleanup operations and lets the user preview and apply them.
+
+**Acceptance Criteria**:
+- User can request cleanup suggestions from the agent panel
+- Suggestions may include:
+  - alignment fixes
+  - spacing normalization
+  - empty text cleanup
+  - inconsistent style warnings
+- Suggestions are presented as explicit proposed actions
+- User can apply all suggestions or selected suggestions only
+- Applying suggestions creates a single undoable change set
+
+**Implementation Details**:
+1. Start with deterministic or mock-backed cleanup rules if needed
+2. Proposal preview must list:
+   - shapes affected
+   - fields changed
+   - deletions, if any
+3. High-impact actions such as deletion must require explicit confirmation
+
+**Files to Create**:
+- `src/agents/providers/cleanupSuggestionsProvider.ts`
+- `src/agents/providers/cleanupSuggestionsProvider.test.ts`
+
+**Files to Modify**:
+- `src/components/AgentPanel.tsx`
+- `src/hooks/useCanvas.ts` - support grouped apply if needed
+- `src/agents/agentOrchestrator.ts`
+
+**Testing Requirements**:
+- Unit tests for cleanup suggestion generation
+- Component tests for preview/apply UI
+- Integration test confirming grouped undo behavior
+
+---
+
+### Task 16: Implement Selection Rewrite Workflow
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Implement a selection-scoped agent workflow that rewrites selected text content and optionally proposes small layout adjustments.
+
+**Acceptance Criteria**:
+- Workflow is available only when the current selection contains text-capable shapes
+- User can enter a short rewrite prompt
+- Workflow only targets the current selection
+- Preview clearly shows before/after text changes
+- Apply updates the selected text shapes only
+- Applying the rewrite is undoable in one step
+
+**Implementation Details**:
+1. Reject the workflow with helpful UI if no text-capable shapes are selected
+2. Limit Phase 1 to text rewrites only
+3. Optional layout adjustments must remain previewable and low-risk
+4. Do not support full prompt-to-diagram generation in this task
+
+**Files to Create**:
+- `src/agents/providers/selectionRewriteProvider.ts`
+- `src/agents/providers/selectionRewriteProvider.test.ts`
+
+**Files to Modify**:
+- `src/components/AgentPanel.tsx`
+- `src/agents/agentOrchestrator.ts`
+- `src/hooks/useCanvas.ts` - support grouped mutation apply if needed
+
+**Testing Requirements**:
+- Unit tests for rewrite proposal generation
+- Component tests for before/after preview
+- Integration test confirming only selected text shapes change
+
+---
+
 ## Task Selection Workflow
 
 When working on tasks:

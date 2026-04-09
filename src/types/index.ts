@@ -4,7 +4,8 @@ export type ToolType =
   | 'rectangle'
   | 'circle'
   | 'line'
-  | 'freehand'
+  | 'arrow'
+  | 'pencil'
   | 'eraser'
   | 'image'
   | 'audio'
@@ -40,7 +41,7 @@ export interface ShapeStyle {
 
 export interface BaseShape {
   id: string;
-  type: 'rectangle' | 'circle' | 'line' | 'freehand' | 'image' | 'audio' | 'text' | 'embed';
+  type: 'rectangle' | 'circle' | 'line' | 'arrow' | 'pencil' | 'image' | 'audio' | 'text' | 'embed';
   bounds: Bounds;
   style: ShapeStyle;
   createdAt: number;
@@ -63,8 +64,14 @@ export interface LineShape extends BaseShape {
   end: Point;
 }
 
-export interface FreehandShape extends BaseShape {
-  type: 'freehand';
+export interface ArrowShape extends BaseShape {
+  type: 'arrow';
+  start: Point;
+  end: Point;
+}
+
+export interface PencilShape extends BaseShape {
+  type: 'pencil';
   points: Point[];
 }
 
@@ -107,7 +114,8 @@ export type Shape =
   | RectangleShape
   | CircleShape
   | LineShape
-  | FreehandShape
+  | ArrowShape
+  | PencilShape
   | ImageShape
   | AudioShape
   | TextShape
@@ -213,7 +221,19 @@ export function isPointInShape(point: Point, shape: Shape): boolean {
       const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
       return distance <= 5;
     }
-    case 'freehand':
+    case 'arrow': {
+      const { start, end } = shape;
+      const arrowLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
+      if (arrowLength === 0) return false;
+      const t =
+        ((point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y)) /
+        arrowLength ** 2;
+      const closestX = start.x + t * (end.x - start.x);
+      const closestY = start.y + t * (end.y - start.y);
+      const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
+      return distance <= 5;
+    }
+    case 'pencil':
       return shape.points.some((p) => {
         const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2);
         return d <= 10;
