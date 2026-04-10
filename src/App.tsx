@@ -10,6 +10,9 @@ import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { ImageUploadDialog } from './components/ImageUploadDialog';
 import { AudioUploadDialog } from './components/AudioUploadDialog';
 import { EmbedDialog } from './components/EmbedDialog';
+import { AgentPanel } from './components/AgentPanel';
+import { AgentOrchestrator } from './agents/agentOrchestrator';
+import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { ToolType, Shape, ShapeStyle } from './types';
 import { createShapeId } from './types';
@@ -21,6 +24,9 @@ function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
   const [showAudioDialog, setShowAudioDialog] = useState(false);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
+  const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
+  const [agentViewport, setAgentViewport] = useState<{ width: number; height: number } | null>(null);
+  const [agentOrchestrator] = useState(() => new AgentOrchestrator([new ReviewModeProvider()]));
   const workspaceStore = useWorkspaceStore();
   const hasInitializedWorkspaceRef = useRef(false);
 
@@ -63,6 +69,25 @@ function App() {
     commitTextEdit,
     cancelTextEdit,
   } = useCanvas(activeWorkspace.id);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const syncViewport = () => {
+      setAgentViewport({
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      });
+    };
+
+    syncViewport();
+
+    const observer = new ResizeObserver(syncViewport);
+    observer.observe(canvas);
+
+    return () => observer.disconnect();
+  }, [canvasRef]);
 
   // Check if any selected shape is text
   const hasTextSelection = shapes.some(
@@ -251,6 +276,18 @@ function App() {
           <div className="header-actions">
             <button
               className="action-button"
+              onClick={() => setIsAgentPanelOpen(true)}
+              title="Open Agent"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3l7 4v5c0 4.97-3.05 8.98-7 10-3.95-1.02-7-5.03-7-10V7l7-4z" />
+                <path d="M9.5 11.5a2.5 2.5 0 015 0c0 1.4-1.1 1.94-1.9 2.47-.52.34-.85.64-.85 1.03" />
+                <circle cx="12" cy="17.5" r=".5" fill="currentColor" stroke="none" />
+              </svg>
+              Agents
+            </button>
+            <button
+              className="action-button"
               onClick={undo}
               disabled={!canUndo}
               title="Undo (Ctrl+Z)"
@@ -377,6 +414,22 @@ function App() {
         onEmbedAdd={handleEmbedAdd}
         style={editorState.shapeStyle}
       />
+
+      {isAgentPanelOpen && (
+        <AgentPanel
+          isOpen={isAgentPanelOpen}
+          workspaceId={activeWorkspace.id}
+          workspaceName={activeWorkspace.name}
+          shapes={shapes}
+          editorState={{
+            camera: editorState.camera,
+            selectedShapeIds: editorState.selectedShapeIds,
+          }}
+          viewport={agentViewport}
+          orchestrator={agentOrchestrator}
+          onClose={() => setIsAgentPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }

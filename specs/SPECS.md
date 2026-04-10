@@ -360,7 +360,7 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 12: Add Agent Domain Model & Orchestrator Foundation
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Create the structured agent contracts and orchestration layer required for all Phase 1 agent workflows.
 
@@ -406,10 +406,20 @@ const isNameTruncated = (name: string): boolean => {
 - Unit tests for proposal validation
 - Tests for invalid action rejection
 
+**Files Created**:
+- `src/types/agents.ts`
+- `src/agents/agentOrchestrator.ts`
+- `src/agents/agentOrchestrator.test.ts`
+
+**Notes**:
+- Added scoped context packaging for selection, visible board, and full board
+- Added provider abstraction with proposal validation before UI consumption
+- Mutation proposal validation is in place even though Phase 1 currently only wires Review Mode
+
 ---
 
 ### Task 13: Add Agent Entry Point & Panel Shell
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Add the initial UI shell for agent workflows, including a header entry point, workflow picker, prompt area, and preview-ready panel states.
 
@@ -448,10 +458,22 @@ const isNameTruncated = (name: string): boolean => {
 - Component tests for workflow switching
 - Component tests for context scope messaging
 
+**Files Created**:
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+
+**Files Modified**:
+- `src/App.tsx` - added `Agents` button and modal mounting
+- `src/App.css` - added minimal agent modal styles
+
+**Notes**:
+- The UI intentionally stays minimal: one entry point, one modal, one workflow picker, one prompt field
+- Lifecycle states are surfaced in the panel without adding provider/model controls
+
 ---
 
 ### Task 14: Implement Agent Review Mode
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Implement the first non-mutating workflow where the agent reviews the board and returns clarity/style findings without changing shapes.
 
@@ -483,6 +505,18 @@ const isNameTruncated = (name: string): boolean => {
 - Unit tests for provider output mapping
 - Component tests for findings rendering
 - Regression test confirming no board mutation occurs
+
+**Files Created**:
+- `src/agents/providers/reviewModeProvider.ts`
+- `src/agents/providers/reviewModeProvider.test.ts`
+
+**Files Modified**:
+- `src/components/AgentPanel.tsx`
+- `src/agents/agentOrchestrator.ts`
+
+**Notes**:
+- Review Mode is deterministic/mock-backed for now and returns structured findings only
+- Cleanup Suggestions and Selection Rewrite remain visible in the UI but are not wired yet
 
 ---
 

@@ -292,20 +292,129 @@ grep -c "Status: 🔴 Not Started" specs/SPECS.md
 When you finish a task:
 
 1. **Mark task complete in SPECS.md** - Change status to ✅ Completed
-2. **Run all checks**:
-   ```bash
-   npx vitest run
-   npm run lint
-   npm run build
-   ```
-3. **Stage changes**: `git add .`
-4. **Create commit with descriptive message** following format:
-   ```
-   <type>: <task name> - <brief description>
-   
-   - Implemented: <what was done>
-   - Tests: <test coverage>
-   - Closes Task #<number>
-   ```
-5. **Show commit to user for approval** - Do NOT push without user confirmation
-6. **After approval**: Push branch and create PR (if applicable)
+2. **Update relevant README files** - Every code change requires corresponding documentation updates:
+   - Modified components → Update `src/components/README.md`
+   - Modified hooks → Update `src/hooks/README.md`
+   - Modified stores → Update `src/stores/README.md`
+   - Modified canvas → Update `src/canvas/README.md`
+   - Modified types → Update `src/types/README.md`
+   - Modified utils → Update `src/utils/README.md`
+   - New features → Update relevant READMEs with behavior, success criteria, and known issues
+   - Add any development issues discovered to the appropriate README's "Known Issues" section
+3. **Run all checks**:
+    ```bash
+    npx vitest run
+    npm run lint
+    npm run build
+    ```
+  4. **Stage changes**: `git add .`
+  5. **Create commit with descriptive message** following format:
+     ```
+     <type>: <task name> - <brief description>
+     
+     - Implemented: <what was done>
+     - Tests: <test coverage>
+     - Documentation: <which READMEs were updated>
+     - Closes Task #<number>
+     ```
+  6. **Show commit to user for approval** - Do NOT push without user confirmation
+  7. **After approval**: Push branch and create PR (if applicable)
+
+## Documentation Requirements
+
+### README Update Rules
+
+**MANDATORY**: Update README files for EVERY code change:
+
+1. **Component Changes** (`src/components/README.md`):
+   - Update component description if behavior changes
+   - Update props interface
+   - Add new success criteria
+   - Document any new constraints
+   - Add discovered issues to "Known Issues"
+
+2. **Hook Changes** (`src/hooks/README.md`):
+   - Update return interface
+   - Document new state or methods
+   - Update constraints and known issues
+
+3. **Store Changes** (`src/stores/README.md`):
+   - Update state interface
+   - Document new actions
+   - Add any new hardcoded values
+   - Update constraints
+
+4. **Canvas Changes** (`src/canvas/README.md`):
+   - Document new rendering methods
+   - Update shape type support
+   - Add performance considerations
+
+5. **Type Changes** (`src/types/README.md`):
+   - Add new interfaces
+   - Update union types
+   - Document constants
+
+6. **Util Changes** (`src/utils/README.md`):
+   - Document new functions
+   - Add usage examples
+   - Note pure vs impure functions
+
+### What to Document
+
+For every change, document:
+- **Behavior**: What it does, how it works
+- **Success Criteria**: How to verify it works
+- **Constraints**: Limitations, hardcoded values
+- **Known Issues**: Bugs, technical debt, gotchas discovered during development
+- **Dependencies**: What it depends on, what depends on it
+
+### Development Issues
+
+When you encounter issues during development:
+1. Try to resolve them
+2. If not resolvable in current task, add to appropriate README's "Known Issues" section
+3. Include context: what you tried, why it didn't work, potential solutions
+
+## Workflow Rules
+
+### 1. Finish Previous Tasks First
+
+**CRITICAL**: Always complete or properly hand off previous tasks before starting new ones:
+
+1. **Check current state** - Review what was left incomplete
+2. **Complete pending work** - Finish the previous task if possible
+3. **Document status** - If handing off, document:
+   - What was completed
+   - What's still pending
+   - Blockers or issues encountered
+   - Next steps
+4. **Update SPECS.md** - Mark status appropriately (✅ Completed, 🟡 In Progress, or 🔴 Not Started with notes)
+5. **Update relevant READMEs** - Ensure documentation reflects current state
+6. **Run all checks** - Tests, lint, build must pass
+7. **Get user approval** - Before switching tasks
+
+### 2. No Task Switching Without Completion
+
+Do NOT start a new task when:
+- Previous task has failing tests
+- Previous task has lint errors
+- Previous task breaks the build
+- Previous task is partially implemented
+- Documentation is not updated
+
+Exception: User explicitly requests task switch after being informed of incomplete state.
+
+### 3. Documentation is Part of the Task
+
+README updates are NOT optional:
+- Every code change requires README updates
+- Task is not complete until documentation is updated
+- "Done" = Code + Tests + Documentation all complete
+
+### 4. Issue Tracking
+
+When you discover issues (not related to current task):
+1. Document in appropriate README's "Known Issues" section
+2. If critical, notify user immediately
+3. If related to current task, fix as part of task
+4. Update SPECS.md if it's a new task to be scheduled

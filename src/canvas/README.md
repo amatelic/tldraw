@@ -1,0 +1,361 @@
+# Canvas Directory
+
+This directory contains the canvas rendering engine for drawing shapes.
+
+## Overview
+
+The CanvasEngine provides low-level canvas rendering capabilities:
+- Shape rendering (rectangle, circle, line, arrow, pencil, image, audio, text, embed)
+- Coordinate transformations (screen ↔ world)
+- Camera transformations (pan/zoom)
+- Grid rendering
+- Selection indicators
+- Shape creation from drag points
+
+## Files
+
+| File | Purpose | Lines |
+|------|---------|-------|
+| `CanvasEngine.ts` | Canvas rendering engine class | 637 |
+
+## Detailed Documentation
+
+### CanvasEngine Class
+
+**Purpose**: Handles all canvas rendering operations and coordinate math.
+
+**⚠️ CRITICAL**: This class manages the HTML5 Canvas 2D Context. All rendering goes through here.
+
+**Constructor**:
+```typescript
+constructor(canvas: HTMLCanvasElement)
+```
+
+**Throws**: Error if canvas 2D context unavailable.
+
+**Instance Properties**:
+```typescript
+private canvas: HTMLCanvasElement;
+private ctx: CanvasRenderingContext2D;
+private dpr: number;  // Device Pixel Ratio
+private imageCache: Map<string, HTMLImageElement>;
+```
+
+**Public Methods**:
+
+| Method | Purpose |
+|--------|---------|
+| `resize()` | Updates canvas size for DPR |
+| `clear()` | Clears entire canvas |
+| `applyCamera(camera)` | Saves context, applies camera transform |
+| `restoreCamera()` | Restores context |
+| `screenToWorld(point, camera)` | Convert screen to world coordinates |
+| `worldToScreen(point, camera)` | Convert world to screen coordinates |
+| `drawShape(shape, isSelected?)` | Render any shape type |
+| `drawGrid(camera, gridSize?)` | Render background grid |
+| `drawPreviewShape(start, end, type, style)` | Draw preview during drag |
+| `createShapeFromPoints(start, end, type, style)` | Create shape object from drag |
+
+**Private Methods**:
+
+| Method | Purpose |
+|--------|---------|
+| `setStrokeStyle(style)` | Apply stroke color, width, dash |
+| `setFillStyle(style)` | Apply fill color and opacity |
+| `drawRectangle(shape)` | Render rectangle |
+| `drawCircle(shape)` | Render circle |
+| `drawLine(shape)` | Render line |
+| `drawArrow(shape)` | Render arrow with arrowhead |
+| `drawPencil(shape)` | Render freehand pencil strokes |
+| `drawImage(shape)` | Render image (with caching) |
+| `drawAudio(shape)` | Render audio waveform |
+| `drawText(shape)` | Render text with word wrap |
+| `drawEmbed(shape)` | Render embed placeholder |
+| `drawSelectionIndicator(shape)` | Render selection border and handles |
+| `getShapeBounds(shape)` | Calculate shape bounds |
+| `getResizeHandles(bounds)` | Get 8 resize handle positions |
+
+**Coordinate Systems**:
+
+### Screen Coordinates
+- Origin: Top-left of canvas element
+- Units: CSS pixels
+- Used for: Mouse events, DOM positioning
+
+### World Coordinates
+- Origin: Arbitrary point in infinite canvas
+- Units: Logical drawing units
+- Used for: Shape positions, storing data
+
+### Camera Transform
+```typescript
+// Screen to World
+worldX = (screenX - camera.x) / camera.zoom
+worldY = (screenY - camera.y) / camera.zoom
+
+// World to Screen
+screenX = worldX * camera.zoom + camera.x
+screenY = worldY * camera.zoom + camera.y
+```
+
+**Device Pixel Ratio (DPR)**:
+
+Canvas is scaled for high-DPI displays:
+```typescript
+// Internal canvas size (actual pixels)
+canvas.width = rect.width * dpr
+canvas.height = rect.height * dpr
+
+// CSS size (displayed size)
+canvas.style.width = `${rect.width}px`
+canvas.style.height = `${rect.height}px`
+
+// Context scaling
+ctx.scale(dpr, dpr)
+```
+
+This ensures crisp rendering on Retina/4K displays.
+
+**Rendering Shapes**:
+
+### Rectangle
+```typescript
+ctx.rect(x, y, width, height)
+```
+Optional fill with 30% opacity.
+
+### Circle
+```typescript
+ctx.arc(center.x, center.y, radius, 0, Math.PI * 2)
+```
+
+### Line
+```typescript
+ctx.moveTo(start.x, start.y)
+ctx.lineTo(end.x, end.y)
+```
+
+### Arrow
+Line plus arrowhead calculated with trigonometry:
+```typescript
+const angle = Math.atan2(end.y - start.y, end.x - start.x)
+// Draw two lines at ±30° from end point
+```
+
+### Pencil (Freehand)
+Quadratic curves for smooth lines:
+```typescript
+for (let i = 1; i < points.length - 1; i++) {
+  const midX = (points[i].x + points[i + 1].x) / 2
+  const midY = (points[i].y + points[i + 1].y) / 2
+  ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY)
+}
+```
+
+### Image
+Cached by URL:
+```typescript
+let img = this.imageCache.get(src)
+if (!img) {
+  img = new Image()
+  img.src = src
+  this.imageCache.set(src, img)
+}
+ctx.drawImage(img, x, y, width, height)
+```
+
+**⚠️ IMPORTANT**: Images are cached by URL, not by content. Two different images with same URL will show the same cached image.
+
+### Audio
+Renders waveform bars:
+```typescript
+waveformData.forEach((amplitude, i) => {
+  const barHeight = amplitude * height * 0.8
+  ctx.fillRect(barX, barY, barWidth - 1, barHeight)
+})
+```
+Plus play/pause indicator and duration text.
+
+### Text
+Word wrapping with alignment:
+```typescript
+// Measure and wrap text
+const metrics = ctx.measureText(testLine)
+if (testWidth > maxWidth) { /* wrap */ }
+
+// Draw with alignment
+ctx.textAlign = shape.textAlign
+ctx.fillText(line, lineX, y + index * lineHeight)
+```
+
+### Embed
+Placeholder with icon:
+- YouTube: Play triangle icon
+- Website: Two horizontal bars icon
+
+**Stroke Styles**:
+```typescript
+switch (style.strokeStyle) {
+  case 'dashed':
+    ctx.setLineDash([5, 5])
+    break
+  case 'dotted':
+    ctx.setLineDash([2, 4])
+    break
+  default:
+    ctx.setLineDash([])
+}
+```
+
+**Selection Indicator**:
+```typescript
+// Dashed blue border
+ctx.strokeStyle = '#2563eb'
+ctx.setLineDash([4, 4])
+ctx.strokeRect(bounds.x - 4, bounds.y - 4, ...)
+
+// 8 resize handles (4px squares)
+handles.forEach((handle) => {
+  ctx.fillRect(handle.x - 4, handle.y - 4, 8, 8)
+})
+```
+
+**Grid Rendering**:
+```typescript
+// Calculate visible grid range
+const startX = Math.floor(-camera.x / camera.zoom / gridSize) * gridSize
+const endX = startX + rect.width / camera.zoom + gridSize * 2
+
+// Draw vertical lines
+for (let x = startX; x < endX; x += gridSize) {
+  ctx.moveTo(x, startY)
+  ctx.lineTo(x, endY)
+}
+
+// Draw horizontal lines
+for (let y = startY; y < endY; y += gridSize) {
+  ctx.moveTo(startX, y)
+  ctx.lineTo(endX, y)
+}
+```
+
+Grid is semi-transparent (50% opacity) light gray (#e5e5e5).
+
+**Shape Creation**:
+
+Factory method creates shape objects from drag coordinates:
+```typescript
+createShapeFromPoints(start, end, type, style): Shape
+```
+
+Supported types:
+- `rectangle`: Bounds from min/max coordinates
+- `circle`: Radius from distance between points
+- `line`: Start/end points
+- `arrow`: Start/end points (same as line, different rendering)
+- `pencil`: Points array with start and end
+
+**⚠️ Unsupported**: `image`, `audio`, `text`, `embed` - these throw errors because they require additional data (files, text content, URLs) that can't be determined from drag points alone.
+
+**Success Criteria**:
+- [ ] All shape types render correctly
+- [ ] Shapes render at correct positions
+- [ ] Selection indicators visible
+- [ ] Grid renders correctly
+- [ ] Images cache and load properly
+- [ ] Text wraps and aligns correctly
+- [ ] Audio waveforms display correctly
+- [ ] Coordinate transformations accurate
+- [ ] High-DPI displays render crisply
+
+**Constraints**:
+- Canvas 2D Context required
+- DPR calculated once at construction (won't update if moved to different display)
+- Image caching by URL only
+- No hit testing (done in Canvas component)
+- No animation support (manual requestAnimationFrame required)
+
+**Known Issues**:
+
+1. **DPR Fixed at Construction**: If window moves to different display with different DPR, canvas won't update. Should listen for DPR changes.
+
+2. **Image Cache Memory**: Images cached forever. No eviction strategy. Large images could cause memory issues.
+
+3. **No Error Handling**: If image fails to load, shows placeholder but no retry mechanism.
+
+4. **Text Performance**: `measureText` called for every text shape on every render. Could cache measurements.
+
+5. **Embed Placeholder**: Embed shapes just show placeholder, not actual embedded content. Actual embeds rendered as DOM overlays by Canvas component.
+
+**Performance Considerations**:
+
+- Reuse CanvasEngine instance (don't recreate)
+- Call `applyCamera`/`restoreCamera` around all drawing
+- Use `requestAnimationFrame` for smooth animation
+- Cache expensive calculations (e.g., text measurements)
+- Image caching prevents reloads
+
+**Usage Example**:
+```typescript
+const engine = new CanvasEngine(canvasElement)
+
+// Resize when window changes
+window.addEventListener('resize', () => engine.resize())
+
+// Render loop
+function render() {
+  engine.clear()
+  engine.applyCamera(camera)
+  
+  // Draw grid
+  engine.drawGrid(camera)
+  
+  // Draw all shapes
+  shapes.forEach((shape) => {
+    const isSelected = selectedIds.includes(shape.id)
+    engine.drawShape(shape, isSelected)
+  })
+  
+  engine.restoreCamera()
+}
+```
+
+**Testing**:
+
+CanvasEngine can be tested with mocked canvas:
+```typescript
+const mockCanvas = {
+  getContext: () => ({
+    scale: vi.fn(),
+    clearRect: vi.fn(),
+    // ... mock all methods
+  }),
+} as unknown as HTMLCanvasElement
+
+const engine = new CanvasEngine(mockCanvas)
+```
+
+However, integration tests with real canvas are more valuable for rendering.
+
+## Adding New Shape Types
+
+To add a new shape type:
+
+1. Add type to `ToolType` in types/index.ts
+2. Add shape interface extending BaseShape
+3. Add to Shape union type
+4. Add case in `drawShape()` method
+5. Create `drawNewShape()` private method
+6. Add case in `getShapeBounds()`
+7. Update `createShapeFromPoints()` if drawable
+8. Update hit testing in Canvas component
+9. Add to Toolbar
+10. Add keyboard shortcut
+
+## Best Practices
+
+1. **Save/Restore Context**: Always wrap transforms in save/restore
+2. **Set Styles Before Drawing**: Don't assume previous state
+3. **Use Constants for Magic Numbers**: Arrow size, handle size, etc.
+4. **Handle Edge Cases**: Empty arrays, zero dimensions
+5. **Clean State**: Reset lineDash, globalAlpha, etc. after use
