@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import type { ToolType } from '../types';
 import { Tooltip } from './Tooltip';
 
@@ -97,6 +98,55 @@ const moreTools: ToolDefinition[] = [
   },
 ];
 
+// Animation variants for the more menu - ease-out for responsive feel
+const menuVariants = {
+  hidden: { 
+    width: 0, 
+    opacity: 0,
+    transition: {
+      duration: 0.2,
+      ease: [0.25, 0.46, 0.45, 0.94] as const,
+    }
+  },
+  visible: { 
+    width: 'auto', 
+    opacity: 1,
+    transition: {
+      duration: 0.2,
+      ease: [0.25, 0.46, 0.45, 0.94] as const,
+    }
+  },
+};
+
+// Button container animation for staggered appearance
+const buttonContainerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.05,
+    }
+  },
+};
+
+const buttonVariants = {
+  hidden: { 
+    opacity: 0, 
+    scale: 0.95,
+    y: -5,
+  },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    y: 0,
+    transition: {
+      duration: 0.15,
+      ease: [0.25, 0.46, 0.45, 0.94] as const,
+    }
+  },
+};
+
 export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -129,6 +179,25 @@ export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
     </Tooltip>
   );
 
+  const renderAnimatedToolButton = (tool: ToolDefinition) => (
+    <Tooltip
+      key={tool.id}
+      content={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ''}`}
+      position="top"
+    >
+      <motion.button
+        variants={buttonVariants}
+        className={`toolbar-button ${currentTool === tool.id ? 'active' : ''}`}
+        onClick={() => handleToolClick(tool.id)}
+        aria-label={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ''}`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+          <path d={tool.icon} />
+        </svg>
+      </motion.button>
+    </Tooltip>
+  );
+
   return (
     <div className="toolbar">
       <div className="toolbar-content">
@@ -141,26 +210,45 @@ export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
             aria-label={isExpanded ? 'Show fewer tools' : 'Show more tools'}
             aria-expanded={isExpanded}
           >
-            <svg
+            <motion.svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="1.75"
-              style={{
-                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.2s ease',
+              animate={{ 
+                rotate: isExpanded ? 180 : 0 
+              }}
+              transition={{ 
+                duration: 0.2, 
+                ease: [0.25, 0.46, 0.45, 0.94] as const
               }}
             >
               <path d="M6 9l6 6 6-6" />
-            </svg>
+            </motion.svg>
           </button>
         </Tooltip>
 
-        {isExpanded && (
-          <div className="toolbar-more-menu">
-            {moreTools.map(renderToolButton)}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              className="toolbar-more-menu"
+              variants={menuVariants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+              style={{ overflow: 'hidden' }}
+            >
+              <motion.div
+                variants={buttonContainerVariants}
+                initial="hidden"
+                animate="visible"
+                style={{ display: 'flex', gap: '4px' }}
+              >
+                {moreTools.map(renderAnimatedToolButton)}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -126,6 +126,8 @@ body {
   padding-left: 4px;
   border-left: 1px solid rgba(0, 0, 0, 0.08);
   margin-left: 4px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 /* Canvas Container */
@@ -1213,5 +1215,13 @@ body {
   .agent-finding-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+/* Reduced motion support for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-more-menu {
+    animation: none;
+    transition: none;
   }
 }

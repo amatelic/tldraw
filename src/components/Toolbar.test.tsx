@@ -1,6 +1,21 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Toolbar } from './Toolbar';
+
+interface MotionProps {
+  children?: React.ReactNode;
+  [key: string]: unknown;
+}
+
+vi.mock('motion/react', () => ({
+  motion: {
+    div: ({ children, ...props }: MotionProps) => React.createElement('div', props, children),
+    button: ({ children, ...props }: MotionProps) => React.createElement('button', props, children),
+    svg: ({ children, ...props }: MotionProps) => React.createElement('svg', props, children),
+  },
+  AnimatePresence: ({ children }: { children?: React.ReactNode }) => React.createElement(React.Fragment, {}, children),
+}));
 
 describe('Toolbar', () => {
   const mockOnToolChange = vi.fn();

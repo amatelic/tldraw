@@ -6,6 +6,7 @@ import type {
   ArrowShape,
   PencilShape,
   EmbedShape,
+  GroupShape,
   Point,
   Bounds,
   CameraState,
@@ -123,6 +124,9 @@ export class CanvasEngine {
         break;
       case 'embed':
         this.drawEmbed(shape);
+        break;
+      case 'group':
+        this.drawGroup(shape);
         break;
     }
 
@@ -246,32 +250,32 @@ export class CanvasEngine {
 
     // Draw waveform bars
     this.ctx.fillStyle = shape.style.color;
+    this.ctx.globalAlpha = shape.style.opacity;
 
-    shape.waveformData.forEach((amplitude, i) => {
-      const barHeight = amplitude * height * 0.8;
+    for (let i = 0; i < barCount; i++) {
+      const barHeight = shape.waveformData[i] * height * 0.8;
       const barX = x + i * barWidth;
       const barY = y + (height - barHeight) / 2;
 
       this.ctx.fillRect(barX, barY, barWidth - 1, barHeight);
-    });
+    }
 
-    // Draw play/pause indicator in center
+    // Draw play/pause indicator
     const centerX = x + width / 2;
     const centerY = y + height / 2;
-    const indicatorSize = Math.min(width, height) * 0.2;
+    const indicatorSize = Math.min(width, height) * 0.3;
+
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, indicatorSize, 0, Math.PI * 2);
+    this.ctx.fill();
 
     this.ctx.fillStyle = shape.style.color;
-
     if (shape.isPlaying) {
-      // Draw pause icon (two vertical bars)
-      const barWidth2 = indicatorSize * 0.25;
+      // Draw pause icon (two bars)
       const gap = indicatorSize * 0.2;
-      this.ctx.fillRect(
-        centerX - gap / 2 - barWidth2,
-        centerY - indicatorSize / 2,
-        barWidth2,
-        indicatorSize
-      );
+      const barWidth2 = (indicatorSize - gap) / 2;
+      this.ctx.fillRect(centerX - indicatorSize / 2 + gap / 2, centerY - indicatorSize / 2, barWidth2, indicatorSize);
       this.ctx.fillRect(centerX + gap / 2, centerY - indicatorSize / 2, barWidth2, indicatorSize);
     } else {
       // Draw play icon (triangle)
@@ -335,43 +339,48 @@ export class CanvasEngine {
       ? shape.text.split('\n').flatMap((line) => wrapText(line, width - 10))
       : wrapText(shape.text, width - 10);
 
+    // Calculate starting Y position based on text align
+    const totalTextHeight = lines.length * lineHeight;
+    let startY = y + 5;
+
+    if (totalTextHeight < height) {
+      // Vertically center if text fits
+      startY = y + (height - totalTextHeight) / 2;
+    }
+
     // Draw each line
     lines.forEach((line, index) => {
-      // Calculate x position based on text alignment
-      let lineX = x;
+      let textX = x + 5;
       if (shape.textAlign === 'center') {
-        lineX = x + width / 2;
+        textX = x + width / 2;
       } else if (shape.textAlign === 'right') {
-        lineX = x + width;
+        textX = x + width - 5;
       }
 
-      // Only draw if within bounds
-      if (index * lineHeight < height) {
-        this.ctx.fillText(line, lineX, y + index * lineHeight);
-      }
+      this.ctx.fillText(line, textX, startY + index * lineHeight);
     });
-
-    // Reset global alpha
-    this.ctx.globalAlpha = 1;
   }
 
   private drawEmbed(shape: EmbedShape) {
     const { x, y, width, height } = shape.bounds;
 
+    // Draw placeholder background
     this.ctx.fillStyle = '#f0f0f0';
     this.ctx.fillRect(x, y, width, height);
 
-    this.ctx.strokeStyle = '#999';
+    // Draw border
+    this.ctx.strokeStyle = '#ccc';
     this.ctx.lineWidth = 1;
-    this.ctx.setLineDash([]);
     this.ctx.strokeRect(x, y, width, height);
 
-    const iconSize = Math.min(width, height) * 0.15;
+    // Draw icon based on embed type
     const centerX = x + width / 2;
-    const centerY = y + height / 2 - iconSize;
+    const centerY = y + height / 2;
+    const iconSize = Math.min(width, height) * 0.2;
 
     this.ctx.fillStyle = '#666';
     if (shape.embedType === 'youtube') {
+      // Draw play icon
       this.ctx.beginPath();
       this.ctx.moveTo(centerX - iconSize / 2, centerY - iconSize / 2);
       this.ctx.lineTo(centerX + iconSize / 2, centerY);
@@ -396,6 +405,31 @@ export class CanvasEngine {
     this.ctx.font = `${urlFontSize}px sans-serif`;
     this.ctx.fillStyle = '#999';
     this.ctx.fillText(shape.url, x + width / 2, y + height - 15, maxTextWidth);
+  }
+
+  private drawGroup(shape: GroupShape) {
+    // Groups are visual containers - we draw their bounds with a purple tint when selected
+    const { x, y, width, height } = shape.bounds;
+    
+    // Draw semi-transparent purple background
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(147, 51, 234, 0.2)'; // Purple with 20% opacity
+    this.ctx.fillRect(x, y, width, height);
+    
+    // Draw purple border
+    this.ctx.strokeStyle = 'rgba(147, 51, 234, 0.6)';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([4, 4]);
+    this.ctx.strokeRect(x, y, width, height);
+    
+    // Draw group label
+    this.ctx.font = '12px sans-serif';
+    this.ctx.fillStyle = 'rgba(147, 51, 234, 0.8)';
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'top';
+    this.ctx.fillText(`Group (${shape.childrenIds.length})`, x + 4, y - 16);
+    
+    this.ctx.restore();
   }
 
   drawEmbedBounds(shape: EmbedShape, isSelected: boolean) {
@@ -434,19 +468,21 @@ export class CanvasEngine {
 
     // Draw resize handles
     const handles = this.getResizeHandles(bounds);
-    this.ctx.fillStyle = '#2563eb';
+    this.ctx.fillStyle = '#fff';
+    this.ctx.strokeStyle = '#2563eb';
     this.ctx.setLineDash([]);
 
     handles.forEach((handle) => {
       this.ctx.beginPath();
       this.ctx.rect(handle.x - 4, handle.y - 4, 8, 8);
       this.ctx.fill();
+      this.ctx.stroke();
     });
 
     this.ctx.restore();
   }
 
-  private getShapeBounds(shape: Shape): Bounds {
+  getShapeBounds(shape: Shape): Bounds {
     switch (shape.type) {
       case 'rectangle':
         return shape.bounds;
@@ -487,6 +523,7 @@ export class CanvasEngine {
       case 'audio':
       case 'text':
       case 'embed':
+      case 'group':
         return shape.bounds;
     }
   }
@@ -632,6 +669,8 @@ export class CanvasEngine {
         throw new Error('Cannot create text shape from points. Use text tool instead.');
       case 'embed':
         throw new Error('Cannot create embed shape from points. Use embed dialog instead.');
+      default:
+        throw new Error(`Cannot create shape of type ${type} from points.`);
     }
   }
 }

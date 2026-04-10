@@ -68,6 +68,8 @@ function App() {
     startTextEdit,
     commitTextEdit,
     cancelTextEdit,
+    groupShapes,
+    ungroupShapes,
   } = useCanvas(activeWorkspace.id);
 
   useEffect(() => {
@@ -256,6 +258,26 @@ function App() {
     [workspaceStore]
   );
 
+  // Grouping helper functions
+  const handleGroupSelected = useCallback(() => {
+    if (editorState.selectedShapeIds.length >= 2) {
+      groupShapes(editorState.selectedShapeIds);
+    }
+  }, [groupShapes, editorState.selectedShapeIds]);
+
+  const handleUngroupSelected = useCallback(() => {
+    // Check if any selected shape is a group
+    const selectedGroups = editorState.selectedShapeIds.filter((id) => {
+      const shape = shapes.find((s) => s.id === id);
+      return shape?.type === 'group';
+    });
+    
+    // Ungroup the first selected group
+    if (selectedGroups.length > 0) {
+      ungroupShapes(selectedGroups[0]);
+    }
+  }, [ungroupShapes, editorState.selectedShapeIds, shapes]);
+
   // Use centralized keyboard management
   useKeyboard({
     undo,
@@ -263,6 +285,8 @@ function App() {
     deleteSelected: deleteSelectedShapes,
     clearSelection,
     setTool: handleToolChange,
+    groupSelected: handleGroupSelected,
+    ungroupSelected: handleUngroupSelected,
   });
 
   return (

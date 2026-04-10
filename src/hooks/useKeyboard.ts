@@ -18,6 +18,9 @@ export interface KeyboardActions {
   deleteSelected: () => void;
   clearSelection: () => void;
   setTool: (tool: ToolType) => void;
+  // Grouping actions
+  groupSelected: () => void;
+  ungroupSelected: () => void;
 }
 
 export function useKeyboard(actions: KeyboardActions) {
@@ -72,6 +75,21 @@ export function useKeyboard(actions: KeyboardActions) {
           key: 'Escape',
           handler: actions.clearSelection,
           description: 'Clear selection',
+          preventDefault: true,
+        },
+        {
+          key: 'g',
+          ctrl: true,
+          handler: actions.groupSelected,
+          description: 'Group selected',
+          preventDefault: true,
+        },
+        {
+          key: 'g',
+          ctrl: true,
+          shift: true,
+          handler: actions.ungroupSelected,
+          description: 'Ungroup selected',
           preventDefault: true,
         },
         {
@@ -161,6 +179,8 @@ export const keyboardShortcuts = [
   { keys: ['E'], description: 'Eraser tool' },
   { keys: ['I'], description: 'Image tool' },
   { keys: ['T'], description: 'Text tool' },
+  { keys: ['Ctrl', 'G'], description: 'Group selected' },
+  { keys: ['Ctrl', 'Shift', 'G'], description: 'Ungroup selected' },
   { keys: ['Ctrl', 'Z'], description: 'Undo' },
   { keys: ['Ctrl', 'Y'], description: 'Redo' },
   { keys: ['Delete'], description: 'Delete selected' },

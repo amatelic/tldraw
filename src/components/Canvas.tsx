@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import type { Point, Shape } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
-import { createShapeId } from '../types';
+import { createShapeId, getGroupDescendants, getRootGroup } from '../types';
 
 interface CanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -223,6 +223,15 @@ export function Canvas({
       case 'image':
       case 'audio':
       case 'text':
+      case 'embed':
+        return (
+          point.x >= shape.bounds.x &&
+          point.x <= shape.bounds.x + shape.bounds.width &&
+          point.y >= shape.bounds.y &&
+          point.y <= shape.bounds.y + shape.bounds.height
+        );
+      case 'group':
+        // Groups are selected by their bounds
         return (
           point.x >= shape.bounds.x &&
           point.x <= shape.bounds.x + shape.bounds.width &&
@@ -324,6 +333,7 @@ export function Canvas({
         case 'image':
         case 'audio':
         case 'text':
+        case 'group':
         default:
           return (dx: number, dy: number) => {
             onShapeUpdate(id, {
@@ -407,8 +417,12 @@ export function Canvas({
               return;
             }
 
-            if (!selectedIdsRef.current.includes(clickedShape.id)) {
-              onSelectionChange([clickedShape.id]);
+            // Check if the clicked shape is inside a group - if so, select the group
+            const rootGroup = getRootGroup(clickedShape.id, shapesRef.current);
+            const shapeToSelect = rootGroup || clickedShape;
+
+            if (!selectedIdsRef.current.includes(shapeToSelect.id)) {
+              onSelectionChange([shapeToSelect.id]);
             }
             onDraggingChange(true);
             dragStartRef.current = worldPoint;
@@ -421,6 +435,18 @@ export function Canvas({
                 const startPos = { x: shape.bounds.x, y: shape.bounds.y };
                 selectedShapesStartRef.current.set(id, startPos);
                 dragUpdateFnsRef.current.set(id, createDragUpdateFn(shape, startPos));
+                
+                // If this is a group, also add drag functions for all children
+                if (shape.type === 'group') {
+                  const descendants = getGroupDescendants(id, shapesRef.current);
+                  descendants.forEach((descendant) => {
+                    if (!dragUpdateFnsRef.current.has(descendant.id)) {
+                      const descStartPos = { x: descendant.bounds.x, y: descendant.bounds.y };
+                      selectedShapesStartRef.current.set(descendant.id, descStartPos);
+                      dragUpdateFnsRef.current.set(descendant.id, createDragUpdateFn(descendant, descStartPos));
+                    }
+                  });
+                }
               }
             });
           } else {

@@ -41,11 +41,13 @@ export interface ShapeStyle {
 
 export interface BaseShape {
   id: string;
-  type: 'rectangle' | 'circle' | 'line' | 'arrow' | 'pencil' | 'image' | 'audio' | 'text' | 'embed';
+  type: 'rectangle' | 'circle' | 'line' | 'arrow' | 'pencil' | 'image' | 'audio' | 'text' | 'embed' | 'group';
   bounds: Bounds;
   style: ShapeStyle;
   createdAt: number;
   updatedAt: number;
+  // Grouping support
+  parentId?: string;
 }
 
 export interface RectangleShape extends BaseShape {
@@ -110,6 +112,12 @@ export interface EmbedShape extends BaseShape {
   embedSrc: string;
 }
 
+// Group shape for nested grouping support
+export interface GroupShape extends BaseShape {
+  type: 'group';
+  childrenIds: string[];
+}
+
 export type Shape =
   | RectangleShape
   | CircleShape
@@ -119,7 +127,8 @@ export type Shape =
   | ImageShape
   | AudioShape
   | TextShape
-  | EmbedShape;
+  | EmbedShape
+  | GroupShape;
 
 export interface CameraState {
   x: number;
@@ -195,6 +204,92 @@ export function generateBounds(start: Point, end: Point): Bounds {
   return { x, y, width, height };
 }
 
+// Group-related helper functions
+
+/**
+ * Get all direct children of a group
+ */
+export function getGroupChildren(groupId: string, shapes: Shape[]): Shape[] {
+  return shapes.filter((shape) => shape.parentId === groupId);
+}
+
+/**
+ * Get all descendants of a group (including nested groups)
+ */
+export function getGroupDescendants(groupId: string, shapes: Shape[]): Shape[] {
+  const descendants: Shape[] = [];
+  const children = getGroupChildren(groupId, shapes);
+  
+  for (const child of children) {
+    descendants.push(child);
+    if (child.type === 'group') {
+      descendants.push(...getGroupDescendants(child.id, shapes));
+    }
+  }
+  
+  return descendants;
+}
+
+/**
+ * Get the bounds of a group including all its children
+ */
+export function getGroupBounds(groupId: string, shapes: Shape[]): Bounds | null {
+  const children = getGroupChildren(groupId, shapes);
+  
+  if (children.length === 0) return null;
+  
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  
+  for (const child of children) {
+    const bounds = child.bounds;
+    minX = Math.min(minX, bounds.x);
+    minY = Math.min(minY, bounds.y);
+    maxX = Math.max(maxX, bounds.x + bounds.width);
+    maxY = Math.max(maxY, bounds.y + bounds.height);
+  }
+  
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+/**
+ * Check if a shape is part of a group (directly or indirectly)
+ */
+export function isShapeInGroup(shapeId: string, groupId: string, shapes: Shape[]): boolean {
+  const shape = shapes.find((s) => s.id === shapeId);
+  if (!shape) return false;
+  
+  if (shape.parentId === groupId) return true;
+  if (shape.parentId) return isShapeInGroup(shape.parentId, groupId, shapes);
+  
+  return false;
+}
+
+/**
+ * Get the root group (top-level parent) of a shape
+ */
+export function getRootGroup(shapeId: string, shapes: Shape[]): GroupShape | null {
+  const shape = shapes.find((s) => s.id === shapeId);
+  if (!shape || !shape.parentId) return null;
+  
+  const parent = shapes.find((s) => s.id === shape.parentId);
+  if (!parent) return null;
+  
+  if (parent.type === 'group') {
+    const rootGroup = getRootGroup(parent.id, shapes);
+    return rootGroup || (parent as GroupShape);
+  }
+  
+  return null;
+}
+
 export function isPointInShape(point: Point, shape: Shape): boolean {
   switch (shape.type) {
     case 'rectangle':
@@ -242,6 +337,14 @@ export function isPointInShape(point: Point, shape: Shape): boolean {
     case 'audio':
     case 'text':
     case 'embed':
+      return (
+        point.x >= shape.bounds.x &&
+        point.x <= shape.bounds.x + shape.bounds.width &&
+        point.y >= shape.bounds.y &&
+        point.y <= shape.bounds.y + shape.bounds.height
+      );
+    case 'group':
+      // Groups are selected by their bounds or children
       return (
         point.x >= shape.bounds.x &&
         point.x <= shape.bounds.x + shape.bounds.width &&

@@ -144,9 +144,44 @@ describe('myFunction', () => {
 
 Before committing, ensure:
 - [ ] All new functions have corresponding tests
+- [ ] **NEW FEATURES MUST HAVE TESTS** - Every new feature requires comprehensive tests
 - [ ] Tests pass: `npx vitest run`
 - [ ] Coverage meets 80% threshold
 - [ ] No test warnings or errors
+
+## Mandatory Testing Policy
+
+**CRITICAL**: Every feature, enhancement, or bug fix MUST include comprehensive tests. No exceptions.
+
+### What requires tests:
+
+1. **New Features** (Required):
+   - All new functionality must have corresponding test files
+   - Test file should be co-located with source: `<feature>.test.ts`
+   - Minimum 3-5 test cases per major feature
+   - Cover happy path, edge cases, and error scenarios
+
+2. **Bug Fixes** (Required):
+   - Add regression test that reproduces the bug
+   - Verify the fix resolves the issue
+   - Ensure no regressions in related functionality
+
+3. **Refactors** (Required):
+   - Ensure existing tests still pass
+   - Add tests for any new patterns or behaviors
+   - Verify no functionality was accidentally changed
+
+### Test Creation Checklist:
+
+- [ ] Test file created with descriptive name (e.g., `useCanvas.grouping.test.ts`)
+- [ ] All public functions/methods have tests
+- [ ] Edge cases covered (empty inputs, invalid data, boundary conditions)
+- [ ] Error handling tested
+- [ ] Integration with other components tested
+- [ ] Tests pass locally: `npx vitest run <test-file>`
+- [ ] No test warnings or console errors
+
+### Example Test Structure:
 
 ## Tech Stack
 

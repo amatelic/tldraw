@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
-import type { Point, Shape, ShapeStyle, EditorState } from '../types';
+import type { Point, Shape, ShapeStyle, EditorState, GroupShape } from '../types';
+import { createShapeId, getGroupDescendants } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 
@@ -34,6 +35,10 @@ interface UseCanvasReturn {
   startTextEdit: (id: string) => void;
   commitTextEdit: () => void;
   cancelTextEdit: () => void;
+  // Grouping actions
+  groupShapes: (shapeIds: string[]) => void;
+  ungroupShapes: (groupId: string) => void;
+  getAllShapesInGroup: (groupId: string) => string[];
 }
 
 const MAX_HISTORY_SIZE = 50;
@@ -246,12 +251,23 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     (id: string) => {
       setPresent((prev) => {
         saveToHistory(prev.shapes, prev.editorState);
+        
+        // Get all shapes to delete (including descendants if it's a group)
+        const idsToDelete = new Set<string>([id]);
+        const shapeToDelete = prev.shapes.find((s) => s.id === id);
+        
+        if (shapeToDelete?.type === 'group') {
+          // Add all descendants
+          const descendants = getGroupDescendants(id, prev.shapes);
+          descendants.forEach((d) => idsToDelete.add(d.id));
+        }
+        
         return {
           ...prev,
-          shapes: prev.shapes.filter((shape) => shape.id !== id),
+          shapes: prev.shapes.filter((shape) => !idsToDelete.has(shape.id)),
           editorState: {
             ...prev.editorState,
-            selectedShapeIds: prev.editorState.selectedShapeIds.filter((sid) => sid !== id),
+            selectedShapeIds: prev.editorState.selectedShapeIds.filter((sid) => !idsToDelete.has(sid)),
           },
         };
       });
@@ -264,11 +280,22 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
 
     setPresent((prev) => {
       saveToHistory(prev.shapes, prev.editorState);
+      
+      // Collect all IDs to delete (including group descendants)
+      const idsToDelete = new Set<string>();
+      
+      for (const selectedId of prev.editorState.selectedShapeIds) {
+        idsToDelete.add(selectedId);
+        const shape = prev.shapes.find((s) => s.id === selectedId);
+        if (shape?.type === 'group') {
+          const descendants = getGroupDescendants(selectedId, prev.shapes);
+          descendants.forEach((d) => idsToDelete.add(d.id));
+        }
+      }
+      
       return {
         ...prev,
-        shapes: prev.shapes.filter(
-          (shape) => !prev.editorState.selectedShapeIds.includes(shape.id)
-        ),
+        shapes: prev.shapes.filter((shape) => !idsToDelete.has(shape.id)),
         editorState: {
           ...prev.editorState,
           selectedShapeIds: [],
@@ -473,6 +500,117 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     }));
   }, []);
 
+  // GROUPING METHODS
+
+  /**
+   * Group selected shapes into a new group
+   */
+  const groupShapes = useCallback((shapeIds: string[]) => {
+    if (shapeIds.length < 2) return; // Need at least 2 shapes to group
+
+    setPresent((prev) => {
+      saveToHistory(prev.shapes, prev.editorState);
+
+      // Find common parent (if all shapes have same parent)
+      const shapesToGroup = prev.shapes.filter((s) => shapeIds.includes(s.id));
+      if (shapesToGroup.length < 2) return prev;
+
+      const parentIds = new Set(shapesToGroup.map((s) => s.parentId));
+      const commonParentId = parentIds.size === 1 ? Array.from(parentIds)[0] : undefined;
+
+      // Calculate bounds for the group
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      for (const shape of shapesToGroup) {
+        const bounds = shape.bounds;
+        minX = Math.min(minX, bounds.x);
+        minY = Math.min(minY, bounds.y);
+        maxX = Math.max(maxX, bounds.x + bounds.width);
+        maxY = Math.max(maxY, bounds.y + bounds.height);
+      }
+
+      // Create the group
+      const groupId = createShapeId();
+      const group: GroupShape = {
+        id: groupId,
+        type: 'group',
+        bounds: {
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY,
+        },
+        childrenIds: shapeIds,
+        style: { ...prev.editorState.shapeStyle },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        parentId: commonParentId,
+      };
+
+      // Update shapes to set their parentId
+      return {
+        ...prev,
+        shapes: prev.shapes.map((shape) => {
+          if (shapeIds.includes(shape.id)) {
+            return { ...shape, parentId: groupId };
+          }
+          return shape;
+        }).concat(group),
+        editorState: {
+          ...prev.editorState,
+          selectedShapeIds: [groupId],
+        },
+      };
+    });
+  }, [saveToHistory]);
+
+  /**
+   * Ungroup a group - removes the group and makes children independent
+   */
+  const ungroupShapes = useCallback((groupId: string) => {
+    setPresent((prev) => {
+      const group = prev.shapes.find((s) => s.id === groupId);
+      if (!group || group.type !== 'group') return prev;
+
+      saveToHistory(prev.shapes, prev.editorState);
+
+      const groupShape = group as GroupShape;
+      const childrenIds = groupShape.childrenIds;
+      const grandParentId = groupShape.parentId;
+
+      // Remove parentId from children and set to grandparent (if exists)
+      return {
+        ...prev,
+        shapes: prev.shapes
+          .filter((s) => s.id !== groupId) // Remove the group
+          .map((shape) => {
+            if (childrenIds.includes(shape.id)) {
+              return { ...shape, parentId: grandParentId };
+            }
+            return shape;
+          }),
+        editorState: {
+          ...prev.editorState,
+          selectedShapeIds: childrenIds,
+        },
+      };
+    });
+  }, [saveToHistory]);
+
+  /**
+   * Get all shape IDs within a group (including descendants)
+   */
+  const getAllShapesInGroup = useCallback((groupId: string): string[] => {
+    const group = shapes.find((s) => s.id === groupId);
+    if (!group || group.type !== 'group') return [];
+
+    const descendants = getGroupDescendants(groupId, shapes);
+    return [groupId, ...descendants.map((d) => d.id)];
+  }, [shapes]);
+
   return {
     canvasRef,
     shapes,
@@ -504,5 +642,9 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     startTextEdit,
     commitTextEdit,
     cancelTextEdit,
+    // Grouping
+    groupShapes,
+    ungroupShapes,
+    getAllShapesInGroup,
   };
 }
