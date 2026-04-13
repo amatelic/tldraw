@@ -16,7 +16,8 @@ The CanvasEngine provides low-level canvas rendering capabilities:
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `CanvasEngine.ts` | Canvas rendering engine class | 637 |
+| `CanvasEngine.ts` | Canvas rendering engine class | 852 |
+| `CanvasEngine.shadow.test.ts` | Shadow rendering tests | 370 |
 
 ## Detailed Documentation
 
@@ -51,7 +52,7 @@ private imageCache: Map<string, HTMLImageElement>;
 | `restoreCamera()` | Restores context |
 | `screenToWorld(point, camera)` | Convert screen to world coordinates |
 | `worldToScreen(point, camera)` | Convert world to screen coordinates |
-| `drawShape(shape, isSelected?)` | Render any shape type |
+| `drawShape(shape, isSelected?)` | Render any shape type with blend mode support |
 | `drawGrid(camera, gridSize?)` | Render background grid |
 | `drawPreviewShape(start, end, type, style)` | Draw preview during drag |
 | `createShapeFromPoints(start, end, type, style)` | Create shape object from drag |
@@ -62,10 +63,20 @@ private imageCache: Map<string, HTMLImageElement>;
 |--------|---------|
 | `setStrokeStyle(style)` | Apply stroke color, width, dash |
 | `setFillStyle(style)` | Apply fill color and opacity |
+| `hexToRgba(hex, opacity)` | Convert hex color to rgba format |
+| `createShapePath(shape)` | Create shape path without drawing |
+| `createRectanglePath(shape)` | Create rectangle path |
+| `createCirclePath(shape)` | Create circle path |
+| `createLinePath(shape)` | Create line path |
+| `createLinePathFromPoints(start, end)` | Create line path from points |
+| `createArrowPath(shape)` | Create arrow path (line only) |
+| `createPencilPath(shape)` | Create pencil path |
+| `drawShapeWithShadow(shape, index)` | Draw shape with shadow at index |
 | `drawRectangle(shape)` | Render rectangle |
 | `drawCircle(shape)` | Render circle |
 | `drawLine(shape)` | Render line |
 | `drawArrow(shape)` | Render arrow with arrowhead |
+| `drawArrowhead(shape)` | Render arrowhead only |
 | `drawPencil(shape)` | Render freehand pencil strokes |
 | `drawImage(shape)` | Render image (with caching) |
 | `drawAudio(shape)` | Render audio waveform |
@@ -117,6 +128,114 @@ ctx.scale(dpr, dpr)
 This ensures crisp rendering on Retina/4K displays.
 
 **Rendering Shapes**:
+
+### Blend Mode Support
+All shapes support blend modes through Canvas 2D's `globalCompositeOperation`. The blend mode is applied before drawing and restored after:
+
+```typescript
+const BLEND_MODE_MAP: Record<BlendMode, GlobalCompositeOperation> = {
+  'normal': 'source-over',
+  'multiply': 'multiply',
+  'screen': 'screen',
+  'overlay': 'overlay',
+  'darken': 'darken',
+  'lighten': 'lighten',
+  'color-dodge': 'color-dodge',
+  'color-burn': 'color-burn',
+  'hard-light': 'hard-light',
+  'soft-light': 'soft-light',
+  'difference': 'difference',
+  'exclusion': 'exclusion',
+  'hue': 'hue',
+  'saturation': 'saturation',
+  'color': 'color',
+  'luminosity': 'luminosity',
+};
+
+// Apply blend mode before drawing
+currentCtx.globalCompositeOperation = BLEND_MODE_MAP[shape.style.blendMode];
+
+// Draw shape...
+
+// Restore default after drawing
+currentCtx.globalCompositeOperation = 'source-over';
+```
+
+**Supported Blend Modes** (16 total):
+1. `normal` - Default source-over blending
+2. `multiply` - Darkens by multiplying colors
+3. `screen` - Lightens by inverting and multiplying
+4. `overlay` - Combines multiply and screen
+5. `darken` - Keeps darker of the two
+6. `lighten` - Keeps lighter of the two
+7. `color-dodge` - Brightens backdrop
+8. `color-burn` - Darkens backdrop
+9. `hard-light` - Intense overlay effect
+10. `soft-light` - Softer overlay effect
+11. `difference` - Absolute difference
+12. `exclusion` - Difference with lower contrast
+13. `hue` - Uses hue from source
+14. `saturation` - Uses saturation from source
+15. `color` - Uses hue and saturation from source
+16. `luminosity` - Uses luminosity from source
+
+### Multiple Shadows Support
+
+All shapes support multiple shadows. Since Canvas 2D only supports one shadow at a time via `shadowColor`, `shadowBlur`, `shadowOffsetX`, and `shadowOffsetY`, the engine draws the shape multiple times - once for each shadow, then once for the actual shape:
+
+```typescript
+// Shadow definition in ShapeStyle
+interface ShadowStyle {
+  x: number;        // Horizontal offset
+  y: number;        // Vertical offset
+  blur: number;     // Blur radius
+  color: string;    // Hex color (#RRGGBB or #RGB)
+  opacity: number;  // 0-1 opacity
+}
+
+// Draw shadows first (if any)
+if (shape.style.shadows && shape.style.shadows.length > 0) {
+  shape.style.shadows.forEach((shadow, index) => {
+    ctx.shadowColor = hexToRgba(shadow.color, shadow.opacity)
+    ctx.shadowBlur = shadow.blur
+    ctx.shadowOffsetX = shadow.x
+    ctx.shadowOffsetY = shadow.y
+    
+    // Draw shape path with current shadow
+    drawShapeWithShadow(shape, index)
+  })
+  
+  // Reset shadows
+  ctx.shadowColor = 'transparent'
+  ctx.shadowBlur = 0
+  ctx.shadowOffsetX = 0
+  ctx.shadowOffsetY = 0
+}
+
+// Now draw the actual shape
+setStrokeStyle(shape.style)
+drawShapeActual(shape)
+```
+
+**Supported Shadow Shapes**:
+- `rectangle` - Full shadow support (fill + stroke)
+- `circle` - Full shadow support (fill + stroke)
+- `line` - Stroke-only shadows
+- `arrow` - Stroke + arrowhead shadows
+- `pencil` - Stroke-only shadows
+- `image`, `audio`, `text`, `embed`, `group` - Shadow rendering not supported
+
+**Color Conversion**:
+Hex colors are automatically converted to rgba for proper opacity support:
+```typescript
+// 6-character hex
+hexToRgba('#ff0000', 0.5) // returns 'rgba(255, 0, 0, 0.5)'
+
+// 3-character hex (expanded)
+hexToRgba('#f00', 0.5)    // returns 'rgba(255, 0, 0, 0.5)'
+```
+
+**Performance Note**: Each shadow requires an additional draw pass. Shapes with many shadows will impact performance proportionally.
 
 ### Rectangle
 ```typescript
@@ -258,15 +377,20 @@ Supported types:
 **⚠️ Unsupported**: `image`, `audio`, `text`, `embed` - these throw errors because they require additional data (files, text content, URLs) that can't be determined from drag points alone.
 
 **Success Criteria**:
-- [ ] All shape types render correctly
-- [ ] Shapes render at correct positions
-- [ ] Selection indicators visible
-- [ ] Grid renders correctly
-- [ ] Images cache and load properly
-- [ ] Text wraps and aligns correctly
-- [ ] Audio waveforms display correctly
-- [ ] Coordinate transformations accurate
-- [ ] High-DPI displays render crisply
+- [x] All shape types render correctly
+- [x] Shapes render at correct positions
+- [x] Selection indicators visible
+- [x] Grid renders correctly
+- [x] Images cache and load properly
+- [x] Text wraps and aligns correctly
+- [x] Audio waveforms display correctly
+- [x] Coordinate transformations accurate
+- [x] High-DPI displays render crisply
+- [x] **Multiple shadows render correctly**
+- [x] **Shadow color conversion works (hex to rgba)**
+- [x] **Shadow reset after drawing**
+- [x] **Blend mode support**
+- [x] **Shapes without shadows render normally**
 
 **Constraints**:
 - Canvas 2D Context required

@@ -1,0 +1,247 @@
+.color-picker {
+  background: var(--panel-bg, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  width: 260px;
+  border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.color-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.color-picker-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.color-picker-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.color-picker-action {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+  transition: all 0.15s ease;
+}
+
+.color-picker-action:hover {
+  background: var(--input-bg, rgba(0, 0, 0, 0.05));
+  color: var(--text-primary, #1a1a1a);
+}
+
+.color-picker-action svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Gradient Selector */
+.color-picker-gradient {
+  width: 100%;
+  height: 120px;
+  border-radius: 8px;
+  position: relative;
+  cursor: crosshair;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+/* Hue Slider */
+.color-picker-hue {
+  width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  margin-bottom: 12px;
+  background: linear-gradient(
+    to right,
+    #ff0000 0%,
+    #ffff00 17%,
+    #00ff00 33%,
+    #00ffff 50%,
+    #0000ff 67%,
+    #ff00ff 83%,
+    #ff0000 100%
+  );
+}
+
+/* Alpha Slider */
+.color-picker-alpha {
+  width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  margin-bottom: 12px;
+  background-image: 
+    linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  overflow: hidden;
+}
+
+.color-picker-alpha-bg {
+  position: absolute;
+  inset: 0;
+}
+
+/* Handle */
+.color-picker-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.color-picker-gradient .color-picker-handle {
+  top: 50%;
+  left: 50%;
+}
+
+.color-picker-hue .color-picker-handle {
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.color-picker-alpha .color-picker-handle {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-color: var(--text-primary, #1a1a1a);
+}
+
+/* Input Fields */
+.color-picker-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.color-picker-input-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  background: var(--input-bg, rgba(0, 0, 0, 0.05));
+  border-radius: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+}
+
+.color-picker-input-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, rgba(0, 0, 0, 0.6));
+  margin-right: 6px;
+  text-transform: uppercase;
+  min-width: 12px;
+}
+
+.color-picker-input-group input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--text-primary, #1a1a1a);
+  outline: none;
+  width: 100%;
+  padding: 0;
+}
+
+.color-picker-input-group input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.color-picker-input-group input[type="number"]::-webkit-outer-spin-button,
+.color-picker-input-group input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.color-picker-hex {
+  flex: 2;
+}
+
+.color-picker-hex label {
+  font-family: monospace;
+}
+
+/* Presets */
+.color-picker-presets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+}
+
+.color-picker-preset {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.color-picker-preset:hover {
+  transform: scale(1.1);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .color-picker {
+    --panel-bg: #2a2a2a;
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --input-bg: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  
+  .color-picker-alpha {
+    background-image: 
+      linear-gradient(45deg, #444 25%, transparent 25%),
+      linear-gradient(-45deg, #444 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #444 75%),
+      linear-gradient(-45deg, transparent 75%, #444 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0px;
+  }
+  
+  .color-picker-preset {
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Ensure CSS variables are available if not set by parent */
+:root {
+  --panel-bg: #ffffff;
+  --panel-border: rgba(0, 0, 0, 0.1);
+  --text-primary: #1a1a1a;
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --input-bg: rgba(0, 0, 0, 0.05);
+}

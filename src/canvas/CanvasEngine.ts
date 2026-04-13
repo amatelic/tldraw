@@ -94,7 +94,176 @@ export class CanvasEngine {
     this.ctx.globalAlpha = style.opacity * 0.3;
   }
 
+  private hexToRgba(hex: string, opacity: number): string {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Parse hex
+    let r: number, g: number, b: number;
+    if (hex.length === 3) {
+      r = parseInt(hex[0] + hex[0], 16);
+      g = parseInt(hex[1] + hex[1], 16);
+      b = parseInt(hex[2] + hex[2], 16);
+    } else {
+      r = parseInt(hex.substring(0, 2), 16);
+      g = parseInt(hex.substring(2, 4), 16);
+      b = parseInt(hex.substring(4, 6), 16);
+    }
+    
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+
+  /**
+   * Creates the path for a shape without filling or stroking.
+   * This is used for both shadow rendering and actual shape drawing.
+   */
+  private createShapePath(shape: Shape): void {
+    switch (shape.type) {
+      case 'rectangle':
+        this.createRectanglePath(shape);
+        break;
+      case 'circle':
+        this.createCirclePath(shape);
+        break;
+      case 'line':
+        this.createLinePath(shape);
+        break;
+      case 'arrow':
+        this.createArrowPath(shape);
+        break;
+      case 'pencil':
+        this.createPencilPath(shape);
+        break;
+      case 'image':
+      case 'audio':
+      case 'text':
+      case 'embed':
+      case 'group':
+        // These shapes have custom drawing logic, handled separately
+        break;
+    }
+  }
+
+  private createRectanglePath(shape: RectangleShape): void {
+    const { x, y, width, height } = shape.bounds;
+    this.ctx.beginPath();
+    this.ctx.rect(x, y, width, height);
+  }
+
+  private createCirclePath(shape: CircleShape): void {
+    this.ctx.beginPath();
+    this.ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, Math.PI * 2);
+  }
+
+  private createLinePath(shape: LineShape): void {
+    const { start, end } = shape;
+    this.createLinePathFromPoints(start, end);
+  }
+
+  private createLinePathFromPoints(start: Point, end: Point): void {
+    this.ctx.beginPath();
+    this.ctx.moveTo(start.x, start.y);
+    this.ctx.lineTo(end.x, end.y);
+  }
+
+  private createArrowPath(shape: ArrowShape): void {
+    const { start, end } = shape;
+    this.createLinePathFromPoints(start, end);
+  }
+
+  private createPencilPath(shape: PencilShape): void {
+    const { points } = shape;
+    if (points.length < 2) return;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(points[0].x, points[0].y);
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const midX = (points[i].x + points[i + 1].x) / 2;
+      const midY = (points[i].y + points[i + 1].y) / 2;
+      this.ctx.quadraticCurveTo(points[i].x, points[i].y, midX, midY);
+    }
+
+    if (points.length > 1) {
+      this.ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    }
+  }
+
+  /**
+   * Draws a shape's path with shadow properties applied.
+   * Used to render multiple shadows by calling this method for each shadow.
+   */
+  private drawShapeWithShadow(shape: Shape, shadowIndex: number): void {
+    const shadows = shape.style.shadows;
+    if (!shadows || shadows.length === 0 || shadowIndex >= shadows.length) return;
+
+    const shadow = shadows[shadowIndex];
+    
+    // Set shadow properties
+    this.ctx.shadowColor = this.hexToRgba(shadow.color, shadow.opacity);
+    this.ctx.shadowBlur = shadow.blur;
+    this.ctx.shadowOffsetX = shadow.x;
+    this.ctx.shadowOffsetY = shadow.y;
+
+    // Create the path (without fill/stroke colors - just for shadow)
+    if (shape.type === 'rectangle' || shape.type === 'circle' || 
+        shape.type === 'line' || shape.type === 'arrow' || shape.type === 'pencil') {
+      this.createShapePath(shape);
+      
+      // For shapes with fills, we need to fill to create the shadow
+      // For strokes, we stroke
+      if (shape.type === 'rectangle' || shape.type === 'circle') {
+        if (shape.style.fillStyle !== 'none') {
+          this.ctx.fillStyle = shape.style.fillColor;
+          this.ctx.globalAlpha = shape.style.opacity;
+          this.ctx.fill();
+        }
+        this.ctx.strokeStyle = shape.style.color;
+        this.ctx.globalAlpha = shape.style.opacity;
+        this.ctx.stroke();
+      } else if (shape.type === 'arrow') {
+        // For arrows, we need to stroke the line and draw the arrowhead
+        this.ctx.strokeStyle = shape.style.color;
+        this.ctx.globalAlpha = shape.style.opacity;
+        this.ctx.stroke();
+        this.drawArrowhead(shape);
+      } else {
+        // Line, pencil - just stroke
+        this.ctx.strokeStyle = shape.style.color;
+        this.ctx.globalAlpha = shape.style.opacity;
+        this.ctx.stroke();
+      }
+    }
+    // For image, audio, text, embed, group - shadows are handled differently or not supported
+  }
+
   drawShape(shape: Shape, isSelected: boolean = false) {
+    // Save current composite operation
+    const prevComposite = this.ctx.globalCompositeOperation;
+    
+    // Apply shape's blend mode (default to 'source-over' for backward compatibility)
+    this.ctx.globalCompositeOperation = shape.style.blendMode || 'source-over';
+
+    // Draw shadows first (if any)
+    if (shape.style.shadows && shape.style.shadows.length > 0) {
+      // Save current context state
+      this.ctx.save();
+      
+      // Draw each shadow
+      for (let i = 0; i < shape.style.shadows.length; i++) {
+        this.drawShapeWithShadow(shape, i);
+      }
+      
+      // Reset shadow properties
+      this.ctx.shadowColor = 'transparent';
+      this.ctx.shadowBlur = 0;
+      this.ctx.shadowOffsetX = 0;
+      this.ctx.shadowOffsetY = 0;
+      
+      // Restore context state
+      this.ctx.restore();
+    }
+    
     this.setStrokeStyle(shape.style);
 
     switch (shape.type) {
@@ -133,6 +302,9 @@ export class CanvasEngine {
     if (isSelected) {
       this.drawSelectionIndicator(shape);
     }
+    
+    // Restore composite operation
+    this.ctx.globalCompositeOperation = prevComposite;
   }
 
   private drawRectangle(shape: RectangleShape) {
@@ -171,18 +343,21 @@ export class CanvasEngine {
   }
 
   private drawArrow(shape: ArrowShape) {
+    // Draw the main line
+    this.createLinePathFromPoints(shape.start, shape.end);
+    this.ctx.stroke();
+    
+    // Draw arrowhead
+    this.drawArrowhead(shape);
+  }
+
+  private drawArrowhead(shape: ArrowShape): void {
     const { start, end } = shape;
     const arrowLength = 10;
     const arrowAngle = Math.PI / 6;
     
     // Calculate arrowhead angle
     const angle = Math.atan2(end.y - start.y, end.x - start.x);
-    
-    // Draw line
-    this.ctx.beginPath();
-    this.ctx.moveTo(start.x, start.y);
-    this.ctx.lineTo(end.x, end.y);
-    this.ctx.stroke();
     
     // Draw arrowhead
     this.ctx.beginPath();

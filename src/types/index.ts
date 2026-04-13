@@ -12,6 +12,25 @@ export type ToolType =
   | 'text'
   | 'embed';
 
+// Canvas blend modes supported by globalCompositeOperation
+export type BlendMode =
+  | 'source-over'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'darken'
+  | 'lighten'
+  | 'color-dodge'
+  | 'color-burn'
+  | 'hard-light'
+  | 'soft-light'
+  | 'difference'
+  | 'exclusion'
+  | 'hue'
+  | 'saturation'
+  | 'color'
+  | 'luminosity';
+
 export interface Point {
   x: number;
   y: number;
@@ -31,12 +50,23 @@ export interface ShapeStyle {
   strokeStyle: 'solid' | 'dashed' | 'dotted';
   fillStyle: 'none' | 'solid' | 'pattern';
   opacity: number;
+  blendMode: BlendMode;
+  shadows: ShadowStyle[];
   // Text-specific properties
   fontSize: number;
   fontFamily: string;
   fontWeight: 'normal' | 'bold';
   fontStyle: 'normal' | 'italic';
   textAlign: 'left' | 'center' | 'right';
+}
+
+// Shadow style for shape shadows
+export interface ShadowStyle {
+  x: number;
+  y: number;
+  blur: number;
+  color: string;
+  opacity: number;
 }
 
 export interface BaseShape {
@@ -158,6 +188,8 @@ export const DEFAULT_STYLE: ShapeStyle = {
   strokeStyle: 'solid',
   fillStyle: 'none',
   opacity: 1,
+  blendMode: 'source-over',
+  shadows: [],
   // Text defaults
   fontSize: 16,
   fontFamily: 'sans-serif',

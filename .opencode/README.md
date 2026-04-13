@@ -356,11 +356,8 @@ interface ZoomControlsProps {
   - Stroke width slider (1, 2, 4, 8, 12)
   - Stroke style (solid, dashed, dotted)
   - Fill style (none, solid, pattern)
-- **Opacity Section**: Opacity slider with percentage display and blend mode selector (16 blend modes)
-- **Effects Section**: 
-  - Multiple shadows with individual controls (X offset, Y offset, Blur, Color, Opacity)
-  - Add/remove shadow buttons
-  - Blur effects
+- **Opacity Section**: Opacity slider with percentage display
+- **Effects Section**: Shadow, blur effects
 - **Text Section** (for text shapes): Font size, family, weight, style, alignment
 
 **Collapsible Sections**:
@@ -382,23 +379,6 @@ interface PropertiesPanelProps {
 }
 ```
 
-**Shadow Controls**:
-When a shape supports shadows (rectangles, circles, lines, arrows, pencil strokes):
-- **Shadow List**: Each shadow displayed with controls
-- **X Offset**: Horizontal shadow displacement (-50 to 50 pixels)
-- **Y Offset**: Vertical shadow displacement (-50 to 50 pixels)
-- **Blur**: Shadow blur radius (0 to 50 pixels)
-- **Color**: Shadow color picker with ColorPicker integration
-- **Opacity**: Shadow transparency slider (0-100%)
-- **Add Shadow**: Button to add new shadow to the list
-- **Remove Shadow**: Button to remove individual shadows
-
-**Supported Shadow Shapes**:
-- Rectangles and circles (fill + stroke shadows)
-- Lines and arrows (stroke-only shadows)
-- Pencil/freehand drawings (stroke-only shadows)
-- Images, audio, text, and embeds (shadows not supported)
-
 **Success Criteria**:
 - [ ] All style controls work and apply immediately
 - [ ] Changes apply immediately to selected shapes
@@ -406,14 +386,6 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - [ ] Panel animates in/out smoothly
 - [ ] Sections can be collapsed/expanded independently
 - [ ] ColorPicker integration works for all color inputs
-- [ ] Blend mode selector shows all 16 options
-- [ ] Shadow controls visible only for supported shape types
-- [ ] Multiple shadows can be added and configured
-- [ ] Shadow X/Y offset sliders work from -50 to 50
-- [ ] Shadow blur slider works from 0 to 50
-- [ ] Shadow opacity slider works from 0 to 100%
-- [ ] Add shadow button creates new shadow with defaults
-- [ ] Remove shadow button deletes individual shadows
 - [ ] Dark mode displays correctly with CSS variables
 - [ ] Panel is scrollable when content overflows
 

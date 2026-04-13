@@ -61,6 +61,8 @@ const defaultEditorState: EditorState = {
     fontWeight: 'normal',
     fontStyle: 'normal',
     textAlign: 'left',
+    blendMode: 'source-over',
+    shadows: [],
   },
   editingTextId: null,
 };

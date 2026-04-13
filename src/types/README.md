@@ -80,6 +80,7 @@ interface ShapeStyle {
   strokeStyle: 'solid' | 'dashed' | 'dotted';
   fillStyle: 'none' | 'solid' | 'pattern';
   opacity: number;            // 0-1
+  blendMode: BlendMode;       // Blend mode for globalCompositeOperation
   // Text-specific
   fontSize: number;
   fontFamily: string;
@@ -90,6 +91,113 @@ interface ShapeStyle {
 ```
 
 Visual styling applied to shapes. Text-specific properties only apply to text shapes.
+
+#### ShadowStyle
+```typescript
+interface ShadowStyle {
+  x: number;        // Horizontal offset in pixels
+  y: number;        // Vertical offset in pixels
+  blur: number;     // Blur radius (0 for sharp shadow)
+  color: string;    // Shadow color in hex format (#RRGGBB)
+  opacity: number;  // Opacity from 0 (transparent) to 1 (fully opaque)
+}
+```
+
+Individual shadow definition used for shape shadows. Multiple shadows can be applied to a single shape.
+
+**Properties**:
+- **x**: Horizontal offset. Positive values move shadow right, negative left.
+- **y**: Vertical offset. Positive values move shadow down, negative up.
+- **blur**: Blur radius in pixels. Higher values create softer shadows.
+- **color**: Hex color code for the shadow (e.g., '#000000' for black).
+- **opacity**: Transparency level from 0 (invisible) to 1 (fully visible).
+
+**Multiple Shadows**:
+Shapes can have multiple shadows defined as an array:
+```typescript
+interface ShapeStyle {
+  // ... other properties
+  shadows?: ShadowStyle[];  // Optional array of shadows
+}
+```
+
+**Example**:
+```typescript
+const dropShadow: ShadowStyle = {
+  x: 4,
+  y: 4,
+  blur: 8,
+  color: '#000000',
+  opacity: 0.3
+};
+```
+
+**Note**: Shadows are rendered by drawing the shape multiple times - once per shadow, then once for the actual shape. Performance scales with the number of shadows.
+
+#### BlendMode
+```typescript
+type BlendMode =
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'darken'
+  | 'lighten'
+  | 'color-dodge'
+  | 'color-burn'
+  | 'hard-light'
+  | 'soft-light'
+  | 'difference'
+  | 'exclusion'
+  | 'hue'
+  | 'saturation'
+  | 'color'
+  | 'luminosity';
+```
+
+**Purpose**: Defines how shapes blend with the canvas content below them using HTML5 Canvas `globalCompositeOperation`.
+
+**Blend Modes**:
+1. **normal**: Standard rendering (source-over)
+2. **multiply**: Multiplies colors, resulting in darker
+3. **screen**: Inverts, multiplies, inverts - lighter result
+4. **overlay**: Combines multiply and screen
+5. **darken**: Selects the darker of backdrop and source
+6. **lighten**: Selects the lighter of backdrop and source
+7. **color-dodge**: Brightens backdrop to reflect source
+8. **color-burn**: Darkens backdrop to reflect source
+9. **hard-light**: Like overlay but with source
+10. **soft-light**: Softer version of hard-light
+11. **difference**: Subtracts darker from lighter
+12. **exclusion**: Similar to difference but lower contrast
+13. **hue**: Uses source hue with backdrop saturation/luminosity
+14. **saturation**: Uses source saturation with backdrop hue/luminosity
+15. **color**: Uses source hue/saturation with backdrop luminosity
+16. **luminosity**: Uses source luminosity with backdrop hue/saturation
+
+**Canvas Mapping**:
+```typescript
+const BLEND_MODE_MAP: Record<BlendMode, GlobalCompositeOperation> = {
+  'normal': 'source-over',
+  'multiply': 'multiply',
+  'screen': 'screen',
+  'overlay': 'overlay',
+  'darken': 'darken',
+  'lighten': 'lighten',
+  'color-dodge': 'color-dodge',
+  'color-burn': 'color-burn',
+  'hard-light': 'hard-light',
+  'soft-light': 'soft-light',
+  'difference': 'difference',
+  'exclusion': 'exclusion',
+  'hue': 'hue',
+  'saturation': 'saturation',
+  'color': 'color',
+  'luminosity': 'luminosity',
+};
+```
+
+All blend modes map directly to Canvas 2D Context's `globalCompositeOperation` property.
 
 ### Shape Types (Discriminated Union)
 
@@ -280,6 +388,7 @@ const DEFAULT_STYLE: ShapeStyle = {
   strokeStyle: 'solid',
   fillStyle: 'none',
   opacity: 1,
+  blendMode: 'normal',
   fontSize: 16,
   fontFamily: 'sans-serif',
   fontWeight: 'normal',

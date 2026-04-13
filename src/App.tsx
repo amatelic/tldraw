@@ -278,6 +278,207 @@ function App() {
     }
   }, [ungroupShapes, editorState.selectedShapeIds, shapes]);
 
+  // Alignment handler
+  const handleAlign = useCallback(
+    (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
+      const selectedShapes = shapes.filter((s) =>
+        editorState.selectedShapeIds.includes(s.id)
+      );
+
+      if (selectedShapes.length < 2) return;
+
+      const bounds = selectedShapes.map((s) => s.bounds);
+
+      let targetValue: number;
+
+      switch (alignment) {
+        case 'left':
+          targetValue = Math.min(...bounds.map((b) => b.x));
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                x: targetValue,
+              },
+            });
+          });
+          break;
+
+        case 'center': {
+          const centers = bounds.map((b) => b.x + b.width / 2);
+          targetValue = centers.reduce((a, b) => a + b, 0) / centers.length;
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                x: targetValue - shape.bounds.width / 2,
+              },
+            });
+          });
+          break;
+        }
+
+        case 'right':
+          targetValue = Math.max(...bounds.map((b) => b.x + b.width));
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                x: targetValue - shape.bounds.width,
+              },
+            });
+          });
+          break;
+
+        case 'top':
+          targetValue = Math.min(...bounds.map((b) => b.y));
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                y: targetValue,
+              },
+            });
+          });
+          break;
+
+        case 'middle': {
+          const centers = bounds.map((b) => b.y + b.height / 2);
+          targetValue = centers.reduce((a, b) => a + b, 0) / centers.length;
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                y: targetValue - shape.bounds.height / 2,
+              },
+            });
+          });
+          break;
+        }
+
+        case 'bottom':
+          targetValue = Math.max(...bounds.map((b) => b.y + b.height));
+          selectedShapes.forEach((shape) => {
+            updateShape(shape.id, {
+              bounds: {
+                ...shape.bounds,
+                y: targetValue - shape.bounds.height,
+              },
+            });
+          });
+          break;
+      }
+    },
+    [shapes, editorState.selectedShapeIds, updateShape]
+  );
+
+  // Distribute handler
+  const handleDistribute = useCallback(
+    (direction: 'horizontal' | 'vertical') => {
+      const selectedShapes = shapes.filter((s) =>
+        editorState.selectedShapeIds.includes(s.id)
+      );
+
+      if (selectedShapes.length < 3) return;
+
+      if (direction === 'horizontal') {
+        const sorted = [...selectedShapes].sort((a, b) => a.bounds.x - b.bounds.x);
+        const leftmost = sorted[0].bounds.x;
+        const rightmost = sorted[sorted.length - 1].bounds.x + sorted[sorted.length - 1].bounds.width;
+        const totalWidth = rightmost - leftmost;
+        const totalShapesWidth = sorted.reduce((sum, s) => sum + s.bounds.width, 0);
+        const gap = (totalWidth - totalShapesWidth) / (sorted.length - 1);
+
+        let currentX = leftmost;
+        sorted.forEach((shape) => {
+          updateShape(shape.id, {
+            bounds: {
+              ...shape.bounds,
+              x: currentX,
+            },
+          });
+          currentX += shape.bounds.width + gap;
+        });
+      } else {
+        const sorted = [...selectedShapes].sort((a, b) => a.bounds.y - b.bounds.y);
+        const topmost = sorted[0].bounds.y;
+        const bottommost = sorted[sorted.length - 1].bounds.y + sorted[sorted.length - 1].bounds.height;
+        const totalHeight = bottommost - topmost;
+        const totalShapesHeight = sorted.reduce((sum, s) => sum + s.bounds.height, 0);
+        const gap = (totalHeight - totalShapesHeight) / (sorted.length - 1);
+
+        let currentY = topmost;
+        sorted.forEach((shape) => {
+          updateShape(shape.id, {
+            bounds: {
+              ...shape.bounds,
+              y: currentY,
+            },
+          });
+          currentY += shape.bounds.height + gap;
+        });
+      }
+    },
+    [shapes, editorState.selectedShapeIds, updateShape]
+  );
+
+  // Tidy handler - arranges shapes in a grid layout
+  const handleTidy = useCallback(() => {
+    const selectedShapes = shapes.filter((s) =>
+      editorState.selectedShapeIds.includes(s.id)
+    );
+
+    if (selectedShapes.length < 2) return;
+
+    // Calculate grid dimensions
+    const cols = Math.ceil(Math.sqrt(selectedShapes.length));
+    const spacing = 20;
+
+    // Find the average position to center the grid
+    const avgX =
+      selectedShapes.reduce((sum, s) => sum + s.bounds.x, 0) /
+      selectedShapes.length;
+    const avgY =
+      selectedShapes.reduce((sum, s) => sum + s.bounds.y, 0) /
+      selectedShapes.length;
+
+    // Calculate total grid size
+    const maxWidth = Math.max(...selectedShapes.map((s) => s.bounds.width));
+    const maxHeight = Math.max(...selectedShapes.map((s) => s.bounds.height));
+    const gridWidth = cols * maxWidth + (cols - 1) * spacing;
+    const rows = Math.ceil(selectedShapes.length / cols);
+    const gridHeight = rows * maxHeight + (rows - 1) * spacing;
+
+    // Start position to center the grid around the average position
+    const startX = avgX - gridWidth / 2;
+    const startY = avgY - gridHeight / 2;
+
+    // Sort shapes by their current position for a more predictable arrangement
+    const sortedShapes = [...selectedShapes].sort((a, b) => {
+      if (Math.abs(a.bounds.y - b.bounds.y) < 50) {
+        return a.bounds.x - b.bounds.x;
+      }
+      return a.bounds.y - b.bounds.y;
+    });
+
+    // Arrange in grid
+    sortedShapes.forEach((shape, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+
+      const newX = startX + col * (maxWidth + spacing) + (maxWidth - shape.bounds.width) / 2;
+      const newY = startY + row * (maxHeight + spacing) + (maxHeight - shape.bounds.height) / 2;
+
+      updateShape(shape.id, {
+        bounds: {
+          ...shape.bounds,
+          x: newX,
+          y: newY,
+        },
+      });
+    });
+  }, [shapes, editorState.selectedShapeIds, updateShape]);
+
   // Use centralized keyboard management
   useKeyboard({
     undo,
@@ -412,6 +613,10 @@ function App() {
                 style={editorState.shapeStyle}
                 onChange={updateShapeStyle}
                 hasTextSelection={hasTextSelection}
+                onAlign={handleAlign}
+                onDistribute={handleDistribute}
+                onTidy={handleTidy}
+                selectedCount={editorState.selectedShapeIds.length}
               />
             </motion.div>
           )}
