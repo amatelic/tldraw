@@ -73,12 +73,6 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
 }
 
-const PRESET_COLORS = [
-  '#000000', '#1e1e1e', '#dc2626', '#ea580c',
-  '#ca8a04', '#16a34a', '#0891b2', '#2563eb',
-  '#9333ea', '#db2777', '#ffffff', '#9ca3af'
-];
-
 export function ColorPicker({
   color,
   alpha = 1,
@@ -212,21 +206,21 @@ export function ColorPicker({
         setL(newHsl.l);
         setHexInput(result.sRGBHex.replace('#', '').toUpperCase());
         onChange(result.sRGBHex.toUpperCase(), a);
-      } catch (e) {
+      } catch {
         // User cancelled
       }
     }
   };
   
   const currentColor = hslToHex(h, s, l);
+  const alphaPercentage = Math.round(a * 100);
   
   return (
     <div className="color-picker">
-      <div className="color-picker-header">
-        <span className="color-picker-title">Solid Color</span>
-        <div className="color-picker-actions">
+      <div className="color-picker-topbar">
+        <div className="color-picker-topbar-slot">
           {'EyeDropper' in window && (
-            <button 
+            <button
               className="color-picker-action" 
               onClick={handleEyedropper}
               title="Pick color from screen"
@@ -236,6 +230,11 @@ export function ColorPicker({
               </svg>
             </button>
           )}
+        </div>
+
+        <span className="color-picker-title">Color</span>
+
+        <div className="color-picker-topbar-slot color-picker-topbar-slot-end">
           <button className="color-picker-action" onClick={onClose} title="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12"/>
@@ -243,8 +242,27 @@ export function ColorPicker({
           </button>
         </div>
       </div>
+
+      <div className="color-picker-tabs" role="tablist" aria-label="Color source">
+        <button
+          className="color-picker-tab color-picker-tab-active"
+          type="button"
+          role="tab"
+          aria-selected="true"
+        >
+          Custom
+        </button>
+        <button
+          className="color-picker-tab"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          disabled
+        >
+          Variables
+        </button>
+      </div>
       
-      {/* Gradient Selector */}
       <div
         ref={gradientRef}
         className="color-picker-gradient"
@@ -270,7 +288,6 @@ export function ColorPicker({
         />
       </div>
       
-      {/* Hue Slider */}
       <div
         ref={hueRef}
         className="color-picker-hue"
@@ -286,7 +303,6 @@ export function ColorPicker({
         />
       </div>
       
-      {/* Alpha Slider */}
       {showAlpha && (
         <div
           ref={alphaRef}
@@ -307,8 +323,25 @@ export function ColorPicker({
           />
         </div>
       )}
-      
-      {/* Input Fields */}
+
+      <div className="color-picker-toolbar">
+        <button className="color-picker-format" type="button">
+          HSLA
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M8 10l4 4 4-4" />
+          </svg>
+        </button>
+
+        <div className="color-picker-toolbar-meta">
+          <div
+            className="color-picker-toolbar-swatch"
+            style={{ backgroundColor: currentColor, opacity: a }}
+            aria-hidden="true"
+          />
+          {showAlpha && <span className="color-picker-toolbar-alpha">A {alphaPercentage}%</span>}
+        </div>
+      </div>
+
       <div className="color-picker-inputs">
         <div className="color-picker-input-group">
           <label htmlFor="color-h">H</label>
@@ -385,26 +418,6 @@ export function ColorPicker({
             />
           </div>
         )}
-      </div>
-      
-      {/* Presets */}
-      <div className="color-picker-presets">
-        {PRESET_COLORS.map((preset) => (
-          <button
-            key={preset}
-            className="color-picker-preset"
-            style={{ background: preset }}
-            onClick={() => {
-              const newHsl = hexToHsl(preset);
-              setH(newHsl.h);
-              setS(newHsl.s);
-              setL(newHsl.l);
-              setHexInput(preset.replace('#', ''));
-              onChange(preset, a);
-            }}
-            title={preset}
-          />
-        ))}
       </div>
     </div>
   );

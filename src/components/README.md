@@ -244,23 +244,20 @@ interface TooltipProps {
 
 ### ColorPicker
 
-**Purpose**: Reusable color picker with HSL gradient, hue slider, and alpha slider.
+**Purpose**: Reusable floating color picker with a tactile, inspector-style HSLA workflow.
 
 **Design**:
-- HSL color gradient selector (saturation/lightness)
-- Hue slider (0-360 degrees)
-- Alpha/transparency slider (0-100%)
-- HSL and Hex input fields with validation
-- Color preset swatches (11 preset colors)
-- Eyedropper tool for picking colors from screen (if supported by browser)
-- Dark mode support via CSS variables
+- Centered popover header with close control and optional eyedropper
+- Segmented "Custom / Variables" tab strip (Variables is visual-only for now)
+- Large HSLA field with refined hue and alpha sliders
+- Grouped HSLA and Hex inputs styled like native design-tool controls
+- Light and dark theme support via local CSS variables
 
 **Features**:
 - Real-time color preview
 - Interactive gradient picker for saturation and lightness
-- Sliders for hue and alpha channels
-- Input validation for HSL and Hex values
-- Quick access to preset colors
+- Hue and alpha sliders with drag handles
+- Input validation for HSLA and Hex values
 - Browser-supported eyedropper API integration
 - Full keyboard accessibility
 
@@ -286,21 +283,21 @@ interface ColorPickerProps {
 - [ ] Alpha slider adjusts transparency (0-100%)
 - [ ] Hex input accepts valid hex colors and updates picker
 - [ ] HSL inputs accept valid HSL values and update picker
-- [ ] Preset colors apply immediately when clicked
+- [ ] Header actions remain accessible in supported browsers
 - [ ] Eyedropper works in supported browsers
 - [ ] Dark mode displays correctly
 - [ ] All inputs are keyboard accessible
 
 **Constraints**:
 - Eyedropper requires browser support (Chrome/Edge 95+)
-- Alpha values stored as hex with transparency (8-digit hex)
+- Variables tab is not yet wired to design tokens or theme variables
 - Minimum picker size for touch interactions (300px width recommended)
 - Must handle invalid input gracefully
 
 **Known Issues**:
 - Eyedropper not supported in Firefox or Safari
 - Touch interactions on mobile may need optimization
-- Large alpha values can make picker difficult to see on light backgrounds
+- The custom picker currently exposes HSLA only; RGB/OKLCH inputs are not implemented
 
 **Dependencies**:
 - CSS variables from `index.css` for theming
@@ -310,7 +307,7 @@ interface ColorPickerProps {
 
 ### ZoomControls
 
-**Purpose**: Bottom-center zoom control buttons.
+**Purpose**: Floating zoom control buttons layered over the full-viewport canvas.
 
 **Features**:
 - Zoom in (+)
@@ -330,48 +327,58 @@ interface ZoomControlsProps {
 **Success Criteria**:
 - [ ] Buttons call correct handlers
 - [ ] Zoom percentage displays correctly
-- [ ] Positioned correctly over canvas
+- [ ] Positioned correctly over the canvas without shrinking the drawing surface
 
 **Constraints**:
-- Positioned absolutely at bottom center
-- Must not overlap with toolbar
+- Positioned as floating chrome over the canvas
+- Must avoid the floating toolbar and inspector on common viewport sizes
 
 ---
 
 ### PropertiesPanel
 
-**Purpose**: Right sidebar for editing shape styles with collapsible sections and CSS variable theming.
+**Purpose**: Floating right-hand inspector for editing selection layout, styling, typography, color, and effects without reducing canvas width or height.
 
 **Design**:
-- Dark mode support via CSS variables
-- Collapsible sections with smooth animations
-- ColorPicker integration for stroke and fill colors
-- Fixed width with scrollable content
+- Floating inspector shell with rounded surfaces and compact section rhythm
+- Collapsible sections with light metadata summaries in the header
+- Inline stroke/fill color cards with embedded ColorPicker popovers
+- Compact typography and control groups inspired by modern design inspectors
+- Fixed overlay treatment so the canvas remains full-viewport beneath it
 
 **Features**:
-- **Layout Section**: Position, size, rotation controls
+- **Layout Section**:
+  - Live position and size readouts from the selected shape or combined multi-select frame
+  - Multi-select align, distribute, and tidy actions
 - **Style Section**: 
-  - Color picker (11 preset colors) with ColorPicker integration
-  - Fill color picker with ColorPicker integration
-  - Stroke width slider (1, 2, 4, 8, 12)
-  - Stroke style (solid, dashed, dotted)
-  - Fill style (none, solid, pattern)
-- **Opacity Section**: Opacity slider with percentage display and blend mode selector (16 blend modes)
+  - Stroke width chooser (1, 2, 4, 8, 12)
+  - Stroke style segmented control (solid, dashed, dotted)
+  - Fill style segmented control (none, solid, pattern)
+  - Opacity slider with inline percentage readout
+  - Blend mode selector (16 blend modes)
+- **Type Section** (for text shapes):
+  - Font family and size
+  - Weight, emphasis, and alignment controls
+- **Color Section**:
+  - Separate stroke and fill rows with current hex values
+  - Reduced quick swatch palette for both stroke and fill to keep the inspector calmer
+  - Section-level custom ColorPicker that opens above the inline color controls instead of pushing them deeper into the stack
 - **Effects Section**: 
   - Multiple shadows with individual controls (X offset, Y offset, Blur, Color, Opacity)
+  - Shadow ColorPicker opens before the shadow inputs and opacity slider so the picker is not buried inside the slider block
   - Add/remove shadow buttons
-  - Blur effects
-- **Text Section** (for text shapes): Font size, family, weight, style, alignment
+  - Empty state prompt when no shadows exist
 
 **Collapsible Sections**:
 - Each section can be expanded/collapsed independently
 - State persists during panel visibility
-- Sections animate smoothly when expanding/collapsing
+- Headers show lightweight metadata (selection size, current blend mode, active color)
 
 **Theming**:
-- Uses CSS variables from `index.css` for consistent styling
+- Uses local CSS variables in the component stylesheet for the inspector palette
 - Automatic dark mode detection via `prefers-color-scheme`
-- All colors reference CSS custom properties (e.g., `--panel-bg`, `--panel-border`)
+- Shares scroll container behavior with the app shell via `App.css`
+- On narrow screens the floating desktop panel collapses toward a bottom-sheet overlay
 
 **Props**:
 ```typescript
@@ -402,19 +409,20 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 **Success Criteria**:
 - [ ] All style controls work and apply immediately
 - [ ] Changes apply immediately to selected shapes
+- [ ] Layout X/Y/W/H reflects the current selected frame bounds
 - [ ] Text-specific controls hidden for non-text shapes
 - [ ] Panel animates in/out smoothly
 - [ ] Sections can be collapsed/expanded independently
 - [ ] ColorPicker integration works for all color inputs
 - [ ] Blend mode selector shows all 16 options
-- [ ] Shadow controls visible only for supported shape types
 - [ ] Multiple shadows can be added and configured
-- [ ] Shadow X/Y offset sliders work from -50 to 50
-- [ ] Shadow blur slider works from 0 to 50
+- [ ] Shadow X/Y inputs work from negative to positive offsets
+- [ ] Shadow blur input works from 0 upward
 - [ ] Shadow opacity slider works from 0 to 100%
 - [ ] Add shadow button creates new shadow with defaults
 - [ ] Remove shadow button deletes individual shadows
-- [ ] Dark mode displays correctly with CSS variables
+- [ ] Multi-select arrange actions remain available
+- [ ] Dark mode displays correctly with component tokens
 - [ ] Panel is scrollable when content overflows
 
 **Constraints**:
@@ -439,9 +447,18 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 
 **Features**:
 - Display all workspaces as tabs
-- Active tab highlighted
+- Active tab highlighted with the same soft-surface visual language used by the redesigned inspector
 - Add new workspace button (max 10)
 - Scrollable if too many tabs
+- Switches to a compact overflow UI once the count exceeds 6 workspaces so the add button remains visible
+- Keeps the first 5 workspaces pinned in the rail and moves the remaining ones into an overflow menu
+- Hidden workspaces can still be switched, renamed, and closed from the overflow menu
+- Rounded workspace rail shell that matches the header chrome redesign in `src/App.css`
+- Rendered inside a floating header shell so the canvas can stay full-viewport
+- Shares a single desktop row with the floating header action pills
+- The previous standalone app title row has been removed to keep the floating header compact
+- Uses softer add/remove/layout motion and roomier internal spacing for the tab pills and add button
+- Active workspace state is carried by a shared moving pill, so tab switching feels spatially connected instead of abruptly recolored
 
 **Props**:
 ```typescript
@@ -462,11 +479,19 @@ interface WorkspaceTabsProps {
 - [ ] Can switch between workspaces
 - [ ] Add button creates new workspace
 - [ ] Respects max workspaces limit
+- [ ] Overflow trigger appears after the 6th workspace without pushing the add button out of view
+- [ ] Hidden workspaces remain manageable from the overflow menu
+- [ ] Header chrome and workspace rail feel visually aligned with the right-side inspector shell
 
 **Constraints**:
 - Maximum 10 workspaces
 - Tabs have minimum width
 - Horizontal scrolling for many tabs
+- Overflow mode starts once more than 6 workspaces exist
+- In overflow mode, 5 tabs stay visible in the rail and the rest move into a dropdown menu
+- Visual styling is implemented from `src/App.css` because the header and workspace rail are treated as one shared chrome surface
+- On desktop, the rail is expected to align horizontally with the header action group
+- Motion should respect `prefers-reduced-motion` and spacing should preserve clear separation between the active tab and the add button
 
 ---
 
@@ -482,6 +507,7 @@ interface WorkspaceTabsProps {
 - 15-character truncation with ellipsis
 - Hover tooltip showing full name (after 3s)
 - Circular progress indicator during long-press
+- Pill-style active state with accent gradient to mirror the inspector color controls
 
 **Props**:
 ```typescript
@@ -514,6 +540,7 @@ interface WorkspaceTabProps {
 **Known Issues**:
 - Context menu positioning can be tricky
 - Long-press timing might feel slow to some users
+- Visual regression coverage for the tab shell relies on Playwright computed-style checks rather than screenshot diffing
 
 ---
 

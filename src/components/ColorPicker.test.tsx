@@ -14,7 +14,9 @@ describe('ColorPicker', () => {
   it('should render with default props', () => {
     render(<ColorPicker color="#2f80ed" onChange={mockOnChange} />);
 
-    expect(screen.getByText('Solid Color')).toBeInTheDocument();
+    expect(screen.getByText('Color')).toBeInTheDocument();
+    expect(screen.getByText('Custom')).toBeInTheDocument();
+    expect(screen.getByText('Variables')).toBeDisabled();
     expect(screen.getByLabelText('H')).toBeInTheDocument();
     expect(screen.getByLabelText('S')).toBeInTheDocument();
     expect(screen.getByLabelText('L')).toBeInTheDocument();
@@ -65,16 +67,6 @@ describe('ColorPicker', () => {
     render(<ColorPicker color="#000000" onChange={mockOnChange} showAlpha={false} />);
     
     expect(screen.queryByLabelText('A')).not.toBeInTheDocument();
-  });
-
-  it('should update color when preset is clicked', () => {
-    render(<ColorPicker color="#000000" onChange={mockOnChange} />);
-    
-    const presets = screen.getAllByRole('button').filter(btn => btn.classList.contains('color-picker-preset'));
-    if (presets.length > 0) {
-      fireEvent.click(presets[0]);
-      expect(mockOnChange).toHaveBeenCalled();
-    }
   });
 
   it('should clamp HSL values to valid ranges', () => {
