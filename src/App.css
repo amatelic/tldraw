@@ -24,6 +24,8 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  container-type: inline-size;
+  container-name: app-shell;
 }
 
 .app-header {
@@ -37,7 +39,7 @@ body {
   --header-accent: #5b65f5;
   --header-accent-strong: #4a54e2;
   --header-danger: #d95370;
-  position: fixed;
+  position: absolute;
   top: 16px;
   left: 16px;
   right: 16px;
@@ -65,14 +67,14 @@ body {
 }
 
 .app-main {
-  position: fixed;
+  position: absolute;
   inset: 0;
   overflow: hidden;
 }
 
 /* Toolbar - Floating TLDraw style */
 .toolbar {
-  position: fixed;
+  position: absolute;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
@@ -156,7 +158,7 @@ body {
 
 /* Zoom Controls */
 .zoom-controls {
-  position: fixed;
+  position: absolute;
   bottom: 20px;
   left: 20px;
   transform: none;
@@ -200,7 +202,7 @@ body {
 
 /* Properties Panel */
 .properties-panel-wrapper {
-  position: fixed;
+  position: absolute;
   top: 118px;
   right: 16px;
   bottom: 20px;
@@ -208,6 +210,7 @@ body {
   overflow: visible;
   pointer-events: none;
   z-index: 85;
+  container-type: inline-size;
 }
 
 .properties-panel {
@@ -433,7 +436,7 @@ body {
 }
 
 .agent-backdrop {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: flex;
   align-items: flex-start;
@@ -445,7 +448,7 @@ body {
 
 .agent-panel {
   width: min(560px, 100%);
-  max-height: calc(100vh - 96px);
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1183,7 +1186,7 @@ body {
   top: calc(100% + 10px);
   right: 0;
   min-width: 280px;
-  max-width: min(340px, calc(100vw - 48px));
+  max-width: min(340px, calc(100% - 24px));
   padding: 8px;
   border-radius: 18px;
   border: none;
@@ -1396,7 +1399,7 @@ body {
 
 /* Dialog Styles */
 .dialog-overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
@@ -1412,8 +1415,11 @@ body {
   background-color: #fff;
   border-radius: 12px;
   padding: 24px;
-  min-width: 400px;
-  max-width: 500px;
+  width: min(500px, calc(100% - 32px));
+  min-width: min(400px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 32px);
+  overflow: auto;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
 }
 
@@ -1576,7 +1582,7 @@ body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@container app-shell (max-width: 768px) {
   .header-body {
     flex-direction: column;
     align-items: stretch;
@@ -1601,7 +1607,6 @@ body {
   }
 
   .toolbar {
-    position: fixed;
     bottom: 12px;
     left: 50%;
     transform: translateX(-50%);

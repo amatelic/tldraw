@@ -21,6 +21,7 @@ import { createShapeId, getGroupBounds } from './types';
 import './App.css';
 
 const MAX_WORKSPACES = 10;
+const LAYOUT_EDITABLE_SHAPE_TYPES: Shape['type'][] = ['rectangle', 'image', 'audio', 'text', 'embed'];
 
 function App() {
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -89,9 +90,12 @@ function App() {
   );
 
   const selectedShapes = shapes.filter((shape) => editorState.selectedShapeIds.includes(shape.id));
+  const singleSelectedShape = selectedShapes.length === 1 ? selectedShapes[0] : null;
   const canGroupSelected = editorState.selectedShapeIds.length >= 2;
   const canUngroupSelected =
     editorState.selectedShapeIds.length === 1 && selectedShapes[0]?.type === 'group';
+  const canEditSelectedLayout =
+    singleSelectedShape !== null && LAYOUT_EDITABLE_SHAPE_TYPES.includes(singleSelectedShape.type);
 
   const selectedLayoutBounds: Bounds | null =
     selectedShapes.length === 0
@@ -510,6 +514,25 @@ function App() {
     });
   }, [shapes, editorState.selectedShapeIds, updateShape]);
 
+  const handleLayoutBoundsChange = useCallback(
+    (updates: Partial<Bounds>) => {
+      if (!singleSelectedShape || !canEditSelectedLayout) {
+        return;
+      }
+
+      const nextBounds: Bounds = {
+        ...singleSelectedShape.bounds,
+        ...updates,
+      };
+
+      nextBounds.width = Math.max(1, nextBounds.width);
+      nextBounds.height = Math.max(1, nextBounds.height);
+
+      updateShape(singleSelectedShape.id, { bounds: nextBounds });
+    },
+    [canEditSelectedLayout, singleSelectedShape, updateShape]
+  );
+
   // Use centralized keyboard management
   useKeyboard({
     undo,
@@ -647,6 +670,7 @@ function App() {
                 style={editorState.shapeStyle}
                 onChange={updateShapeStyle}
                 layoutBounds={selectedLayoutBounds}
+                onLayoutBoundsChange={canEditSelectedLayout ? handleLayoutBoundsChange : undefined}
                 hasTextSelection={hasTextSelection}
                 onAlign={handleAlign}
                 onDistribute={handleDistribute}

@@ -5,12 +5,14 @@ import { DEFAULT_STYLE } from '../types';
 
 describe('PropertiesPanel', () => {
   const onChange = vi.fn();
+  const onLayoutBoundsChange = vi.fn();
   const onAlign = vi.fn();
   const onDistribute = vi.fn();
   const onTidy = vi.fn();
 
   beforeEach(() => {
     onChange.mockClear();
+    onLayoutBoundsChange.mockClear();
     onAlign.mockClear();
     onDistribute.mockClear();
     onTidy.mockClear();
@@ -57,6 +59,56 @@ describe('PropertiesPanel', () => {
     expect(screen.getByDisplayValue('128')).toBeInTheDocument();
   });
 
+  it('commits editable layout width changes on blur', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        onLayoutBoundsChange={onLayoutBoundsChange}
+        selectedCount={1}
+        layoutBounds={{ x: 118, y: 42, width: 264, height: 128 }}
+      />
+    );
+
+    const widthInput = screen.getByLabelText('Layout Width');
+    fireEvent.change(widthInput, { target: { value: '320' } });
+    fireEvent.blur(widthInput);
+
+    expect(onLayoutBoundsChange).toHaveBeenCalledWith({ width: 320 });
+  });
+
+  it('commits editable layout height changes on Enter', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        onLayoutBoundsChange={onLayoutBoundsChange}
+        selectedCount={1}
+        layoutBounds={{ x: 118, y: 42, width: 264, height: 128 }}
+      />
+    );
+
+    const heightInput = screen.getByLabelText('Layout Height');
+    fireEvent.change(heightInput, { target: { value: '300' } });
+    fireEvent.keyDown(heightInput, { key: 'Enter' });
+
+    expect(onLayoutBoundsChange).toHaveBeenCalledWith({ height: 300 });
+  });
+
+  it('keeps layout fields read-only when layout editing is unavailable', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={2}
+        layoutBounds={{ x: 118, y: 42, width: 264, height: 128 }}
+      />
+    );
+
+    expect(screen.getByLabelText('Layout Width')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Layout Height')).toHaveAttribute('readonly');
+  });
+
   it('opens the stroke color picker from the redesigned color controls', () => {
     const { container } = render(
       <PropertiesPanel style={DEFAULT_STYLE} onChange={onChange} selectedCount={1} />
@@ -71,6 +123,71 @@ describe('PropertiesPanel', () => {
     expect(screen.getByText('Custom')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Variables' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('keeps floating pickers inside the app shell when rendered in an embedded host', () => {
+    const getBoundingClientRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function () {
+        const element = this as HTMLElement;
+
+        if (element.classList.contains('app')) {
+          return {
+            x: 40,
+            y: 20,
+            top: 20,
+            left: 40,
+            bottom: 620,
+            right: 840,
+            width: 800,
+            height: 600,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+
+        if (element.title === 'Edit stroke color') {
+          return {
+            x: 680,
+            y: 180,
+            top: 180,
+            left: 680,
+            bottom: 220,
+            right: 720,
+            width: 40,
+            height: 40,
+            toJSON: () => ({}),
+          } as DOMRect;
+        }
+
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          width: 0,
+          height: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+    const { container } = render(
+      <div className="app">
+        <PropertiesPanel style={DEFAULT_STYLE} onChange={onChange} selectedCount={1} />
+      </div>
+    );
+
+    fireEvent.click(screen.getByTitle('Edit stroke color'));
+
+    const appShell = container.querySelector('.app');
+    const floatingLayer = appShell?.querySelector('.floating-color-picker-layer') as HTMLElement | null;
+
+    expect(floatingLayer).toBeInTheDocument();
+    expect(floatingLayer?.parentElement).toBe(appShell);
+    expect(floatingLayer).toHaveStyle({ position: 'absolute', left: '192px', top: '16px' });
+
+    getBoundingClientRectSpy.mockRestore();
   });
 
   it('supports toggling fill off from the inline fill chip', () => {

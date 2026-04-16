@@ -27,10 +27,98 @@ interface CanvasProps {
   onTextEditStart: (id: string) => void;
   onTextEditCommit: () => void;
   onTextEditCancel: () => void;
+  onDeleteSelected: () => void;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
+  canGroupSelection: boolean;
+  canUngroupSelection: boolean;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
 }
 
 // Type for drag update function (optimized approach)
 type DragUpdateFn = (dx: number, dy: number) => void;
+type EmbedResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+interface EmbedBoundsSnapshot {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const MIN_EMBED_WIDTH = 160;
+const MIN_EMBED_HEIGHT = 120;
+
+const EMBED_RESIZE_HANDLE_POSITIONS: Array<{
+  handle: EmbedResizeHandle;
+  style: React.CSSProperties;
+}> = [
+  { handle: 'nw', style: { left: 0, top: 0, transform: 'translate(-50%, -50%)' } },
+  { handle: 'n', style: { left: '50%', top: 0, transform: 'translate(-50%, -50%)' } },
+  { handle: 'ne', style: { right: 0, top: 0, transform: 'translate(50%, -50%)' } },
+  { handle: 'e', style: { right: 0, top: '50%', transform: 'translate(50%, -50%)' } },
+  { handle: 'se', style: { right: 0, bottom: 0, transform: 'translate(50%, 50%)' } },
+  { handle: 's', style: { left: '50%', bottom: 0, transform: 'translate(-50%, 50%)' } },
+  { handle: 'sw', style: { left: 0, bottom: 0, transform: 'translate(-50%, 50%)' } },
+  { handle: 'w', style: { left: 0, top: '50%', transform: 'translate(-50%, -50%)' } },
+];
+
+const EMBED_RESIZE_CURSORS: Record<EmbedResizeHandle, React.CSSProperties['cursor']> = {
+  nw: 'nwse-resize',
+  n: 'ns-resize',
+  ne: 'nesw-resize',
+  e: 'ew-resize',
+  se: 'nwse-resize',
+  s: 'ns-resize',
+  sw: 'nesw-resize',
+  w: 'ew-resize',
+};
+
+function resizeEmbedBounds(
+  bounds: EmbedBoundsSnapshot,
+  handle: EmbedResizeHandle,
+  deltaX: number,
+  deltaY: number
+): EmbedBoundsSnapshot {
+  const right = bounds.x + bounds.width;
+  const bottom = bounds.y + bounds.height;
+
+  let nextX = bounds.x;
+  let nextY = bounds.y;
+  let nextWidth = bounds.width;
+  let nextHeight = bounds.height;
+
+  if (handle.includes('w')) {
+    nextX = Math.min(bounds.x + deltaX, right - MIN_EMBED_WIDTH);
+    nextWidth = right - nextX;
+  }
+
+  if (handle.includes('e')) {
+    nextWidth = Math.max(MIN_EMBED_WIDTH, bounds.width + deltaX);
+  }
+
+  if (handle.includes('n')) {
+    nextY = Math.min(bounds.y + deltaY, bottom - MIN_EMBED_HEIGHT);
+    nextHeight = bottom - nextY;
+  }
+
+  if (handle.includes('s')) {
+    nextHeight = Math.max(MIN_EMBED_HEIGHT, bounds.height + deltaY);
+  }
+
+  return {
+    x: nextX,
+    y: nextY,
+    width: nextWidth,
+    height: nextHeight,
+  };
+}
 
 export function Canvas({
   canvasRef,
@@ -55,6 +143,13 @@ export function Canvas({
   onTextEditStart,
   onTextEditCommit,
   onTextEditCancel,
+  onDeleteSelected,
+  onGroupSelected,
+  onUngroupSelected,
+  onBringToFront,
+  onSendToBack,
+  canGroupSelection,
+  canUngroupSelection,
 }: CanvasProps) {
   const engineRef = useRef<CanvasEngine | null>(null);
   const startPointRef = useRef<Point | null>(null);
@@ -76,7 +171,9 @@ export function Canvas({
   const editingTextIdRef = useRef(editingTextId);
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const [originalText, setOriginalText] = useState<string>('');
+  const originalTextRef = useRef('');
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const canvasSize = useElementSize(canvasRef);
 
   // Update refs when props change
@@ -109,9 +206,50 @@ export function Canvas({
   // Update original text when entering edit mode
   useEffect(() => {
     if (editingTextId && editingShape) {
-      setOriginalText(editingShape.text);
+      originalTextRef.current = editingShape.text;
     }
   }, [editingTextId, editingShape]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && contextMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setContextMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (tool === 'select' && selectedIds.length > 0 && !editingTextId) {
+      return;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      setContextMenu(null);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+    };
+  }, [tool, selectedIds.length, editingTextId]);
 
   // Render function - defined before use
   const render = useCallback(() => {
@@ -511,7 +649,6 @@ export function Canvas({
       onDraggingChange,
       onDrawingChange,
       onShapeDelete,
-      onShapeUpdate,
       onShapeAdd,
       onTextEditStart,
       onTextEditCommit,
@@ -541,6 +678,49 @@ export function Canvas({
       }
     },
     [screenToWorld, onTextEditStart, onTextEditCommit, getPointerPoint]
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.preventDefault();
+
+      if (toolRef.current !== 'select' || editingTextIdRef.current) {
+        setContextMenu(null);
+        return;
+      }
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const screenPoint = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      const worldPoint = screenToWorld(screenPoint);
+
+      const clickedShape = [...shapesRef.current]
+        .reverse()
+        .find((shape) => isPointInShape(worldPoint, shape));
+
+      if (!clickedShape) {
+        setContextMenu(null);
+        return;
+      }
+
+      const rootGroup = getRootGroup(clickedShape.id, shapesRef.current);
+      const shapeToSelect = rootGroup || clickedShape;
+
+      if (!selectedIdsRef.current.includes(shapeToSelect.id)) {
+        onSelectionChange([shapeToSelect.id]);
+      }
+
+      setContextMenu({
+        x: screenPoint.x,
+        y: screenPoint.y,
+      });
+    },
+    [canvasRef, onSelectionChange, screenToWorld]
   );
 
   const handlePointerMove = useCallback(
@@ -738,7 +918,7 @@ export function Canvas({
 
     // Restore original text
     onShapeUpdate(editingShape.id, {
-      text: originalText,
+      text: originalTextRef.current,
     });
 
     onTextEditCancel();
@@ -776,6 +956,62 @@ export function Canvas({
     };
   };
 
+  const getContextMenuStyle = (): React.CSSProperties => {
+    if (!contextMenu) {
+      return { display: 'none' };
+    }
+
+    const maxLeft = Math.max(8, canvasSize.width - 188);
+    const maxTop = Math.max(8, canvasSize.height - 212);
+
+    return {
+      position: 'absolute',
+      left: `${Math.min(contextMenu.x, maxLeft)}px`,
+      top: `${Math.min(contextMenu.y, maxTop)}px`,
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: '180px',
+      padding: '8px',
+      borderRadius: '12px',
+      border: '1px solid rgba(15, 23, 42, 0.08)',
+      background: 'rgba(255, 255, 255, 0.98)',
+      boxShadow: '0 18px 40px rgba(15, 23, 42, 0.16)',
+      backdropFilter: 'blur(16px)',
+      zIndex: 1100,
+      gap: '4px',
+    };
+  };
+
+  const contextMenuButtonStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '12px',
+    width: '100%',
+    padding: '10px 12px',
+    border: 'none',
+    borderRadius: '8px',
+    background: 'transparent',
+    color: '#0f172a',
+    fontSize: '13px',
+    fontWeight: 500,
+    textAlign: 'left',
+    cursor: 'pointer',
+  };
+
+  const contextMenuHintStyle: React.CSSProperties = {
+    color: '#64748b',
+    fontSize: '11px',
+    fontWeight: 600,
+    letterSpacing: '0.02em',
+    textTransform: 'uppercase',
+  };
+
+  const runContextMenuAction = (action: () => void) => {
+    action();
+    setContextMenu(null);
+  };
+
   const getEmbedOverlays = useCallback(() => {
     const embedShapes = shapes.filter(
       (s): s is Extract<Shape, { type: 'embed' }> => s.type === 'embed'
@@ -807,6 +1043,13 @@ export function Canvas({
     startX: number;
     startY: number;
     origBounds: { x: number; y: number; width: number; height: number };
+  } | null>(null);
+  const embedResizeRef = useRef<{
+    shapeId: string;
+    handle: EmbedResizeHandle;
+    startX: number;
+    startY: number;
+    origBounds: EmbedBoundsSnapshot;
   } | null>(null);
 
   const handleEmbedDragStart = useCallback(
@@ -849,12 +1092,60 @@ export function Canvas({
     [tool, camera.zoom, onSelectionChange, onShapeUpdate]
   );
 
+  const handleEmbedResizeStart = useCallback(
+    (
+      e: React.PointerEvent<HTMLButtonElement>,
+      shape: Extract<Shape, { type: 'embed' }>,
+      handle: EmbedResizeHandle
+    ) => {
+      if (tool !== 'select') return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      embedResizeRef.current = {
+        shapeId: shape.id,
+        handle,
+        startX: e.clientX,
+        startY: e.clientY,
+        origBounds: { ...shape.bounds },
+      };
+
+      onSelectionChange([shape.id]);
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        if (!embedResizeRef.current) return;
+
+        const dx = (moveEvent.clientX - embedResizeRef.current.startX) / camera.zoom;
+        const dy = (moveEvent.clientY - embedResizeRef.current.startY) / camera.zoom;
+        const nextBounds = resizeEmbedBounds(
+          embedResizeRef.current.origBounds,
+          embedResizeRef.current.handle,
+          dx,
+          dy
+        );
+
+        onShapeUpdate(embedResizeRef.current.shapeId, { bounds: nextBounds });
+      };
+
+      const handleUp = () => {
+        embedResizeRef.current = null;
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+      };
+
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+    },
+    [tool, camera.zoom, onSelectionChange, onShapeUpdate]
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <canvas
         ref={canvasRef}
         className="canvas"
         onPointerDown={handlePointerDown}
+        onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -886,6 +1177,68 @@ export function Canvas({
           autoFocus
         />
       )}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          role="menu"
+          aria-label="Canvas actions"
+          style={getContextMenuStyle()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            style={contextMenuButtonStyle}
+            onClick={() => runContextMenuAction(onDeleteSelected)}
+          >
+            <span>Delete</span>
+            <span style={contextMenuHintStyle}>Del</span>
+          </button>
+          {canGroupSelection && (
+            <button
+              type="button"
+              role="menuitem"
+              style={contextMenuButtonStyle}
+              onClick={() => runContextMenuAction(onGroupSelected)}
+            >
+              <span>Group Selection</span>
+              <span style={contextMenuHintStyle}>Ctrl+G</span>
+            </button>
+          )}
+          {canUngroupSelection && (
+            <button
+              type="button"
+              role="menuitem"
+              style={contextMenuButtonStyle}
+              onClick={() => runContextMenuAction(onUngroupSelected)}
+            >
+              <span>Ungroup</span>
+              <span style={contextMenuHintStyle}>Ctrl+Shift+G</span>
+            </button>
+          )}
+          <div
+            aria-hidden="true"
+            style={{ height: '1px', margin: '4px 0', background: 'rgba(148, 163, 184, 0.22)' }}
+          />
+          <button
+            type="button"
+            role="menuitem"
+            style={contextMenuButtonStyle}
+            onClick={() => runContextMenuAction(onBringToFront)}
+          >
+            <span>Bring To Front</span>
+            <span style={contextMenuHintStyle}>Top</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            style={contextMenuButtonStyle}
+            onClick={() => runContextMenuAction(onSendToBack)}
+          >
+            <span>Send To Back</span>
+            <span style={contextMenuHintStyle}>Back</span>
+          </button>
+        </div>
+      )}
       {embedOverlays.map(({ shape, left, top, width, height }) => (
         <div
           key={shape.id}
@@ -899,51 +1252,83 @@ export function Canvas({
             pointerEvents: tool === 'select' ? 'auto' : 'none',
             zIndex: 10,
             borderRadius: '4px',
-            overflow: 'hidden',
-            border: selectedIds.includes(shape.id) ? '2px solid #2563eb' : '1px solid #999',
-            display: 'flex',
-            flexDirection: 'column',
+            overflow: 'visible',
           }}
         >
           <div
-            className="embed-drag-handle"
-            onPointerDown={(e) => handleEmbedDragStart(e, shape)}
             style={{
-              width: '100%',
-              height: '24px',
-              minHeight: '24px',
-              background: selectedIds.includes(shape.id) ? '#2563eb' : '#666',
-              cursor: 'grab',
+              position: 'absolute',
+              inset: 0,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '3px',
-              padding: '0 8px',
-              flexShrink: 0,
-              userSelect: 'none',
+              flexDirection: 'column',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              border: selectedIds.includes(shape.id) ? '2px solid #2563eb' : '1px solid #999',
+              background: '#fff',
             }}
-            title="Drag to move"
           >
-            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
-            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
-            <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
-            <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {shape.embedType === 'youtube' ? 'YouTube' : 'Website'}
-            </span>
+            <div
+              className="embed-drag-handle"
+              onPointerDown={(e) => handleEmbedDragStart(e, shape)}
+              style={{
+                width: '100%',
+                height: '24px',
+                minHeight: '24px',
+                background: selectedIds.includes(shape.id) ? '#2563eb' : '#666',
+                cursor: 'grab',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '3px',
+                padding: '0 8px',
+                flexShrink: 0,
+                userSelect: 'none',
+              }}
+              title="Drag to move"
+            >
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.6)' }} />
+              <span style={{ marginLeft: 'auto', fontSize: '10px', color: 'rgba(255,255,255,0.8)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {shape.embedType === 'youtube' ? 'YouTube' : 'Website'}
+              </span>
+            </div>
+            <iframe
+              src={shape.embedSrc}
+              title={shape.url}
+              style={{
+                width: '100%',
+                flex: 1,
+                border: 'none',
+                pointerEvents: tool === 'select' ? 'auto' : 'none',
+              }}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-presentation"
+            />
           </div>
-          <iframe
-            src={shape.embedSrc}
-            title={shape.url}
-            style={{
-              width: '100%',
-              flex: 1,
-              border: 'none',
-              pointerEvents: tool === 'select' ? 'auto' : 'none',
-            }}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-            sandbox="allow-scripts allow-same-origin allow-presentation"
-          />
+          {tool === 'select' && selectedIds.includes(shape.id)
+            ? EMBED_RESIZE_HANDLE_POSITIONS.map(({ handle, style: handlePositionStyle }) => (
+                <button
+                  key={`${shape.id}-${handle}`}
+                  type="button"
+                  aria-label={`Resize embed ${handle}`}
+                  onPointerDown={(e) => handleEmbedResizeStart(e, shape, handle)}
+                  style={{
+                    position: 'absolute',
+                    width: '12px',
+                    height: '12px',
+                    padding: 0,
+                    borderRadius: '999px',
+                    border: '2px solid #2563eb',
+                    background: '#fff',
+                    boxShadow: '0 0 0 1px rgba(255,255,255,0.75)',
+                    cursor: EMBED_RESIZE_CURSORS[handle],
+                    ...handlePositionStyle,
+                  }}
+                />
+              ))
+            : null}
         </div>
       ))}
     </div>
