@@ -179,6 +179,7 @@ This allows the board to work correctly when embedded in:
 - `src/components/Canvas.embed-resize.test.tsx`
 - `src/components/PropertiesPanel.test.tsx`
 - `src/components/themeStyles.test.ts`
+- `e2e/embed-layout.spec.ts`
 
 Coverage includes:
 
@@ -189,11 +190,14 @@ Coverage includes:
 - inspector width/height commits
 - inspector read-only behavior when layout editing is unavailable
 - shell/container-query style guards
+- browser-level resize-handle persistence checks
+- browser-level inspector width/height persistence checks
 
 ### Commands
 
 ```bash
 npx vitest run
+npm run test:e2e
 npm run lint
 npm run build
 ```
