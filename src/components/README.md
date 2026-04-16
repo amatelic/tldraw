@@ -48,16 +48,22 @@ Components are organized by functionality:
   - storyboard for learning storytelling
 - Full-board context lock for first-pass generation
 - Messaging that explains the workflow produces both a draft diagram and presentation guidance
+- Preview sections for:
+  - diagram sections
+  - planned nodes
+  - planned connectors
+  - warnings
+  - presentation brief details and list-based talk-track content
 
 **Success Criteria**:
 - [ ] Diagram Generator appears as a distinct workflow, not generic chat UI
 - [ ] Context locks to full board for diagram generation
 - [ ] Presets and starter examples populate the prompt scaffolding
+- [ ] Generated diagrams render a readable preview before apply
 - [ ] Review Mode behavior remains unchanged
 
 **Known Issues**:
-- Diagram Generator is provider-backed, but the dedicated generation preview UI is not implemented yet
-- Preview for generated diagrams and presentation briefs is not implemented yet
+- Diagram previews are read-only for now; apply behavior lands in the next task
 
 **Dependencies**:
 - `AgentOrchestrator`

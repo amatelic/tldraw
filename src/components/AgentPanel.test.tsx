@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentOrchestrator } from '../agents/agentOrchestrator';
+import { OpenCodeDiagramProvider } from '../agents/providers/openCodeDiagramProvider';
 import { ReviewModeProvider } from '../agents/providers/reviewModeProvider';
 import type { Shape } from '../types';
+import type { AgentGenerationProposal } from '../types/agents';
 import { AgentPanel } from './AgentPanel';
 
 const shapeStyle = {
@@ -96,8 +98,14 @@ const baseShapes: Shape[] = [
   },
 ];
 
-function renderPanel(options?: { selectedShapeIds?: string[]; shapes?: Shape[] }) {
-  const orchestrator = new AgentOrchestrator([new ReviewModeProvider()]);
+function renderPanel(options?: {
+  selectedShapeIds?: string[];
+  shapes?: Shape[];
+  orchestrator?: AgentOrchestrator;
+}) {
+  const orchestrator =
+    options?.orchestrator ??
+    new AgentOrchestrator([new ReviewModeProvider(), new OpenCodeDiagramProvider()]);
 
   return render(
     <AgentPanel
@@ -252,6 +260,75 @@ describe('AgentPanel', () => {
       expect(screen.getByText(/Preview ready/i)).toBeInTheDocument();
       expect(screen.getByText('Consistency Issues')).toBeInTheDocument();
       expect(screen.getByText('Suggested Next Edits')).toBeInTheDocument();
+    });
+  });
+
+  it('should render a diagram preview with sections, planned nodes, connectors, warnings, and presentation brief details', async () => {
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Preview ready/i)).toBeInTheDocument();
+      expect(screen.getByText('Diagram plan')).toBeInTheDocument();
+      expect(screen.getByText('Presentation brief')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Warnings' })).toBeInTheDocument();
+      expect(screen.getByText('Messaging App Backend Architecture')).toBeInTheDocument();
+      expect(screen.getByText('Core Services')).toBeInTheDocument();
+      expect(screen.getByText('Web / Mobile Clients')).toBeInTheDocument();
+      expect(screen.getByText('API Gateway')).toBeInTheDocument();
+      expect(screen.getByText(/Realtime websocket infrastructure is summarized/i)).toBeInTheDocument();
+      expect(screen.getByText(/Product and engineering stakeholders/i)).toBeInTheDocument();
+    });
+  });
+
+  it('should show empty-state messaging for missing presentation sections in generation preview', async () => {
+    const fakeProposal: AgentGenerationProposal = {
+      kind: 'generation',
+      workflow: 'generate-diagram',
+      summary: 'Drafted a minimal diagram.',
+      confidence: 'medium',
+      sections: [],
+      actions: [],
+      presentationBrief: {
+        title: 'Minimal draft',
+        objective: 'Outline the bare structure.',
+        audience: 'Internal team',
+        summary: 'This draft intentionally omits detail.',
+        narrativeSteps: [],
+        speakerNotes: [],
+        assumptions: [],
+        openQuestions: [],
+      },
+      warnings: [],
+    };
+
+    const fakeOrchestrator = {
+      run: vi.fn().mockResolvedValue({
+        providerId: 'fake-provider',
+        request: {} as never,
+        proposal: fakeProposal,
+      }),
+    } as unknown as AgentOrchestrator;
+
+    renderPanel({ orchestrator: fakeOrchestrator });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('No narrative order was provided.')).toBeInTheDocument();
+      expect(screen.getByText('No speaker notes were provided.')).toBeInTheDocument();
+      expect(screen.getByText('No assumptions were included.')).toBeInTheDocument();
+      expect(screen.getByText('No open questions were included.')).toBeInTheDocument();
+      expect(screen.getByText('No warnings were returned for this draft.')).toBeInTheDocument();
     });
   });
 

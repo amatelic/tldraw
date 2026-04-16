@@ -3,6 +3,7 @@ import type { AgentOrchestrator } from '../agents/agentOrchestrator';
 import type { EditorState, Shape } from '../types';
 import type {
   AgentContextScope,
+  AgentGenerationProposal,
   AgentLifecycleState,
   AgentProposal,
   AgentReviewFinding,
@@ -190,6 +191,65 @@ function groupFindings(findings: AgentReviewFinding[]): Map<AgentReviewFindingCa
   }, new Map<AgentReviewFindingCategory, AgentReviewFinding[]>());
 }
 
+function getGenerationCounts(proposal: AgentGenerationProposal) {
+  return proposal.actions.reduce(
+    (counts, action) => {
+      if (action.type === 'create-shape') {
+        counts.shapes += 1;
+      } else {
+        counts.connectors += 1;
+      }
+
+      return counts;
+    },
+    { shapes: 0, connectors: 0 }
+  );
+}
+
+function getDiagramNodeLabel(action: Extract<AgentGenerationProposal['actions'][number], { type: 'create-shape' }>): string {
+  const text = action.shape.text?.trim();
+  if (text) {
+    return text;
+  }
+
+  return action.shape.id;
+}
+
+function getConnectorLabel(
+  action: Extract<AgentGenerationProposal['actions'][number], { type: 'create-connector' }>,
+  nodeLabelLookup: Map<string, string>
+): string {
+  const label = action.connector.label?.trim();
+  if (label) {
+    return label;
+  }
+
+  const source = action.connector.sourceId
+    ? nodeLabelLookup.get(action.connector.sourceId) ?? action.connector.sourceId
+    : 'Start';
+  const target = action.connector.targetId
+    ? nodeLabelLookup.get(action.connector.targetId) ?? action.connector.targetId
+    : 'End';
+
+  return `${source} -> ${target}`;
+}
+
+function renderStringList(items: string[], fallback: string) {
+  const visibleItems = items.filter((item) => item.trim().length > 0);
+
+  if (visibleItems.length === 0) {
+    return <div className="agent-inline-empty-state">{fallback}</div>;
+  }
+
+  return (
+    <ul>
+      {visibleItems.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
 export function AgentPanel({
   isOpen,
   workspaceId,
@@ -227,6 +287,30 @@ export function AgentPanel({
     }
 
     return groupFindings(proposal.findings);
+  }, [proposal]);
+
+  const generationPreview = useMemo(() => {
+    if (proposal?.kind !== 'generation') {
+      return null;
+    }
+
+    const counts = getGenerationCounts(proposal);
+    const nodeActions = proposal.actions.filter(
+      (action): action is Extract<AgentGenerationProposal['actions'][number], { type: 'create-shape' }> =>
+        action.type === 'create-shape'
+    );
+    const connectorActions = proposal.actions.filter(
+      (action): action is Extract<AgentGenerationProposal['actions'][number], { type: 'create-connector' }> =>
+        action.type === 'create-connector'
+    );
+    const nodeLabelLookup = new Map(nodeActions.map((action) => [action.shape.id, getDiagramNodeLabel(action)]));
+
+    return {
+      counts,
+      nodeActions,
+      connectorActions,
+      nodeLabelLookup,
+    };
   }, [proposal]);
 
   if (!isOpen) {
@@ -468,11 +552,157 @@ export function AgentPanel({
           </div>
         )}
 
-        {status === 'preview-ready' && proposal?.kind === 'generation' && (
-          <div className="agent-message-card" data-tone="info">
-            Diagram draft generated with {proposal.actions.length} planned action
-            {proposal.actions.length === 1 ? '' : 's'} and {proposal.warnings.length} warning
-            {proposal.warnings.length === 1 ? '' : 's'}. Full preview UI arrives in the next task.
+        {status === 'preview-ready' && proposal?.kind === 'generation' && generationPreview && (
+          <div className="agent-results">
+            <div className="agent-results-summary">{proposal.summary}</div>
+
+            <div className="agent-stat-grid">
+              <div className="agent-stat-card">
+                <strong>{generationPreview.counts.shapes}</strong>
+                <span>Planned nodes</span>
+              </div>
+              <div className="agent-stat-card">
+                <strong>{generationPreview.counts.connectors}</strong>
+                <span>Planned connectors</span>
+              </div>
+              <div className="agent-stat-card">
+                <strong>{proposal.sections.length}</strong>
+                <span>Diagram sections</span>
+              </div>
+              <div className="agent-stat-card">
+                <strong>{proposal.warnings.length}</strong>
+                <span>Warnings</span>
+              </div>
+            </div>
+
+            <section className="agent-result-group">
+              <h3>Diagram plan</h3>
+              {proposal.sections.length === 0 ? (
+                <div className="agent-inline-empty-state">No explicit sections were generated for this draft.</div>
+              ) : (
+                <div className="agent-section-list">
+                  {proposal.sections.map((section) => (
+                    <article key={section.id} className="agent-section-card">
+                      <div className="agent-section-header">
+                        <strong>{section.title}</strong>
+                        <span>{section.shapeIds.length} node{section.shapeIds.length === 1 ? '' : 's'}</span>
+                      </div>
+                      <p>{section.summary}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <div className="agent-preview-grid">
+              <section className="agent-result-group">
+                <h3>Planned nodes</h3>
+                {generationPreview.nodeActions.length === 0 ? (
+                  <div className="agent-inline-empty-state">No nodes were generated for this draft.</div>
+                ) : (
+                  <ul>
+                    {generationPreview.nodeActions.map((action) => (
+                      <li key={action.shape.id} className="agent-preview-item">
+                        <strong>{getDiagramNodeLabel(action)}</strong>
+                        <span>{action.shape.type}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section className="agent-result-group">
+                <h3>Planned connectors</h3>
+                {generationPreview.connectorActions.length === 0 ? (
+                  <div className="agent-inline-empty-state">No connectors were generated for this draft.</div>
+                ) : (
+                  <ul>
+                    {generationPreview.connectorActions.map((action) => (
+                      <li key={action.connector.id} className="agent-preview-item">
+                        <strong>{getConnectorLabel(action, generationPreview.nodeLabelLookup)}</strong>
+                        <span>{action.connector.type}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+
+            <section className="agent-result-group">
+              <h3>Presentation brief</h3>
+              <div className="agent-brief-grid">
+                <div className="agent-brief-card">
+                  <span className="agent-brief-label">Title</span>
+                  <strong>{proposal.presentationBrief.title}</strong>
+                </div>
+                <div className="agent-brief-card">
+                  <span className="agent-brief-label">Audience</span>
+                  <strong>{proposal.presentationBrief.audience}</strong>
+                </div>
+                <div className="agent-brief-card agent-brief-card-wide">
+                  <span className="agent-brief-label">Objective</span>
+                  <p>{proposal.presentationBrief.objective}</p>
+                </div>
+                <div className="agent-brief-card agent-brief-card-wide">
+                  <span className="agent-brief-label">Summary</span>
+                  <p>{proposal.presentationBrief.summary}</p>
+                </div>
+              </div>
+
+              <div className="agent-preview-grid">
+                <section className="agent-preview-subgroup">
+                  <h4>Narrative order</h4>
+                  {renderStringList(
+                    proposal.presentationBrief.narrativeSteps,
+                    'No narrative order was provided.'
+                  )}
+                </section>
+
+                <section className="agent-preview-subgroup">
+                  <h4>Speaker notes</h4>
+                  {renderStringList(
+                    proposal.presentationBrief.speakerNotes,
+                    'No speaker notes were provided.'
+                  )}
+                </section>
+
+                <section className="agent-preview-subgroup">
+                  <h4>Assumptions</h4>
+                  {renderStringList(
+                    proposal.presentationBrief.assumptions,
+                    'No assumptions were included.'
+                  )}
+                </section>
+
+                <section className="agent-preview-subgroup">
+                  <h4>Open questions</h4>
+                  {renderStringList(
+                    proposal.presentationBrief.openQuestions,
+                    'No open questions were included.'
+                  )}
+                </section>
+              </div>
+            </section>
+
+            <section className="agent-result-group">
+              <h3>Warnings</h3>
+              {proposal.warnings.length === 0 ? (
+                <div className="agent-inline-empty-state">No warnings were returned for this draft.</div>
+              ) : (
+                <ul>
+                  {proposal.warnings.map((warning) => (
+                    <li key={warning.id} className="agent-finding">
+                      <div className="agent-finding-header">
+                        <strong>{warning.message}</strong>
+                        <span className={`agent-severity agent-severity-${warning.severity}`}>
+                          {warning.severity}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         )}
       </section>

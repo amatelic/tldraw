@@ -755,38 +755,40 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 21: Add Diagram Preview & Presentation Brief UI
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Show users what the generated work diagram will create and how to present it before anything is applied to the board.
 
 **Acceptance Criteria**:
-- Preview shows a readable summary of planned sections, nodes, and connectors
-- Preview shows how many shapes will be added
-- Preview surfaces warnings and assumptions clearly
-- Preview includes a presentation brief with:
+- ✅ Preview shows a readable summary of planned sections, nodes, and connectors
+- ✅ Preview shows how many shapes will be added
+- ✅ Preview surfaces warnings and assumptions clearly
+- ✅ Preview includes a presentation brief with:
   - title
   - objective
   - audience
   - narrative order
   - speaker notes
   - open questions
-- Preview remains readable after generation and before apply
+- ✅ Preview remains readable after generation and before apply
 
-**Implementation Details**:
-1. Extend `AgentPanel` result rendering beyond review findings
-2. Show diagram plan and presentation brief as separate sections
-3. Highlight missing fields or server warnings with clear UI feedback
-4. Keep the preview lightweight and text-first for the initial slice
-
-**Files to Modify**:
+**Files Modified**:
 - `src/components/AgentPanel.tsx`
 - `src/components/AgentPanel.test.tsx`
+- `src/components/README.md`
 - `src/App.css`
+- `PROGRESS.md`
 
-**Testing Requirements**:
-- Component tests for preview rendering
-- Component tests for warnings/error states
-- Regression tests for empty presentation sections
+**Verification**:
+- `npx vitest run src/components/AgentPanel.test.tsx`
+- `npm run build`
+
+**Notes**:
+- Added a structured generation preview for diagram sections, planned nodes, planned connectors, warnings, and presentation brief content
+- Added safe empty-state rendering for missing presentation sections so the panel stays readable even when the response is sparse
+- Preview is still read-only in this task; apply behavior lands next in Task 22
+- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
+- `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
 
