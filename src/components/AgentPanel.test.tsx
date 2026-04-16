@@ -199,7 +199,7 @@ describe('AgentPanel', () => {
     expect(screen.getByLabelText('Presentation Goal')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate draft' })).toBeInTheDocument();
     expect(
-      screen.getByText(/OpenCode-backed provider lands in the next implementation task/i)
+      screen.getByText(/OpenCode-backed provider/i)
     ).toBeInTheDocument();
   });
 

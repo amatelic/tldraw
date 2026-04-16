@@ -56,7 +56,7 @@ Components are organized by functionality:
 - [ ] Review Mode behavior remains unchanged
 
 **Known Issues**:
-- Diagram Generator UI is scaffolded before the live provider is wired
+- Diagram Generator is provider-backed, but the dedicated generation preview UI is not implemented yet
 - Preview for generated diagrams and presentation briefs is not implemented yet
 
 **Dependencies**:

@@ -84,6 +84,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Structured diagram-generation contracts for create actions and presentation briefs
 - [x] OpenCode transport adapter with deterministic mock fallback for diagram-generation requests
 - [x] Diagram generator workflow UI with presets, starter examples, and presentation-oriented prompt scaffolding
+- [x] OpenCode-backed diagram provider wired into the app orchestrator with warning surfacing for low-confidence or incomplete drafts
 
 ## 🚧 Partially Implemented / Known Issues
 

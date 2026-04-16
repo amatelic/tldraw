@@ -13,6 +13,7 @@ import { EmbedDialog } from './components/EmbedDialog';
 import { AgentPanel } from './components/AgentPanel';
 import { AgentOrchestrator } from './agents/agentOrchestrator';
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
+import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvider';
 import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
@@ -26,7 +27,9 @@ function App() {
   const [showAudioDialog, setShowAudioDialog] = useState(false);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
-  const [agentOrchestrator] = useState(() => new AgentOrchestrator([new ReviewModeProvider()]));
+  const [agentOrchestrator] = useState(
+    () => new AgentOrchestrator([new ReviewModeProvider(), new OpenCodeDiagramProvider()])
+  );
   const workspaceStore = useWorkspaceStore();
   const hasInitializedWorkspaceRef = useRef(false);
 

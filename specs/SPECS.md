@@ -718,35 +718,39 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 20: Implement OpenCode-Backed Diagram Provider
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Implement the provider that sends diagram-generation requests through OpenCode and returns a validated diagram proposal.
 
 **Acceptance Criteria**:
-- Add a provider for the diagram-generation workflow
-- Provider sends structured request data, not only raw prompt text
-- Provider maps server output into supported app actions
-- Provider surfaces partial/low-confidence output as warnings instead of silent failure
-- Unsupported shapes or connector references are rejected safely
+- ✅ Add a provider for the diagram-generation workflow
+- ✅ Provider sends structured request data, not only raw prompt text
+- ✅ Provider maps server output into supported app actions
+- ✅ Provider surfaces partial/low-confidence output as warnings instead of silent failure
+- ✅ Unsupported shapes or connector references are rejected safely
 
-**Implementation Details**:
-1. Add a provider such as `OpenCodeDiagramProvider`
-2. Include prompt, workspace metadata, and generation options in the request
-3. Normalize server output into supported shape creation actions only
-4. Return warnings when the server omits details that the UI should surface
-
-**Files to Create**:
+**Files Created**:
 - `src/agents/providers/openCodeDiagramProvider.ts`
 - `src/agents/providers/openCodeDiagramProvider.test.ts`
 
-**Files to Modify**:
-- `src/agents/agentOrchestrator.ts`
-- `src/types/agents.ts`
+**Files Modified**:
+- `src/App.tsx`
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+- `src/components/README.md`
+- `src/agents/README.md`
+- `PROGRESS.md`
 
-**Testing Requirements**:
-- Unit tests for request building
-- Unit tests for response normalization
-- Regression tests for malformed server payloads
+**Verification**:
+- `npx vitest run src/agents/providers/openCodeDiagramProvider.test.ts src/components/AgentPanel.test.tsx`
+- `npm run build`
+
+**Notes**:
+- Added `OpenCodeDiagramProvider` on top of `OpenCodeClient` and wired it into the app orchestrator
+- Low-confidence, unsectioned, or empty drafts now surface warnings instead of appearing as clean successes
+- Agent panel copy now reflects that provider wiring is complete while full generation preview still lands in the next task
+- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
+- `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
 

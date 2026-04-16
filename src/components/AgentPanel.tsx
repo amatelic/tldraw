@@ -174,7 +174,7 @@ function getWorkflowScaffoldMessage(workflow: AgentWorkflowType): string | null 
     case 'rewrite-selection':
       return 'Cleanup Suggestions and Selection Rewrite are scaffolded in the UI, but only Review Mode is wired in this first implementation slice.';
     case 'generate-diagram':
-      return 'Diagram Generator now collects structured prompt context and examples. The OpenCode-backed provider lands in the next implementation task, so running this workflow will still report that the provider is unavailable.';
+      return 'Diagram Generator now sends structured requests through the OpenCode-backed provider. Full preview UI lands next, so this step focuses on provider wiring and validation.';
     case 'review':
     default:
       return null;
@@ -465,6 +465,14 @@ export function AgentPanel({
                 </section>
               ))
             )}
+          </div>
+        )}
+
+        {status === 'preview-ready' && proposal?.kind === 'generation' && (
+          <div className="agent-message-card" data-tone="info">
+            Diagram draft generated with {proposal.actions.length} planned action
+            {proposal.actions.length === 1 ? '' : 's'} and {proposal.warnings.length} warning
+            {proposal.warnings.length === 1 ? '' : 's'}. Full preview UI arrives in the next task.
           </div>
         )}
       </section>
