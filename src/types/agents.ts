@@ -1,6 +1,6 @@
-import type { Bounds, CameraState, Shape, ShapeStyle } from './index';
+import type { Bounds, CameraState, Point, Shape, ShapeStyle } from './index';
 
-export type AgentWorkflowType = 'review' | 'cleanup' | 'rewrite-selection';
+export type AgentWorkflowType = 'review' | 'cleanup' | 'rewrite-selection' | 'generate-diagram';
 
 export type AgentContextScope = 'selection' | 'visible-board' | 'full-board';
 
@@ -18,6 +18,9 @@ export type AgentReviewFindingCategory =
   | 'suggested-next-edits';
 
 export type AgentFindingSeverity = 'low' | 'medium' | 'high';
+export type AgentConfidence = 'low' | 'medium' | 'high';
+export type AgentGeneratedShapeType = 'rectangle' | 'circle' | 'text';
+export type AgentGeneratedConnectorType = 'arrow' | 'line';
 
 export interface AgentViewport {
   width: number;
@@ -59,6 +62,49 @@ export interface AgentReviewFinding {
   targetIds: string[];
 }
 
+export interface AgentGenerationWarning {
+  id: string;
+  severity: AgentFindingSeverity;
+  message: string;
+}
+
+export interface AgentDiagramSection {
+  id: string;
+  title: string;
+  summary: string;
+  shapeIds: string[];
+}
+
+export interface AgentPresentationBrief {
+  title: string;
+  objective: string;
+  audience: string;
+  summary: string;
+  narrativeSteps: string[];
+  speakerNotes: string[];
+  assumptions: string[];
+  openQuestions: string[];
+}
+
+export interface AgentGeneratedShape {
+  id: string;
+  type: AgentGeneratedShapeType;
+  bounds: Bounds;
+  style?: Partial<ShapeStyle>;
+  text?: string;
+}
+
+export interface AgentGeneratedConnector {
+  id: string;
+  type: AgentGeneratedConnectorType;
+  start: Point;
+  end: Point;
+  sourceId?: string;
+  targetId?: string;
+  style?: Partial<ShapeStyle>;
+  label?: string | null;
+}
+
 export interface AgentUpdateShapeAction {
   type: 'update-shape';
   targetId: string;
@@ -76,7 +122,23 @@ export interface AgentDeleteShapeAction {
   description: string;
 }
 
-export type AgentAction = AgentUpdateShapeAction | AgentDeleteShapeAction;
+export interface AgentCreateShapeAction {
+  type: 'create-shape';
+  description: string;
+  shape: AgentGeneratedShape;
+}
+
+export interface AgentCreateConnectorAction {
+  type: 'create-connector';
+  description: string;
+  connector: AgentGeneratedConnector;
+}
+
+export type AgentAction =
+  | AgentUpdateShapeAction
+  | AgentDeleteShapeAction
+  | AgentCreateShapeAction
+  | AgentCreateConnectorAction;
 
 export interface AgentReviewProposal {
   kind: 'review';
@@ -89,10 +151,21 @@ export interface AgentMutationProposal {
   kind: 'mutation';
   workflow: Extract<AgentWorkflowType, 'cleanup' | 'rewrite-selection'>;
   summary: string;
-  actions: AgentAction[];
+  actions: Array<AgentUpdateShapeAction | AgentDeleteShapeAction>;
 }
 
-export type AgentProposal = AgentReviewProposal | AgentMutationProposal;
+export interface AgentGenerationProposal {
+  kind: 'generation';
+  workflow: 'generate-diagram';
+  summary: string;
+  confidence: AgentConfidence;
+  sections: AgentDiagramSection[];
+  actions: Array<AgentCreateShapeAction | AgentCreateConnectorAction>;
+  presentationBrief: AgentPresentationBrief;
+  warnings: AgentGenerationWarning[];
+}
+
+export type AgentProposal = AgentReviewProposal | AgentMutationProposal | AgentGenerationProposal;
 
 export interface AgentProposalValidationResult {
   isValid: boolean;

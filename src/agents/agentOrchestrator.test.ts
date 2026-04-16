@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AgentOrchestrator, buildAgentContext, validateAgentProposal } from './agentOrchestrator';
 import type { Shape } from '../types';
-import type { AgentProvider } from '../types/agents';
+import type { AgentGenerationProposal, AgentProvider } from '../types/agents';
 
 const baseShapes: Shape[] = [
   {
@@ -15,6 +15,8 @@ const baseShapes: Shape[] = [
       strokeStyle: 'solid',
       fillStyle: 'none',
       opacity: 1,
+      blendMode: 'source-over',
+      shadows: [],
       fontSize: 16,
       fontFamily: 'sans-serif',
       fontWeight: 'normal',
@@ -41,6 +43,8 @@ const baseShapes: Shape[] = [
       strokeStyle: 'solid',
       fillStyle: 'none',
       opacity: 1,
+      blendMode: 'source-over',
+      shadows: [],
       fontSize: 16,
       fontFamily: 'sans-serif',
       fontWeight: 'normal',
@@ -63,6 +67,8 @@ const baseShapes: Shape[] = [
       strokeStyle: 'solid',
       fillStyle: 'none',
       opacity: 1,
+      blendMode: 'source-over',
+      shadows: [],
       fontSize: 16,
       fontFamily: 'sans-serif',
       fontWeight: 'normal',
@@ -179,6 +185,111 @@ describe('validateAgentProposal', () => {
 
     expect(result.isValid).toBe(false);
     expect(result.error).toContain('Only text shapes can receive text updates');
+  });
+
+  it('should validate a diagram generation proposal with create actions and a presentation brief', () => {
+    const result = validateAgentProposal(
+      {
+        kind: 'generation',
+        workflow: 'generate-diagram',
+        summary: 'Drafted a lightweight architecture diagram.',
+        confidence: 'medium',
+        sections: [
+          {
+            id: 'section-1',
+            title: 'Core Flow',
+            summary: 'Main request path.',
+            shapeIds: ['generated-service'],
+          },
+        ],
+        actions: [
+          {
+            type: 'create-shape',
+            description: 'Create the service node',
+            shape: {
+              id: 'generated-service',
+              type: 'rectangle',
+              bounds: { x: 200, y: 100, width: 180, height: 80 },
+              text: 'Service',
+            },
+          },
+          {
+            type: 'create-connector',
+            description: 'Connect the existing client to the service',
+            connector: {
+              id: 'generated-connector',
+              type: 'arrow',
+              sourceId: 'shape-a',
+              targetId: 'generated-service',
+              start: { x: 110, y: 50 },
+              end: { x: 200, y: 140 },
+            },
+          },
+        ],
+        presentationBrief: {
+          title: 'Architecture overview',
+          objective: 'Explain the main request path.',
+          audience: 'Engineering',
+          summary: 'Walk through the client, service, and follow-up actions.',
+          narrativeSteps: ['Start with the client entry point.'],
+          speakerNotes: ['Keep the explanation high level.'],
+          assumptions: ['The service handles authentication upstream.'],
+          openQuestions: ['Do we need to show monitoring explicitly?'],
+        },
+        warnings: [],
+      } satisfies AgentGenerationProposal,
+      {
+        ...request,
+        workflow: 'generate-diagram',
+      }
+    );
+
+    expect(result.isValid).toBe(true);
+    expect(result.error).toBeNull();
+  });
+
+  it('should reject generated connectors that reference unknown shapes', () => {
+    const result = validateAgentProposal(
+      {
+        kind: 'generation',
+        workflow: 'generate-diagram',
+        summary: 'Invalid diagram',
+        confidence: 'medium',
+        sections: [],
+        actions: [
+          {
+            type: 'create-connector',
+            description: 'Create a broken connector',
+            connector: {
+              id: 'generated-connector',
+              type: 'arrow',
+              sourceId: 'shape-a',
+              targetId: 'missing-shape',
+              start: { x: 10, y: 10 },
+              end: { x: 50, y: 50 },
+            },
+          },
+        ],
+        presentationBrief: {
+          title: 'Architecture overview',
+          objective: 'Explain the main request path.',
+          audience: 'Engineering',
+          summary: 'Walk through the flow.',
+          narrativeSteps: ['Start with the client entry point.'],
+          speakerNotes: ['Keep the explanation high level.'],
+          assumptions: ['This is a first draft.'],
+          openQuestions: ['What should be expanded later?'],
+        },
+        warnings: [],
+      } satisfies AgentGenerationProposal,
+      {
+        ...request,
+        workflow: 'generate-diagram',
+      }
+    );
+
+    expect(result.isValid).toBe(false);
+    expect(result.error).toContain('unknown target');
   });
 });
 

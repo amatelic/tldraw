@@ -6,6 +6,7 @@ This directory contains all the source code for the TLDraw Clone application.
 
 ```
 src/
+├── agents/         # Agent orchestration, providers, and transport adapters
 ├── components/     # React UI components
 ├── hooks/          # Custom React hooks
 ├── stores/         # Zustand state stores
@@ -106,6 +107,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 ```
 App.tsx
 ├── useCanvas (shapes, camera, history, text editing)
+├── AgentPanel / agentOrchestrator / providers (agent workflows)
 ├── useKeyboard (shortcuts)
 ├── workspaceStore (persistence)
 ├── Toolbar (tool selection)
@@ -119,6 +121,11 @@ useCanvas
 ├── CanvasEngine (rendering)
 ├── workspaceStore (load/save)
 └── types (Shape, EditorState)
+
+agents
+├── agentOrchestrator (context packaging + validation)
+├── openCodeClient (server transport normalization + fallback)
+└── providers (workflow-specific behavior)
 
 Canvas
 ├── CanvasEngine (rendering)
@@ -183,6 +190,7 @@ Development server runs on port 5175 (configured in `vite.config.ts`).
 ## Related Documentation
 
 - [Components](./components/README.md) - UI components
+- [Agents](./agents/README.md) - Agent orchestration and transport
 - [Hooks](./hooks/README.md) - Custom React hooks
 - [Stores](./stores/README.md) - State management
 - [Canvas](./canvas/README.md) - Rendering engine

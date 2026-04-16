@@ -642,45 +642,40 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 18: Add Diagram Generation Contracts & OpenCode Transport
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Extend the agent foundation so the app can request simple work diagrams from a server through OpenCode and receive structured diagram plus presentation output.
 
 **Acceptance Criteria**:
-- Add a new agent workflow for prompt-to-diagram generation
-- Extend the proposal schema to support create actions for shapes/connectors
-- Add a structured presentation brief contract to agent results
-- Add an OpenCode client/adapter layer that isolates transport concerns from UI code
-- Keep a mock or local fallback path for development and tests
-- Reject invalid diagram proposals safely before they reach the UI
+- ✅ Add a new agent workflow for prompt-to-diagram generation
+- ✅ Extend the proposal schema to support create actions for shapes/connectors
+- ✅ Add a structured presentation brief contract to agent results
+- ✅ Add an OpenCode client/adapter layer that isolates transport concerns from UI code
+- ✅ Keep a mock or local fallback path for development and tests
+- ✅ Reject invalid diagram proposals safely before they reach the UI
 
-**Implementation Details**:
-1. Add a new workflow type such as `generate-diagram`
-2. Add create-action types for supported canvas primitives
-3. Add a presentation brief shape with:
-   - title
-   - objective
-   - audience
-   - summary
-   - narrative steps
-   - speaker notes
-   - assumptions
-   - open questions
-4. Add an OpenCode transport client that maps server responses into app contracts
-5. Keep the orchestrator transport-agnostic
-
-**Files to Create**:
+**Files Created**:
 - `src/agents/openCodeClient.ts`
 - `src/agents/openCodeClient.test.ts`
+- `src/agents/README.md`
 
-**Files to Modify**:
+**Files Modified**:
 - `src/types/agents.ts`
 - `src/agents/agentOrchestrator.ts`
+- `src/agents/agentOrchestrator.test.ts`
+- `src/types/README.md`
+- `src/README.md`
+- `PROGRESS.md`
 
-**Testing Requirements**:
-- Unit tests for response mapping
-- Unit tests for invalid proposal rejection
-- Tests covering mock fallback behavior
+**Verification**:
+- `npx vitest run src/agents/agentOrchestrator.test.ts src/agents/openCodeClient.test.ts`
+- `npm run build`
+
+**Notes**:
+- Added structured diagram-generation contracts for create-shape/create-connector actions, sections, warnings, confidence, and presentation briefs
+- Added an OpenCode client with deterministic mock fallback so future provider work can integrate without coupling transport details into the UI
+- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
+- `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
 

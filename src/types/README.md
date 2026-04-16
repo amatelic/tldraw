@@ -11,8 +11,26 @@ Centralized type definitions ensure consistency across the application. All modu
 | File | Purpose | Lines |
 |------|---------|-------|
 | `index.ts` | All type definitions | 254 |
+| `agents.ts` | Agent workflow and proposal contracts | ~150 |
 
 ## Type Definitions
+
+### Agent Contracts
+
+`agents.ts` defines the structured contracts used by the agent workflow system.
+
+Key areas covered:
+
+- workflow identifiers such as review, cleanup, rewrite, and diagram generation
+- request/context packaging for current board scope
+- structured proposal types for:
+  - review findings
+  - mutation actions
+  - diagram-generation actions
+- presentation brief metadata for generated diagrams
+- generated shape and connector contracts used before apply
+
+These types keep the UI, orchestrator, providers, and OpenCode transport aligned on one schema.
 
 ### Core Types
 

@@ -78,6 +78,12 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Dark mode support - Automatic light/dark theme switching
 - [x] Responsive design - Adapts to screen sizes
 
+### Agent Foundations
+- [x] Agent domain model and orchestrator foundation
+- [x] Agent review workflow panel shell
+- [x] Structured diagram-generation contracts for create actions and presentation briefs
+- [x] OpenCode transport adapter with deterministic mock fallback for diagram-generation requests
+
 ## 🚧 Partially Implemented / Known Issues
 
 ### Performance
