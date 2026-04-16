@@ -57,6 +57,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Delete workspace - Remove workspaces (minimum 1 required)
 - [x] Rename workspace - Custom workspace names
 - [x] Persistence - All workspaces saved to localStorage
+- [x] Versioned workspace export - Active workspace downloads as stable JSON with hierarchy-preserving group structure
 
 ### Keyboard Shortcuts
 - [x] Tool shortcuts - V (select), H (pan), R (rectangle), C (circle), etc.
@@ -92,7 +93,6 @@ This document tracks the implementation progress of the TLDraw Clone application
 ### Performance
 - [ ] Canvas optimization for 1000+ shapes
 - [ ] Virtual rendering for off-screen shapes
-- [ ] Shape grouping/ungrouping
 
 ### Audio Feature
 - [ ] Audio playback controls in UI
@@ -121,7 +121,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 
 ### Export/Import
 - [ ] Export to PNG/SVG
-- [ ] Export to JSON
+- [x] Export to JSON
 - [ ] Import from JSON
 - [ ] Copy/paste shapes between workspaces
 

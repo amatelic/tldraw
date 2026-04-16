@@ -55,6 +55,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 3. **Selection**: Click detection via `isPointInShape()` hit testing
 4. **Transformation**: Drag updates via `onShapeUpdate()`
 5. **Persistence**: Auto-saved to workspace store every 100ms
+6. **Export**: Active workspace can be serialized into a versioned JSON document for backup or downstream processing
 
 ### History System
 
@@ -93,6 +94,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
    - Zustand over Redux for simplicity
    - No external icon library (inline SVGs)
    - No backend (purely client-side)
+   - Versioned JSON export is kept separate from the raw persisted workspace store
 
 ## Known Issues
 
@@ -110,6 +112,7 @@ App.tsx
 ├── AgentPanel / agentOrchestrator / providers (agent workflows)
 ├── useKeyboard (shortcuts)
 ├── workspaceStore (persistence)
+├── workspaceExport utils (versioned JSON serialization + download)
 ├── Toolbar (tool selection)
 ├── Canvas (rendering, interactions)
 ├── PropertiesPanel (conditional, animated)

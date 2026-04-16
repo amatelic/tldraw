@@ -11,7 +11,9 @@ Utilities are pure functions that don't depend on React or browser state. They c
 | File | Purpose | Lines | Tests |
 |------|---------|-------|-------|
 | `audioProcessor.ts` | Audio waveform extraction and formatting | 73 | 11 tests |
+| `workspaceExport.ts` | Versioned workspace export serialization and JSON download helpers | ~130 | 4 tests |
 | `audioProcessor.test.ts` | Unit tests for audioProcessor | 149 | - |
+| `workspaceExport.test.ts` | Unit tests for workspace export helpers | ~190 | - |
 
 ## Detailed Documentation
 
@@ -197,9 +199,63 @@ return `${minutes}:${secs.toString().padStart(2, '0')}`;
 
 ---
 
+### workspaceExport.ts
+
+**Purpose**: Serialize the active workspace into a versioned JSON export format that stays stable even if the internal Zustand store evolves.
+
+**Export Contract**:
+- Format id: `tldraw-workspace-export`
+- Version: `1`
+- Includes workspace metadata, camera state, ordered nodes, and root node ids
+- Preserves grouping through both `parentId` and `childrenIds`
+- Preserves layer order through the exported node array and `zIndex`
+- Excludes transient runtime-only state such as:
+  - dragging/drawing flags
+  - current selection
+  - text editing state
+  - audio playback state
+
+**Functions**:
+
+#### serializeWorkspaceForExport(workspace)
+
+**Purpose**: Convert a persisted workspace into `WorkspaceExportDocumentV1`.
+
+**Behavior**:
+- Copies shape/style data defensively so the export payload is detached from live state
+- Normalizes missing `parentId` values to `null`
+- Emits root nodes separately for consumers that want a direct hierarchy entry point
+- Supports nested groups without flattening them away
+
+#### createWorkspaceExportFilename(workspaceName, date)
+
+**Purpose**: Generate a filesystem-safe JSON filename for downloads.
+
+**Behavior**:
+- Lowercases and slugifies the workspace name
+- Appends an ISO timestamp with colon-safe characters
+- Falls back to `workspace-...json` when the workspace name is blank after sanitization
+
+#### downloadWorkspaceExport(exportDocument, filename)
+
+**Purpose**: Download the serialized document as a pretty-printed JSON file in the browser.
+
+**Implementation Notes**:
+- Uses `Blob`
+- Uses `URL.createObjectURL()` / `URL.revokeObjectURL()`
+- Creates a temporary anchor element and triggers `click()`
+
+**Success Criteria**:
+- [ ] Exported JSON includes format/version metadata
+- [ ] Grouped shapes retain hierarchy and child ordering
+- [ ] Layer order is preserved in the exported node list
+- [ ] Downloaded file uses a deterministic, safe filename shape
+
+---
+
 ## Testing
 
-Comprehensive test suite with 11 tests covering:
+Comprehensive test suites cover:
 
 1. **formatDuration**:
    - Zero seconds
@@ -214,6 +270,13 @@ Comprehensive test suite with 11 tests covering:
    - Negative values (audio oscillates)
    - Correct number of bars
    - Normalization range
+
+3. **workspaceExport**:
+   - Versioned document metadata
+   - Group hierarchy preservation
+   - Layer-order preservation
+   - Filename sanitization
+   - Browser download payload generation
 
 **Test Philosophy**:
 - Test pure functions extensively

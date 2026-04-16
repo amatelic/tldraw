@@ -863,6 +863,47 @@ const isNameTruncated = (name: string): boolean => {
 
 ---
 
+### Task 24: Add Versioned Workspace JSON Export
+**Status**: ✅ Completed
+**Priority**: MEDIUM
+**Description**: Export the active workspace as a versioned JSON document that preserves UI structure, including grouped shapes and canvas layer order.
+
+**Acceptance Criteria**:
+- ✅ Add an export action in the app header for the active workspace
+- ✅ Serialize the workspace into a dedicated `v1` export contract instead of dumping the raw Zustand payload
+- ✅ Preserve group hierarchy through `parentId` and `childrenIds`
+- ✅ Preserve layer order in the exported node list
+- ✅ Exclude transient runtime-only state such as dragging, selection, text-edit mode, and audio playback
+- ✅ Generate a deterministic, filesystem-safe filename
+
+**Files Created**:
+- `src/utils/workspaceExport.ts`
+- `src/utils/workspaceExport.test.ts`
+- `src/App.export.test.tsx`
+
+**Files Modified**:
+- `src/App.tsx`
+- `src/types/index.ts`
+- `src/utils/README.md`
+- `src/types/README.md`
+- `src/README.md`
+- `PROGRESS.md`
+- `specs/SPECS.md`
+
+**Verification**:
+- `npx vitest run src/utils/workspaceExport.test.ts src/App.export.test.tsx`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added a stable export contract with explicit format/version metadata to decouple downloads from internal persistence shape
+- Exported group nodes now carry `childrenIds` while every node carries `parentId`, so nested grouping survives export cleanly
+- Exported node order mirrors canvas layer order and also includes `zIndex` for consumers that prefer explicit ordering metadata
+- The first export slice targets JSON structure export only; PNG/SVG export remains separate work
+
+---
+
 ## Task Selection Workflow
 
 

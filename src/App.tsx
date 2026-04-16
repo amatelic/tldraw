@@ -18,6 +18,11 @@ import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
 import { createShapeId, getGroupBounds } from './types';
+import {
+  createWorkspaceExportFilename,
+  downloadWorkspaceExport,
+  serializeWorkspaceForExport,
+} from './utils/workspaceExport';
 import './App.css';
 
 const MAX_WORKSPACES = 10;
@@ -157,6 +162,12 @@ function App() {
     },
     [setEditorState]
   );
+
+  const handleExportWorkspace = useCallback(() => {
+    const exportDocument = serializeWorkspaceForExport(activeWorkspace);
+    const filename = createWorkspaceExportFilename(activeWorkspace.name);
+    downloadWorkspaceExport(exportDocument, filename);
+  }, [activeWorkspace]);
 
   const getViewportCenter = useCallback((): { x: number; y: number } => {
     const canvas = canvasRef.current;
@@ -559,6 +570,18 @@ function App() {
           />
 
           <div className="header-actions">
+            <button
+              className="action-button"
+              onClick={handleExportWorkspace}
+              title="Export active workspace as versioned JSON"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 3v12" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+              Export JSON
+            </button>
             <button
               className="action-button"
               onClick={() => setIsAgentPanelOpen(true)}

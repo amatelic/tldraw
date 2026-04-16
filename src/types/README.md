@@ -10,7 +10,7 @@ Centralized type definitions ensure consistency across the application. All modu
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `index.ts` | All type definitions | 254 |
+| `index.ts` | Core canvas/editor types plus export-contract definitions | ~360 |
 | `agents.ts` | Agent workflow and proposal contracts | ~150 |
 
 ## Type Definitions
@@ -31,6 +31,27 @@ Key areas covered:
 - generated shape and connector contracts used before apply
 
 These types keep the UI, orchestrator, providers, and OpenCode transport aligned on one schema.
+
+### Workspace Export Contract
+
+`index.ts` also defines the public-facing versioned export schema used by `src/utils/workspaceExport.ts`.
+
+Key pieces:
+- `WORKSPACE_EXPORT_FORMAT`: stable format id for downloaded workspace JSON
+- `WORKSPACE_EXPORT_VERSION`: current schema version
+- `WorkspaceExportDocumentV1`: top-level export document
+- `ExportedShape`: discriminated union for exported nodes
+- `WorkspaceExportMetadata`: exported workspace identity/timestamps
+
+**Why it exists**:
+- Prevents the download format from being tightly coupled to Zustand persistence internals
+- Keeps transient editor/runtime state out of exported files
+- Preserves group hierarchy explicitly for nested groups and future import support
+
+**Grouping model**:
+- Every exported node includes `parentId`
+- Group nodes include `childrenIds`
+- The exported `nodes` array preserves canvas layer order and each node also includes `zIndex`
 
 ### Core Types
 
