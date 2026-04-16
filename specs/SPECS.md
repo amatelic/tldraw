@@ -674,7 +674,6 @@ const isNameTruncated = (name: string): boolean => {
 **Notes**:
 - Added structured diagram-generation contracts for create-shape/create-connector actions, sections, warnings, confidence, and presentation briefs
 - Added an OpenCode client with deterministic mock fallback so future provider work can integrate without coupling transport details into the UI
-- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
 - `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
@@ -712,7 +711,6 @@ const isNameTruncated = (name: string): boolean => {
 - Added a dedicated Diagram Generator workflow with preset cards, example starters, audience input, and presentation-goal scaffolding
 - Locked diagram generation to full-board scope for the first draft-generation slice
 - Running the workflow still reports that the provider is unavailable until Task 20 wires the OpenCode-backed implementation
-- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
 - `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
@@ -749,7 +747,6 @@ const isNameTruncated = (name: string): boolean => {
 - Added `OpenCodeDiagramProvider` on top of `OpenCodeClient` and wired it into the app orchestrator
 - Low-confidence, unsectioned, or empty drafts now surface warnings instead of appearing as clean successes
 - Agent panel copy now reflects that provider wiring is complete while full generation preview still lands in the next task
-- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
 - `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
@@ -787,7 +784,6 @@ const isNameTruncated = (name: string): boolean => {
 - Added a structured generation preview for diagram sections, planned nodes, planned connectors, warnings, and presentation brief content
 - Added safe empty-state rendering for missing presentation sections so the panel stays readable even when the response is sparse
 - Preview is still read-only in this task; apply behavior lands next in Task 22
-- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
 - `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---

@@ -8,6 +8,7 @@ Testing is done with Vitest + React Testing Library. Tests are co-located with s
 
 Browser E2E coverage is handled separately with Playwright using `playwright.config.ts` and specs in the repo-level `e2e/` directory.
 The Playwright setup prefers a locally installed `Google Chrome.app` on macOS to avoid Gatekeeper issues with older Homebrew Chromium installs. You can override the browser path with `PLAYWRIGHT_CHROME_PATH`.
+Vitest is intentionally scoped to co-located tests under `src/` so it does not execute the Playwright `e2e/` specs.
 
 ## Files
 
@@ -25,6 +26,8 @@ export default defineConfig({
     environment: 'jsdom',      // Browser-like environment
     globals: true,             // Auto-import describe, it, expect
     setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
