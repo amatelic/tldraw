@@ -10,6 +10,7 @@ interface PropertiesPanelProps {
   style: ShapeStyle;
   onChange: (style: Partial<ShapeStyle>) => void;
   layoutBounds?: Bounds | null;
+  onLayoutBoundsChange?: (bounds: Partial<Bounds>) => void;
   hasTextSelection?: boolean;
   onAlign?: (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
   onDistribute?: (axis: 'horizontal' | 'vertical') => void;
@@ -105,6 +106,21 @@ const FLOATING_PICKER_GAP = 18;
 const FLOATING_PICKER_MARGIN = 16;
 type StrokeWidthPickerVariant = 'visual' | 'slider' | 'compact';
 type ColorPickerTarget = 'stroke' | 'fill';
+type LayoutField = keyof Bounds;
+type LayoutDraftValues = Record<LayoutField, string>;
+
+function getFloatingPickerPortalHost(anchorElement: HTMLElement | null): HTMLElement | null {
+  return anchorElement?.closest<HTMLElement>('.app') ?? null;
+}
+
+function buildLayoutDraft(layoutBounds?: Bounds | null): LayoutDraftValues {
+  return {
+    x: formatMeasurement(layoutBounds?.x),
+    y: formatMeasurement(layoutBounds?.y),
+    width: formatMeasurement(layoutBounds?.width),
+    height: formatMeasurement(layoutBounds?.height),
+  };
+}
 
 function getGradientPreview(fillGradient: FillGradient): string {
   return fillGradient.type === 'linear'
@@ -125,6 +141,7 @@ export function PropertiesPanel({
   style,
   onChange,
   layoutBounds,
+  onLayoutBoundsChange,
   hasTextSelection,
   onAlign,
   onDistribute,
@@ -150,6 +167,14 @@ export function PropertiesPanel({
   const [floatingPickerStyle, setFloatingPickerStyle] = useState<{ top: number; left: number } | null>(
     null
   );
+  const [floatingPickerPortalHost, setFloatingPickerPortalHost] = useState<HTMLElement | null>(null);
+  const [layoutDraft, setLayoutDraft] = useState<{
+    sourceKey: string;
+    values: LayoutDraftValues;
+  }>({
+    sourceKey: '',
+    values: buildLayoutDraft(),
+  });
   const [strokeWidthPickerVariant, setStrokeWidthPickerVariant] =
     useState<StrokeWidthPickerVariant>('visual');
   const colorTriggerRefs = useRef<Record<ColorPickerTarget, HTMLButtonElement | null>>({
@@ -177,6 +202,10 @@ export function PropertiesPanel({
     0,
     STROKE_WIDTHS.findIndex((width) => width === resolvedStyle.strokeWidth)
   );
+  const canEditLayout = Boolean(layoutBounds && onLayoutBoundsChange && selectedCount === 1);
+  const layoutSourceKey = `${layoutBounds?.x ?? ''}:${layoutBounds?.y ?? ''}:${layoutBounds?.width ?? ''}:${layoutBounds?.height ?? ''}`;
+  const displayedLayoutDraft =
+    layoutDraft.sourceKey === layoutSourceKey ? layoutDraft.values : buildLayoutDraft(layoutBounds);
 
   const updateStrokeWidthFromIndex = useCallback(
     (index: number) => {
@@ -184,6 +213,86 @@ export function PropertiesPanel({
       onChange({ strokeWidth: width });
     },
     [onChange]
+  );
+
+  const commitLayoutField = useCallback(
+    (field: LayoutField) => {
+      if (!layoutBounds || !onLayoutBoundsChange || selectedCount !== 1) {
+        return;
+      }
+
+      const draftValue = displayedLayoutDraft[field];
+      const parsedValue = Number(draftValue);
+
+      if (!draftValue.trim() || Number.isNaN(parsedValue)) {
+        setLayoutDraft((currentDraft) => ({
+          sourceKey: layoutSourceKey,
+          values: {
+            ...currentDraft.values,
+            [field]: formatMeasurement(layoutBounds[field]),
+          },
+        }));
+        return;
+      }
+
+      if (Math.round(layoutBounds[field]) === parsedValue) {
+        setLayoutDraft((currentDraft) => ({
+          sourceKey: layoutSourceKey,
+          values: {
+            ...currentDraft.values,
+            [field]: formatMeasurement(layoutBounds[field]),
+          },
+        }));
+        return;
+      }
+
+      onLayoutBoundsChange({ [field]: parsedValue });
+    },
+    [displayedLayoutDraft, layoutBounds, layoutSourceKey, onLayoutBoundsChange, selectedCount]
+  );
+
+  const handleLayoutInputChange = useCallback(
+    (field: LayoutField, nextValue: string) => {
+      if (!canEditLayout) {
+        return;
+      }
+
+      setLayoutDraft((currentDraft) => ({
+        sourceKey: layoutSourceKey,
+        values: {
+          ...(currentDraft.sourceKey === layoutSourceKey ? currentDraft.values : buildLayoutDraft(layoutBounds)),
+          [field]: nextValue,
+        },
+      }));
+    },
+    [canEditLayout, layoutBounds, layoutSourceKey]
+  );
+
+  const handleLayoutInputKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>, field: LayoutField) => {
+      if (!canEditLayout) {
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitLayoutField(field);
+        event.currentTarget.blur();
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setLayoutDraft((currentDraft) => ({
+          sourceKey: layoutSourceKey,
+          values: {
+            ...(currentDraft.sourceKey === layoutSourceKey ? currentDraft.values : buildLayoutDraft(layoutBounds)),
+            [field]: formatMeasurement(layoutBounds?.[field]),
+          },
+        }));
+        event.currentTarget.blur();
+      }
+    },
+    [canEditLayout, commitLayoutField, layoutBounds, layoutSourceKey]
   );
 
   const getAnchorElement = useCallback((): HTMLButtonElement | null => {
@@ -202,41 +311,56 @@ export function PropertiesPanel({
     const anchorElement = getAnchorElement();
     if (!anchorElement) {
       setFloatingPickerStyle(null);
+      setFloatingPickerPortalHost(null);
       return;
     }
 
     const rect = anchorElement.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const preferredLeft = rect.left - FLOATING_PICKER_WIDTH - FLOATING_PICKER_GAP;
-    const fallbackLeft = rect.right + FLOATING_PICKER_GAP;
+    const portalHost = getFloatingPickerPortalHost(anchorElement);
+    const hostRect = portalHost?.getBoundingClientRect() ?? {
+      left: 0,
+      top: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    const anchorLeft = rect.left - hostRect.left;
+    const anchorRight = rect.right - hostRect.left;
+    const anchorTop = rect.top - hostRect.top;
+    const anchorHeight = rect.height;
+    const availableWidth = hostRect.width;
+    const availableHeight = hostRect.height;
+    const preferredLeft = anchorLeft - FLOATING_PICKER_WIDTH - FLOATING_PICKER_GAP;
+    const fallbackLeft = anchorRight + FLOATING_PICKER_GAP;
     const left =
       preferredLeft >= FLOATING_PICKER_MARGIN
         ? preferredLeft
-        : fallbackLeft + FLOATING_PICKER_WIDTH <= viewportWidth - FLOATING_PICKER_MARGIN
+        : fallbackLeft + FLOATING_PICKER_WIDTH <= availableWidth - FLOATING_PICKER_MARGIN
           ? fallbackLeft
           : Math.max(
               FLOATING_PICKER_MARGIN,
               Math.min(
-                rect.left + rect.width / 2 - FLOATING_PICKER_WIDTH / 2,
-                viewportWidth - FLOATING_PICKER_WIDTH - FLOATING_PICKER_MARGIN
+                anchorLeft + rect.width / 2 - FLOATING_PICKER_WIDTH / 2,
+                availableWidth - FLOATING_PICKER_WIDTH - FLOATING_PICKER_MARGIN
               )
             );
     const estimatedHeight = 520;
     const top = Math.max(
       FLOATING_PICKER_MARGIN,
       Math.min(
-        rect.top + rect.height / 2 - estimatedHeight / 2,
-        viewportHeight - estimatedHeight - FLOATING_PICKER_MARGIN
+        anchorTop + anchorHeight / 2 - estimatedHeight / 2,
+        availableHeight - estimatedHeight - FLOATING_PICKER_MARGIN
       )
     );
 
+    setFloatingPickerPortalHost(portalHost);
     setFloatingPickerStyle({ top, left });
   }, [getAnchorElement]);
 
   useEffect(() => {
     if (!activeFloatingPicker) return;
 
+    const anchorElement = getAnchorElement();
+    const portalHost = getFloatingPickerPortalHost(anchorElement);
     const handleViewportChange = () => {
       updateFloatingPickerPosition();
     };
@@ -244,13 +368,29 @@ export function PropertiesPanel({
     const animationFrameId = requestAnimationFrame(updateFloatingPickerPosition);
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            updateFloatingPickerPosition();
+          });
+
+    if (resizeObserver) {
+      if (anchorElement) {
+        resizeObserver.observe(anchorElement);
+      }
+      if (portalHost) {
+        resizeObserver.observe(portalHost);
+      }
+    }
 
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
+      resizeObserver?.disconnect();
     };
-  }, [activeFloatingPicker, updateFloatingPickerPosition]);
+  }, [activeFloatingPicker, getAnchorElement, updateFloatingPickerPosition]);
 
   useEffect(() => {
     if (!activeFloatingPicker) return;
@@ -464,19 +604,19 @@ export function PropertiesPanel({
   const activeShadowPickerConfig =
     activeShadowColorPicker !== null ? resolvedStyle.shadows[activeShadowColorPicker] : null;
 
+  const floatingPickerPortalTarget = floatingPickerPortalHost ?? document.body;
+  const floatingPickerPosition: CSSProperties = {
+    position: floatingPickerPortalHost ? 'absolute' : 'fixed',
+    top: `${floatingPickerStyle?.top ?? FLOATING_PICKER_MARGIN}px`,
+    left: `${floatingPickerStyle?.left ?? FLOATING_PICKER_MARGIN}px`,
+    width: `${FLOATING_PICKER_WIDTH}px`,
+  };
+
   const floatingColorPicker = activeColorPickerConfig
     ? createPortal(
         <div
           className="floating-color-picker-layer"
-          style={
-            floatingPickerStyle
-              ? {
-                  top: `${floatingPickerStyle.top}px`,
-                  left: `${floatingPickerStyle.left}px`,
-                  width: `${FLOATING_PICKER_WIDTH}px`,
-                }
-              : undefined
-          }
+          style={floatingPickerPosition}
         >
           <ColorPicker
             color={activeColorPickerConfig.color}
@@ -497,21 +637,13 @@ export function PropertiesPanel({
             }
           />
         </div>,
-        document.body
+        floatingPickerPortalTarget
       )
     : activeShadowPickerConfig
       ? createPortal(
           <div
             className="floating-color-picker-layer"
-            style={
-              floatingPickerStyle
-                ? {
-                    top: `${floatingPickerStyle.top}px`,
-                    left: `${floatingPickerStyle.left}px`,
-                    width: `${FLOATING_PICKER_WIDTH}px`,
-                  }
-                : undefined
-            }
+            style={floatingPickerPosition}
           >
             <ColorPicker
               color={activeShadowPickerConfig.color}
@@ -525,7 +657,7 @@ export function PropertiesPanel({
               showAlpha={true}
             />
           </div>,
-          document.body
+          floatingPickerPortalTarget
         )
       : null;
  
@@ -554,8 +686,13 @@ export function PropertiesPanel({
             <input
               type="text"
               className="field-input"
-              value={formatMeasurement(layoutBounds?.x)}
-              readOnly
+              aria-label="Layout X"
+              inputMode="numeric"
+              value={displayedLayoutDraft.x}
+              readOnly={!canEditLayout}
+              onChange={(event) => handleLayoutInputChange('x', event.target.value)}
+              onBlur={() => commitLayoutField('x')}
+              onKeyDown={(event) => handleLayoutInputKeyDown(event, 'x')}
               placeholder="0"
             />
           </div>
@@ -564,8 +701,13 @@ export function PropertiesPanel({
             <input
               type="text"
               className="field-input"
-              value={formatMeasurement(layoutBounds?.y)}
-              readOnly
+              aria-label="Layout Y"
+              inputMode="numeric"
+              value={displayedLayoutDraft.y}
+              readOnly={!canEditLayout}
+              onChange={(event) => handleLayoutInputChange('y', event.target.value)}
+              onBlur={() => commitLayoutField('y')}
+              onKeyDown={(event) => handleLayoutInputKeyDown(event, 'y')}
               placeholder="0"
             />
           </div>
@@ -574,8 +716,13 @@ export function PropertiesPanel({
             <input
               type="text"
               className="field-input"
-              value={formatMeasurement(layoutBounds?.width)}
-              readOnly
+              aria-label="Layout Width"
+              inputMode="numeric"
+              value={displayedLayoutDraft.width}
+              readOnly={!canEditLayout}
+              onChange={(event) => handleLayoutInputChange('width', event.target.value)}
+              onBlur={() => commitLayoutField('width')}
+              onKeyDown={(event) => handleLayoutInputKeyDown(event, 'width')}
               placeholder="0"
             />
           </div>
@@ -584,8 +731,13 @@ export function PropertiesPanel({
             <input
               type="text"
               className="field-input"
-              value={formatMeasurement(layoutBounds?.height)}
-              readOnly
+              aria-label="Layout Height"
+              inputMode="numeric"
+              value={displayedLayoutDraft.height}
+              readOnly={!canEditLayout}
+              onChange={(event) => handleLayoutInputChange('height', event.target.value)}
+              onBlur={() => commitLayoutField('height')}
+              onKeyDown={(event) => handleLayoutInputKeyDown(event, 'height')}
               placeholder="0"
             />
           </div>

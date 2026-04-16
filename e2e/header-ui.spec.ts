@@ -125,7 +125,7 @@ test.describe('Header UI chrome', () => {
     expect(headerStyles.backgroundImage).toContain('linear-gradient');
     expect(headerStyles.fontFamily).toContain('Avenir Next');
     expect(headerStyles.borderBottomColor).not.toBe('rgba(0, 0, 0, 0)');
-    expect(headerStyles.position).toBe('fixed');
+    expect(headerStyles.position).toBe('absolute');
 
     const railStyles = await workspaceRail.evaluate((element) => {
       const styles = window.getComputedStyle(element);
@@ -140,8 +140,8 @@ test.describe('Header UI chrome', () => {
     });
 
     expect(parseFloat(railStyles.borderRadius)).toBeGreaterThanOrEqual(20);
-    expect(railStyles.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
-    expect(railStyles.boxShadow).not.toBe('none');
+    expect(railStyles.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(railStyles.boxShadow).toBe('none');
     expect(parseFloat(railStyles.gap)).toBeGreaterThanOrEqual(10);
     expect(parseFloat(railStyles.paddingLeft)).toBeGreaterThanOrEqual(10);
     expect(parseFloat(railStyles.paddingTop)).toBeGreaterThanOrEqual(8);
@@ -237,7 +237,7 @@ test.describe('Header UI chrome', () => {
       };
     });
 
-    expect(propertiesPanelStyles.position).toBe('fixed');
+    expect(propertiesPanelStyles.position).toBe('absolute');
     expect(propertiesPanelStyles.right).not.toBe('auto');
     expect(propertiesPanelStyles.bottom).not.toBe('auto');
 

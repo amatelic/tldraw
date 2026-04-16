@@ -17,6 +17,7 @@ Specs serve as:
 | `SPECS.md` | Main task list (23 tasks) | ~800 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
+| `EMBED_LAYOUT_INTERACTIONS_SPEC.md` | Embed movement, resize, and inspector layout editing rules | ~180 | Completed |
 | `toolbar-refactor-SPEC.md` | Toolbar redesign spec | ~350 | Completed |
 | `AGENT_WORKFLOWS_SPEC.md` | AI agent integration | ~400 | Planning |
 | `AGENT_DIAGRAM_PRESENTATION_SPEC.md` | Work-diagram generation and presentation brief agent | ~250 | Planning |
@@ -139,6 +140,18 @@ Properties panel animation:
 - AnimatePresence for enter/exit
 
 **Implementation Date**: March 2025
+**Status**: Completed and merged
+
+### Embed & Layout Interactions ✅
+**File**: `EMBED_LAYOUT_INTERACTIONS_SPEC.md`
+
+Documents:
+- embed movement via drag bar
+- eight-handle embed resizing
+- inspector-driven X/Y/W/H editing for single selected frame-like shapes
+- container-relative shell behavior for embedded hosts
+
+**Implementation Date**: April 2026
 **Status**: Completed and merged
 
 ## Architecture Specs

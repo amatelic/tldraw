@@ -9,6 +9,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - 2026-04-13: Extended the inspector redesign language into the app header/workspace rail and added Playwright coverage for the new chrome styling.
 - 2026-04-14: Converted the shell to a full-viewport canvas with floating header and inspector overlays, plus Playwright checks for viewport coverage.
 - 2026-04-15: Added a focused spec and task breakdown for a work-diagram agent with OpenCode transport and presentation-brief output.
+- 2026-04-16: Added embed resize handles, inspector-driven layout editing for single selected frame-like shapes, a dedicated interaction spec for embed/layout behavior, and Playwright coverage for canvas resize plus inspector size edits.
 
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed

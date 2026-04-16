@@ -220,6 +220,7 @@ interface CanvasProps {
 **Embed Overlays**:
 - Positioned divs with iframes
 - Drag handle at top
+- Eight resize handles on the selected embed (corners + edges)
 - Selection border
 - Sandboxed iframe for security
 
@@ -236,6 +237,7 @@ interface CanvasProps {
 - [ ] Text editing works with proper positioning
 - [ ] Right-click menu exposes core selection actions without breaking drag/draw flows
 - [ ] Embed overlays move correctly
+- [ ] Embed overlays resize correctly from corners and edges
 - [ ] Audio toggle works
 - [ ] 60fps during dragging/panning
 
@@ -244,6 +246,7 @@ interface CanvasProps {
 - Coordinate transformation required for all operations
 - Textarea position must match zoom level
 - Embed iframes need pointer-events management
+- Embed resize handles clamp to a minimum frame of 160x120 world units
 
 **Known Issues**:
 - Very large component (~1050 lines) - hard to maintain
@@ -422,11 +425,12 @@ interface ZoomControlsProps {
 - Collapsible sections with light metadata summaries in the header
 - Inline stroke/fill color cards with floating ColorPicker popovers
 - Compact typography and control groups inspired by modern design inspectors
-- Fixed overlay treatment so the canvas remains full-viewport beneath it
+- Container-relative overlay treatment so the canvas remains full-size even inside a resizable embed host
 
 **Features**:
 - **Layout Section**:
   - Live position and size readouts from the selected shape or combined multi-select frame
+  - Single selected frame-like shapes can edit X, Y, W, and H directly from the inspector inputs
   - Multi-select align, distribute, and tidy actions
 - **Style Section**: 
   - Stroke width chooser with three compareable picker treatments: Visual, Slider, and Compact
@@ -440,12 +444,12 @@ interface ZoomControlsProps {
   - Weight, emphasis, and alignment controls
 - **Color Section**:
   - Separate stroke and fill rows with current hex values
-  - Reduced quick swatch palette for both stroke and fill to keep the inspector calmer
-  - Section-level custom ColorPicker opens in a floating portal anchored to the trigger, so it does not inherit the inspector width
-  - Fill color opens the same ColorPicker with embedded solid/linear/rounded gradient controls, so stop editing stays in one place
+- Reduced quick swatch palette for both stroke and fill to keep the inspector calmer
+- Section-level custom ColorPicker opens in a floating portal anchored to the trigger, and the portal stays inside the `.app` shell when the board is embedded
+- Fill color opens the same ColorPicker with embedded solid/linear/rounded gradient controls, so stop editing stays in one place
 - **Effects Section**: 
-  - Multiple shadows with individual controls (X offset, Y offset, Blur, Color, Opacity)
-  - Shadow ColorPicker uses the same floating portal so the picker layout stays stable even when the inspector is narrow
+- Multiple shadows with individual controls (X offset, Y offset, Blur, Color, Opacity)
+- Shadow ColorPicker uses the same floating portal so the picker layout stays stable even when the inspector is narrow
   - Add/remove shadow buttons
   - Empty state prompt when no shadows exist
 
@@ -458,7 +462,7 @@ interface ZoomControlsProps {
 - Uses local CSS variables in the component stylesheet for the inspector palette
 - Dark mode is temporarily disabled so the inspector and picker always use the light palette
 - Shares scroll container behavior with the app shell via `App.css`
-- On narrow screens the floating desktop panel collapses toward a bottom-sheet overlay
+- On narrow shells the floating desktop panel collapses toward a bottom-sheet overlay via container queries, so embed resizes behave like viewport resizes
 
 **Props**:
 ```typescript
@@ -491,6 +495,7 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - [ ] Changes apply immediately to selected shapes
 - [ ] Stroke width picker can switch between the three comparison layouts without losing functionality
 - [ ] Layout X/Y/W/H reflects the current selected frame bounds
+- [ ] Layout X/Y/W/H edits update single selected frame-like shapes on blur or Enter
 - [ ] Text-specific controls hidden for non-text shapes
 - [ ] Panel animates in/out smoothly
 - [ ] Sections can be collapsed/expanded independently
@@ -514,6 +519,8 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - Only visible when shapes selected
 - CSS variables must be defined in `index.css`
 - Minimum 4 sections (Layout, Style, Opacity, Effects)
+- Floating picker placement assumes the board is rendered inside the `.app` shell; it falls back to `document.body` in isolated tests or standalone mounts
+- Direct layout editing is intentionally limited to single selected rectangle, image, audio, text, and embed shapes; multi-select and other geometry types remain read-only
 
 **Known Issues**:
 - None currently
@@ -575,6 +582,7 @@ interface WorkspaceTabsProps {
 - Visual styling is implemented from `src/App.css` because the header and workspace rail are treated as one shared chrome surface
 - On desktop, the rail is expected to align horizontally with the header action group
 - Motion should respect `prefers-reduced-motion` and spacing should preserve clear separation between the active tab and the add button
+- Mobile-style header stacking is driven by the app shell container width, not only the browser viewport, so narrow embeds still collapse cleanly
 
 ---
 
@@ -669,6 +677,7 @@ interface WorkspaceTabProps {
 - Modals block interaction with rest of app
 - File size limits apply
 - URL must be valid format
+- Dialog sizing is bounded by the app shell so embeds can shrink without forcing viewport-width modals
 
 ## Testing
 
