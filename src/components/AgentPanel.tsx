@@ -29,6 +29,13 @@ interface AgentPanelProps {
   editorState: Pick<EditorState, 'camera' | 'selectedShapeIds'>;
   viewport?: AgentViewport | null;
   orchestrator: AgentOrchestrator;
+  onApplyGenerationProposal: (proposal: AgentGenerationProposal) => Promise<{
+    success: boolean;
+    error: string | null;
+  }> | {
+    success: boolean;
+    error: string | null;
+  };
   onClose: () => void;
 }
 
@@ -258,6 +265,7 @@ export function AgentPanel({
   editorState,
   viewport,
   orchestrator,
+  onApplyGenerationProposal,
   onClose,
 }: AgentPanelProps) {
   const [workflow, setWorkflow] = useState<AgentWorkflowType>('review');
@@ -269,6 +277,7 @@ export function AgentPanel({
   const [status, setStatus] = useState<AgentLifecycleState>('idle');
   const [proposal, setProposal] = useState<AgentProposal | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isApplyingDraft, setIsApplyingDraft] = useState(false);
   const scope = getScopeForWorkflow(workflow, editorState.selectedShapeIds, scopeOverride);
   const workflowMessage = getWorkflowScaffoldMessage(workflow);
   const isDiagramWorkflow = workflow === 'generate-diagram';
@@ -361,6 +370,28 @@ export function AgentPanel({
     } catch (error) {
       setStatus('failed');
       setErrorMessage(error instanceof Error ? error.message : 'The agent request failed.');
+    }
+  };
+
+  const handleApplyDraft = async () => {
+    if (proposal?.kind !== 'generation') {
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsApplyingDraft(true);
+
+    try {
+      const result = await onApplyGenerationProposal(proposal);
+
+      if (!result.success) {
+        setErrorMessage(result.error ?? 'The generated diagram could not be applied.');
+        return;
+      }
+
+      onClose();
+    } finally {
+      setIsApplyingDraft(false);
     }
   };
 
@@ -517,7 +548,7 @@ export function AgentPanel({
           </div>
         )}
 
-        {status === 'failed' && errorMessage && (
+        {errorMessage && (
           <div className="agent-message-card" data-tone="error" role="alert">
             {errorMessage}
           </div>
@@ -703,6 +734,18 @@ export function AgentPanel({
                 </ul>
               )}
             </section>
+
+            <div className="agent-panel-actions agent-panel-actions-inline">
+              <div className="agent-button-row">
+                <button
+                  className="agent-primary-button"
+                  onClick={handleApplyDraft}
+                  disabled={isApplyingDraft || proposal.actions.length === 0}
+                >
+                  {isApplyingDraft ? 'Applying...' : 'Apply to board'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>

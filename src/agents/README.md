@@ -30,6 +30,7 @@ Agent logic is intentionally split into small layers so the UI does not depend o
   - connector references
   - section references
   - required presentation-brief fields
+- Exposes reusable generation validation for canvas apply flows
 - Runs diagram-generation requests through the OpenCode-backed provider path
 - Normalizes OpenCode diagram responses into:
   - create-shape actions
@@ -51,6 +52,5 @@ Agent logic is intentionally split into small layers so the UI does not depend o
 
 ## Known Issues
 
-- Generated diagram actions are validated but not yet applied to the canvas
 - Presentation briefs currently live only in the proposal contract, not persistent workspace state
-- Full diagram preview UI is still pending, so generation currently surfaces status and counts rather than a structured preview
+- Generated connector endpoints are still static after apply because the canvas does not yet maintain live bindings between nodes and connectors

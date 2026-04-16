@@ -71,8 +71,11 @@ function App() {
     startTextEdit,
     commitTextEdit,
     cancelTextEdit,
+    applyGeneratedDiagram,
     groupShapes,
     ungroupShapes,
+    bringShapesToFront,
+    sendShapesToBack,
   } = useCanvas(activeWorkspace.id);
   const canvasSize = useElementSize(canvasRef);
   const agentViewport =
@@ -86,6 +89,9 @@ function App() {
   );
 
   const selectedShapes = shapes.filter((shape) => editorState.selectedShapeIds.includes(shape.id));
+  const canGroupSelected = editorState.selectedShapeIds.length >= 2;
+  const canUngroupSelected =
+    editorState.selectedShapeIds.length === 1 && selectedShapes[0]?.type === 'group';
 
   const selectedLayoutBounds: Bounds | null =
     selectedShapes.length === 0
@@ -292,6 +298,16 @@ function App() {
       ungroupShapes(selectedGroups[0]);
     }
   }, [ungroupShapes, editorState.selectedShapeIds, shapes]);
+
+  const handleBringSelectedToFront = useCallback(() => {
+    if (editorState.selectedShapeIds.length === 0) return;
+    bringShapesToFront(editorState.selectedShapeIds);
+  }, [bringShapesToFront, editorState.selectedShapeIds]);
+
+  const handleSendSelectedToBack = useCallback(() => {
+    if (editorState.selectedShapeIds.length === 0) return;
+    sendShapesToBack(editorState.selectedShapeIds);
+  }, [sendShapesToBack, editorState.selectedShapeIds]);
 
   // Alignment handler
   const handleAlign = useCallback(
@@ -596,6 +612,13 @@ function App() {
             onTextEditStart={startTextEdit}
             onTextEditCommit={commitTextEdit}
             onTextEditCancel={cancelTextEdit}
+            onDeleteSelected={deleteSelectedShapes}
+            onGroupSelected={handleGroupSelected}
+            onUngroupSelected={handleUngroupSelected}
+            onBringToFront={handleBringSelectedToFront}
+            onSendToBack={handleSendSelectedToBack}
+            canGroupSelection={canGroupSelected}
+            canUngroupSelection={canUngroupSelected}
           />
 
           <ZoomControls
@@ -668,6 +691,7 @@ function App() {
           }}
           viewport={agentViewport}
           orchestrator={agentOrchestrator}
+          onApplyGenerationProposal={applyGeneratedDiagram}
           onClose={() => setIsAgentPanelOpen(false)}
         />
       )}

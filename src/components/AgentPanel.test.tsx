@@ -102,6 +102,11 @@ function renderPanel(options?: {
   selectedShapeIds?: string[];
   shapes?: Shape[];
   orchestrator?: AgentOrchestrator;
+  onApplyGenerationProposal?: (proposal: AgentGenerationProposal) => {
+    success: boolean;
+    error: string | null;
+  };
+  onClose?: ReturnType<typeof vi.fn>;
 }) {
   const orchestrator =
     options?.orchestrator ??
@@ -119,7 +124,10 @@ function renderPanel(options?: {
       }}
       viewport={{ width: 600, height: 400 }}
       orchestrator={orchestrator}
-      onClose={vi.fn()}
+      onApplyGenerationProposal={
+        options?.onApplyGenerationProposal ?? vi.fn(() => ({ success: true, error: null }))
+      }
+      onClose={options?.onClose ?? vi.fn()}
     />
   );
 }
@@ -140,6 +148,7 @@ describe('AgentPanel', () => {
         }}
         viewport={{ width: 600, height: 400 }}
         orchestrator={orchestrator}
+        onApplyGenerationProposal={vi.fn(() => ({ success: true, error: null }))}
         onClose={vi.fn()}
       />
     );
@@ -163,6 +172,7 @@ describe('AgentPanel', () => {
         }}
         viewport={{ width: 600, height: 400 }}
         orchestrator={orchestrator}
+        onApplyGenerationProposal={vi.fn(() => ({ success: true, error: null }))}
         onClose={onClose}
       />
     );
@@ -330,6 +340,60 @@ describe('AgentPanel', () => {
       expect(screen.getByText('No open questions were included.')).toBeInTheDocument();
       expect(screen.getByText('No warnings were returned for this draft.')).toBeInTheDocument();
     });
+  });
+
+  it('should apply a generated diagram draft from preview and close the panel on success', async () => {
+    const onClose = vi.fn();
+    const onApplyGenerationProposal = vi.fn(() => ({ success: true, error: null }));
+
+    renderPanel({ onApplyGenerationProposal, onClose });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply to board' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to board' }));
+
+    await waitFor(() => {
+      expect(onApplyGenerationProposal).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('should keep the preview open and show an apply error when the draft cannot be applied', async () => {
+    const onClose = vi.fn();
+    const onApplyGenerationProposal = vi.fn(() => ({
+      success: false,
+      error: 'Connector target is missing.',
+    }));
+
+    renderPanel({ onApplyGenerationProposal, onClose });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply to board' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to board' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Connector target is missing.');
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('should not mutate the input shapes when running review mode', async () => {

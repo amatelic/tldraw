@@ -654,6 +654,11 @@ body {
   gap: 12px;
 }
 
+.agent-panel-actions-inline {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .agent-button-row {
   display: flex;
   align-items: center;

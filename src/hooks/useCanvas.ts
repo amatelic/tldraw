@@ -1,6 +1,12 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import type { Point, Shape, ShapeStyle, EditorState, GroupShape } from '../types';
-import { createShapeId, getGroupDescendants } from '../types';
+import { DEFAULT_STYLE, createShapeId, generateBounds, getGroupDescendants, getRootGroup } from '../types';
+import { validateGenerationProposalForCanvas } from '../agents/agentOrchestrator';
+import type {
+  AgentCreateConnectorAction,
+  AgentCreateShapeAction,
+  AgentGenerationProposal,
+} from '../types/agents';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 
@@ -35,13 +41,70 @@ interface UseCanvasReturn {
   startTextEdit: (id: string) => void;
   commitTextEdit: () => void;
   cancelTextEdit: () => void;
+  applyGeneratedDiagram: (proposal: AgentGenerationProposal) => {
+    success: boolean;
+    error: string | null;
+    appliedShapeIds: string[];
+  };
   // Grouping actions
   groupShapes: (shapeIds: string[]) => void;
   ungroupShapes: (groupId: string) => void;
   getAllShapesInGroup: (groupId: string) => string[];
+  bringShapesToFront: (shapeIds: string[]) => void;
+  sendShapesToBack: (shapeIds: string[]) => void;
 }
 
 const MAX_HISTORY_SIZE = 50;
+
+function normalizeShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): string[] {
+  const normalizedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  for (const shapeId of shapeIds) {
+    const rootGroup = getRootGroup(shapeId, shapes);
+    const normalizedId = rootGroup?.id ?? shapeId;
+
+    if (!seenIds.has(normalizedId)) {
+      seenIds.add(normalizedId);
+      normalizedIds.push(normalizedId);
+    }
+  }
+
+  return normalizedIds;
+}
+
+function expandShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): Set<string> {
+  const expandedIds = new Set<string>();
+
+  for (const shapeId of shapeIds) {
+    expandedIds.add(shapeId);
+
+    const shape = shapes.find((candidate) => candidate.id === shapeId);
+    if (shape?.type === 'group') {
+      const descendants = getGroupDescendants(shapeId, shapes);
+      descendants.forEach((descendant) => expandedIds.add(descendant.id));
+    }
+  }
+
+  return expandedIds;
+}
+
+function reorderShapesByLayer(shapeIds: string[], shapes: Shape[], destination: 'front' | 'back'): Shape[] {
+  const normalizedIds = normalizeShapeIdsForLayering(shapeIds, shapes);
+  if (normalizedIds.length === 0) return shapes;
+
+  const idsToMove = expandShapeIdsForLayering(normalizedIds, shapes);
+  const movedShapes = shapes.filter((shape) => idsToMove.has(shape.id));
+  const stationaryShapes = shapes.filter((shape) => !idsToMove.has(shape.id));
+
+  if (movedShapes.length === 0 || stationaryShapes.length === 0) {
+    return shapes;
+  }
+
+  return destination === 'front'
+    ? stationaryShapes.concat(movedShapes)
+    : movedShapes.concat(stationaryShapes);
+}
 
 const defaultEditorState: EditorState = {
   tool: 'select',
@@ -66,6 +129,134 @@ const defaultEditorState: EditorState = {
   },
   editingTextId: null,
 };
+
+function mergeGeneratedStyle(baseStyle: ShapeStyle, overrides?: Partial<ShapeStyle>): ShapeStyle {
+  return {
+    ...DEFAULT_STYLE,
+    ...baseStyle,
+    ...overrides,
+  };
+}
+
+function createGeneratedCanvasShape(
+  action: AgentCreateShapeAction,
+  baseStyle: ShapeStyle,
+  timestamp: number
+): Shape {
+  const style = mergeGeneratedStyle(baseStyle, action.shape.style);
+
+  if (action.shape.type === 'text') {
+    return {
+      id: action.shape.id,
+      type: 'text',
+      bounds: { ...action.shape.bounds },
+      text: action.shape.text ?? '',
+      fontSize: style.fontSize,
+      fontFamily: style.fontFamily,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      textAlign: style.textAlign,
+      style,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  }
+
+  if (action.shape.type === 'circle') {
+    const { x, y, width, height } = action.shape.bounds;
+
+    return {
+      id: action.shape.id,
+      type: 'circle',
+      bounds: { ...action.shape.bounds },
+      center: {
+        x: x + width / 2,
+        y: y + height / 2,
+      },
+      radius: Math.min(width, height) / 2,
+      style,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  }
+
+  return {
+    id: action.shape.id,
+    type: 'rectangle',
+    bounds: { ...action.shape.bounds },
+    style,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function createGeneratedCanvasConnector(
+  action: AgentCreateConnectorAction,
+  baseStyle: ShapeStyle,
+  timestamp: number
+): Shape {
+  const style = mergeGeneratedStyle(baseStyle, action.connector.style);
+
+  return {
+    id: action.connector.id,
+    type: action.connector.type,
+    bounds: generateBounds(action.connector.start, action.connector.end),
+    start: { ...action.connector.start },
+    end: { ...action.connector.end },
+    style,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+function createGeneratedNodeLabel(
+  nodeShapeId: string,
+  label: string,
+  bounds: Shape['bounds'],
+  baseStyle: ShapeStyle,
+  timestamp: number,
+  existingIds: Set<string>
+): Shape {
+  const labelBaseId = `${nodeShapeId}-label`;
+  let labelId = labelBaseId;
+  let suffix = 1;
+
+  while (existingIds.has(labelId)) {
+    labelId = `${labelBaseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  existingIds.add(labelId);
+
+  const style = mergeGeneratedStyle(baseStyle, {
+    color: baseStyle.color,
+    fillStyle: 'none',
+    textAlign: 'center',
+  });
+
+  const insetX = Math.min(12, Math.max(bounds.width * 0.12, 6));
+  const insetY = Math.min(12, Math.max(bounds.height * 0.12, 6));
+
+  return {
+    id: labelId,
+    type: 'text',
+    bounds: {
+      x: bounds.x + insetX,
+      y: bounds.y + insetY,
+      width: Math.max(bounds.width - insetX * 2, 40),
+      height: Math.max(bounds.height - insetY * 2, style.fontSize * 1.4),
+    },
+    text: label,
+    fontSize: style.fontSize,
+    fontFamily: style.fontFamily,
+    fontWeight: style.fontWeight,
+    fontStyle: style.fontStyle,
+    textAlign: style.textAlign,
+    style,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
 
 export function useCanvas(workspaceId: string): UseCanvasReturn {
   const workspaceStore = useWorkspaceStore();
@@ -502,6 +693,79 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     }));
   }, []);
 
+  const applyGeneratedDiagram = useCallback(
+    (proposal: AgentGenerationProposal) => {
+      if (proposal.actions.length === 0) {
+        return {
+          success: false,
+          error: 'This draft does not include any shapes or connectors to apply.',
+          appliedShapeIds: [],
+        };
+      }
+
+      const validation = validateGenerationProposalForCanvas(
+        proposal,
+        shapes.map((shape) => shape.id)
+      );
+
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: validation.error ?? 'The generated diagram is invalid.',
+          appliedShapeIds: [],
+        };
+      }
+
+      const timestamp = Date.now();
+      const reservedIds = new Set(shapes.map((shape) => shape.id));
+      const nextShapes = proposal.actions.flatMap((action) => {
+        if (action.type === 'create-connector') {
+          const connector = createGeneratedCanvasConnector(action, editorState.shapeStyle, timestamp);
+          reservedIds.add(connector.id);
+          return [connector];
+        }
+
+        const nodeShape = createGeneratedCanvasShape(action, editorState.shapeStyle, timestamp);
+        reservedIds.add(nodeShape.id);
+
+        if (action.shape.type === 'text' || !action.shape.text?.trim()) {
+          return [nodeShape];
+        }
+
+        const labelShape = createGeneratedNodeLabel(
+          action.shape.id,
+          action.shape.text,
+          action.shape.bounds,
+          mergeGeneratedStyle(editorState.shapeStyle, action.shape.style),
+          timestamp,
+          reservedIds
+        );
+
+        return [nodeShape, labelShape];
+      });
+      const appliedShapeIds = nextShapes.map((shape) => shape.id);
+
+      setPresent((prev) => {
+        saveToHistory(prev.shapes, prev.editorState);
+
+        return {
+          shapes: [...prev.shapes, ...nextShapes],
+          editorState: {
+            ...prev.editorState,
+            selectedShapeIds: appliedShapeIds,
+          },
+        };
+      });
+
+      return {
+        success: true,
+        error: null,
+        appliedShapeIds,
+      };
+    },
+    [editorState.shapeStyle, saveToHistory, shapes]
+  );
+
   // GROUPING METHODS
 
   /**
@@ -613,6 +877,42 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     return [groupId, ...descendants.map((d) => d.id)];
   }, [shapes]);
 
+  const bringShapesToFront = useCallback(
+    (shapeIds: string[]) => {
+      if (shapeIds.length === 0) return;
+
+      setPresent((prev) => {
+        const reorderedShapes = reorderShapesByLayer(shapeIds, prev.shapes, 'front');
+        if (reorderedShapes === prev.shapes) return prev;
+
+        saveToHistory(prev.shapes, prev.editorState);
+        return {
+          ...prev,
+          shapes: reorderedShapes,
+        };
+      });
+    },
+    [saveToHistory]
+  );
+
+  const sendShapesToBack = useCallback(
+    (shapeIds: string[]) => {
+      if (shapeIds.length === 0) return;
+
+      setPresent((prev) => {
+        const reorderedShapes = reorderShapesByLayer(shapeIds, prev.shapes, 'back');
+        if (reorderedShapes === prev.shapes) return prev;
+
+        saveToHistory(prev.shapes, prev.editorState);
+        return {
+          ...prev,
+          shapes: reorderedShapes,
+        };
+      });
+    },
+    [saveToHistory]
+  );
+
   return {
     canvasRef,
     shapes,
@@ -644,9 +944,12 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     startTextEdit,
     commitTextEdit,
     cancelTextEdit,
+    applyGeneratedDiagram,
     // Grouping
     groupShapes,
     ungroupShapes,
     getAllShapesInGroup,
+    bringShapesToFront,
+    sendShapesToBack,
   };
 }

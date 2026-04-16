@@ -16,8 +16,8 @@ Components are organized by functionality:
 | Component | File | Purpose | Lines |
 |-----------|------|---------|-------|
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
-| Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~923 |
-| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~300 |
+| Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~1050 |
+| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~340 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
 | PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for shape styling | ~400 |
@@ -54,16 +54,20 @@ Components are organized by functionality:
   - planned connectors
   - warnings
   - presentation brief details and list-based talk-track content
+- Apply action that sends the approved draft onto the canvas and closes back to the board on success
+- Inline error messaging when a generated draft fails validation during apply
 
 **Success Criteria**:
 - [ ] Diagram Generator appears as a distinct workflow, not generic chat UI
 - [ ] Context locks to full board for diagram generation
 - [ ] Presets and starter examples populate the prompt scaffolding
 - [ ] Generated diagrams render a readable preview before apply
+- [ ] Approved drafts can be applied from preview without leaving the panel in a broken state
 - [ ] Review Mode behavior remains unchanged
 
 **Known Issues**:
-- Diagram previews are read-only for now; apply behavior lands in the next task
+- Rectangle and circle node labels are applied as separate text shapes because the canvas primitives do not yet support inline text
+- Applied connector endpoints are static; moving nodes later does not auto-reroute the generated arrows/lines
 
 **Dependencies**:
 - `AgentOrchestrator`
@@ -135,7 +139,7 @@ interface ToolbarProps {
 
 **Purpose**: Main drawing surface handling all pointer interactions, rendering, and shape management.
 
-**⚠️ WARNING**: This component is 923 lines - very large and complex. Consider refactoring into smaller components or hooks.
+**⚠️ WARNING**: This component is ~1050 lines - very large and complex. Consider refactoring into smaller components or hooks.
 
 **Responsibilities**:
 1. Render shapes using CanvasEngine
@@ -146,6 +150,7 @@ interface ToolbarProps {
 6. Embed iframe overlays
 7. Audio playback toggle
 8. Double-click for text editing
+9. Right-click context menu for selection actions
 
 **Props**:
 ```typescript
@@ -172,6 +177,13 @@ interface CanvasProps {
   onTextEditStart: (id: string) => void;
   onTextEditCommit: () => void;
   onTextEditCancel: () => void;
+  onDeleteSelected: () => void;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
+  onBringToFront: () => void;
+  onSendToBack: () => void;
+  canGroupSelection: boolean;
+  canUngroupSelection: boolean;
 }
 ```
 
@@ -192,6 +204,12 @@ interface CanvasProps {
 3. **Pointer Up**:
    - Stop panning/dragging/drawing
    - Finalize shape if meaningful size (>5px)
+
+4. **Context Menu**:
+   - Right-clicking a shape opens a lightweight selection menu
+   - Right-clicking an unselected shape selects it before opening the menu
+   - Menu actions currently include delete, group/ungroup, bring to front, and send to back
+   - Menu closes on outside click, Escape, tool changes, or when selection clears
 
 **Text Editing**:
 - Overlay textarea positioned over text shape
@@ -216,6 +234,7 @@ interface CanvasProps {
 - [ ] Shapes render correctly with all styles
 - [ ] Selection indicators visible
 - [ ] Text editing works with proper positioning
+- [ ] Right-click menu exposes core selection actions without breaking drag/draw flows
 - [ ] Embed overlays move correctly
 - [ ] Audio toggle works
 - [ ] 60fps during dragging/panning
@@ -227,7 +246,7 @@ interface CanvasProps {
 - Embed iframes need pointer-events management
 
 **Known Issues**:
-- Very large component (923 lines) - hard to maintain
+- Very large component (~1050 lines) - hard to maintain
 - Complex coordinate math for textarea positioning
 - Audio elements not cleaned up on unmount
 - Potential memory leak with drag update functions

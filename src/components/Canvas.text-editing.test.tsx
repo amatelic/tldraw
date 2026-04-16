@@ -25,10 +25,13 @@ describe('Canvas Text Editing', () => {
   const mockShapeStyle: ShapeStyle = {
     color: '#000000',
     fillColor: '#000000',
+    fillGradient: null,
     strokeWidth: 2,
     strokeStyle: 'solid',
     fillStyle: 'none',
     opacity: 1,
+    blendMode: 'source-over',
+    shadows: [],
     fontSize: 16,
     fontFamily: 'sans-serif',
     fontWeight: 'normal',
@@ -75,6 +78,13 @@ describe('Canvas Text Editing', () => {
     onTextEditStart: vi.fn(),
     onTextEditCommit: vi.fn(),
     onTextEditCancel: vi.fn(),
+    onDeleteSelected: vi.fn(),
+    onGroupSelected: vi.fn(),
+    onUngroupSelected: vi.fn(),
+    onBringToFront: vi.fn(),
+    onSendToBack: vi.fn(),
+    canGroupSelection: false,
+    canUngroupSelection: false,
   };
 
   beforeEach(() => {
@@ -130,7 +140,7 @@ describe('Canvas Text Editing', () => {
         bounds: { x: 100, y: 100, width: 200, height: 100 },
       });
       
-      const { container } = render(
+      render(
         <Canvas
           {...defaultProps}
           shapes={[textShape]}
@@ -457,7 +467,7 @@ describe('Canvas Text Editing', () => {
         y: (point.y * 2) + 30, // zoom: 2, pan: 30
       }));
       
-      const { container } = render(
+      render(
         <Canvas
           {...defaultProps}
           shapes={[textShape]}

@@ -13,7 +13,7 @@ Hooks encapsulate complex logic that can be reused across components:
 
 | Hook | File | Purpose | Lines | Complexity |
 |------|------|---------|-------|------------|
-| useCanvas | `useCanvas.ts` | Canvas state, history, shapes | 508 | High |
+| useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and agent draft apply | ~650 | High |
 | useKeyboard | `useKeyboard.ts` | Global keyboard shortcuts | 170 | Medium |
 | useElementSize | `useElementSize.ts` | Observe DOM element width/height changes | ~60 | Low |
 
@@ -21,7 +21,7 @@ Hooks encapsulate complex logic that can be reused across components:
 
 ### useCanvas
 
-**Purpose**: Main canvas state management hook providing drawing operations, camera control, history (undo/redo), and text editing.
+**Purpose**: Main canvas state management hook providing drawing operations, camera control, history (undo/redo), text editing, grouping, and layer ordering.
 
 **⚠️ WARNING**: This is the most complex hook in the application. It manages:
 - Shape state and operations
@@ -77,6 +77,20 @@ interface UseCanvasReturn {
   startTextEdit: (id: string) => void;
   commitTextEdit: () => void;
   cancelTextEdit: () => void;
+
+  // Agent generation
+  applyGeneratedDiagram: (proposal: AgentGenerationProposal) => {
+    success: boolean;
+    error: string | null;
+    appliedShapeIds: string[];
+  };
+
+  // Grouping and layering
+  groupShapes: (shapeIds: string[]) => void;
+  ungroupShapes: (groupId: string) => void;
+  getAllShapesInGroup: (groupId: string) => string[];
+  bringShapesToFront: (shapeIds: string[]) => void;
+  sendShapesToBack: (shapeIds: string[]) => void;
 }
 
 function useCanvas(workspaceId: string): UseCanvasReturn
@@ -108,6 +122,9 @@ const [future, setFuture] = useState<HistoryState[]>([]);
    - deleteShape
    - deleteSelectedShapes
    - updateShapeStyle (when applied to selection)
+   - applyGeneratedDiagram
+   - groupShapes / ungroupShapes
+   - bringShapesToFront / sendShapesToBack
 
 2. **Don't Add to History** (non-undoable):
    - Dragging (continuous updates)
@@ -156,10 +173,14 @@ const defaultEditorState: EditorState = {
 **Success Criteria**:
 - [ ] Shapes can be added, updated, deleted
 - [ ] Undo/redo works for all significant operations
+- [ ] Generated diagram drafts apply atomically in one undo step
+- [ ] Invalid generated drafts fail without partial board changes
 - [ ] Camera can be panned and zoomed
 - [ ] Selection works correctly
 - [ ] Auto-saves to workspace store
 - [ ] Text editing state managed correctly
+- [ ] Selected shapes can be grouped and ungrouped
+- [ ] Selected shapes can be moved to front or back without splitting groups
 - [ ] History limited to 50 states
 - [ ] History cleared on workspace switch
 
@@ -168,6 +189,8 @@ const defaultEditorState: EditorState = {
 - Maximum 50 history states
 - Auto-save debounced at 100ms
 - Shape updates during drag not saved to history
+- Layer ordering normalizes child selections up to their root group so grouped content moves as one stack item
+- Generated rectangle/circle labels are applied as companion text shapes because those primitives do not yet render inline text
 
 **Known Issues**:
 1. **ESLint Warning**: `react-hooks/exhaustive-deps` disabled for initialData useMemo
@@ -179,7 +202,9 @@ const defaultEditorState: EditorState = {
 
 2. **History Loss**: When switching workspaces, all undo history is lost. This is by design but could be improved to preserve history per-workspace.
 
-3. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
+3. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
+
+4. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
 
 **Testing Requirements**:
 
@@ -199,6 +224,9 @@ const {
   addShape,
   updateShape,
   deleteShape,
+  deleteSelectedShapes,
+  groupShapes,
+  bringShapesToFront,
   undo,
   redo,
   canUndo,

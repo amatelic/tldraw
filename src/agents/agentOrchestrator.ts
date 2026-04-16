@@ -172,6 +172,33 @@ export function validateAgentProposal(
   return { isValid: true, error: null };
 }
 
+export function validateGenerationProposalForCanvas(
+  proposal: AgentGenerationProposal,
+  existingShapeIdsInput: Iterable<string>
+): AgentProposalValidationResult {
+  const existingShapeIds = new Set(existingShapeIdsInput);
+
+  if (!isNonEmptyText(proposal.summary)) {
+    return {
+      isValid: false,
+      error: 'Generation proposals must include a non-empty summary.',
+    };
+  }
+
+  const actionValidation = validateGenerationActions(proposal.actions, existingShapeIds);
+  if (!actionValidation.isValid) {
+    return actionValidation;
+  }
+
+  const presentationValidation = validatePresentationBrief(proposal);
+  if (!presentationValidation.isValid) {
+    return presentationValidation;
+  }
+
+  const availableShapeIds = new Set([...existingShapeIds, ...getCreatedShapeIds(proposal.actions)]);
+  return validateGenerationSections(proposal, availableShapeIds);
+}
+
 function isFinitePoint(point: AgentGeneratedConnector['start']): boolean {
   return Number.isFinite(point.x) && Number.isFinite(point.y);
 }
@@ -359,25 +386,7 @@ function validateGenerationProposal(
   proposal: AgentGenerationProposal,
   shapeLookup: Map<string, AgentShapeSummary>
 ): AgentProposalValidationResult {
-  if (!isNonEmptyText(proposal.summary)) {
-    return {
-      isValid: false,
-      error: 'Generation proposals must include a non-empty summary.',
-    };
-  }
-
-  const actionValidation = validateGenerationActions(proposal.actions, new Set(shapeLookup.keys()));
-  if (!actionValidation.isValid) {
-    return actionValidation;
-  }
-
-  const presentationValidation = validatePresentationBrief(proposal);
-  if (!presentationValidation.isValid) {
-    return presentationValidation;
-  }
-
-  const availableShapeIds = new Set([...shapeLookup.keys(), ...getCreatedShapeIds(proposal.actions)]);
-  return validateGenerationSections(proposal, availableShapeIds);
+  return validateGenerationProposalForCanvas(proposal, shapeLookup.keys());
 }
 
 export class AgentOrchestrator {

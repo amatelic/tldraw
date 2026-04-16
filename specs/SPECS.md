@@ -123,21 +123,28 @@ useEffect(() => {
 ---
 
 ### Task 5: Add Shape Grouping/Ungrouping
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Allow grouping multiple shapes so they move/scale together
 **Acceptance Criteria**:
-- Select multiple shapes and group them (Ctrl+G)
-- Grouped shapes move together when dragged
-- Ungroup shapes (Ctrl+Shift+G)
-- Group appears as single selection
-- Groups can be nested
-- Works with undo/redo
+- ✅ Select multiple shapes and group them (Ctrl+G)
+- ✅ Grouped shapes move together when dragged
+- ✅ Ungroup shapes (Ctrl+Shift+G)
+- ✅ Group appears as single selection
+- ✅ Groups can be nested
+- ✅ Works with undo/redo
+- ✅ Right-click menu exposes delete, group/ungroup, and layer-order actions for selected shapes
 
-**Files to Modify**:
-- `src/types/index.ts` - add GroupShape type
-- `src/hooks/useCanvas.ts` - add group/ungroup methods
-- `src/canvas/CanvasEngine.ts` - render groups
+**Files Modified**:
+- `src/types/index.ts` - added group helpers and root-group resolution utilities
+- `src/hooks/useCanvas.ts` - implemented group/ungroup plus bring-to-front / send-to-back actions
+- `src/canvas/CanvasEngine.ts` - renders group bounds and labels
+- `src/components/Canvas.tsx` - added right-click context menu for delete, grouping, and z-order actions
+- `src/App.tsx` - wired canvas menu actions to selection state
+
+**Files Created**:
+- `src/hooks/useCanvas.grouping.test.ts` - grouping, ungrouping, delete, and layer-order coverage
+- `src/components/Canvas.context-menu.test.tsx` - right-click menu interaction coverage
 
 ---
 
@@ -784,12 +791,11 @@ const isNameTruncated = (name: string): boolean => {
 - Added a structured generation preview for diagram sections, planned nodes, planned connectors, warnings, and presentation brief content
 - Added safe empty-state rendering for missing presentation sections so the panel stays readable even when the response is sparse
 - Preview is still read-only in this task; apply behavior lands next in Task 22
-- `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
 
 ### Task 22: Apply Generated Diagrams to the Canvas
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Convert validated diagram proposals into real canvas shapes and connectors, applied as one undoable change set.
 
@@ -815,6 +821,19 @@ const isNameTruncated = (name: string): boolean => {
 - Integration tests for apply flow
 - Tests for grouped undo behavior
 - Tests ensuring invalid apply attempts are blocked
+
+**Verification**:
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added a reusable generation-validation helper so canvas apply re-checks structured diagram drafts before mutating board state
+- Added `applyGeneratedDiagram` to `useCanvas` so generated drafts are created in a single undoable history step with no partial writes
+- Applied rectangle/circle labels as companion text shapes so approved previews remain readable on the board
+- Added AgentPanel apply actions plus success/error handling around preview approval
+- Added regression coverage for canvas apply, grouped undo, invalid apply blocking, and panel-level apply behavior
+- Fixed the existing `Canvas.text-editing` test bug so the full Vitest suite and lint now pass again
 
 ---
 
