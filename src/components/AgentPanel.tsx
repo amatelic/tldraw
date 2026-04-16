@@ -11,6 +11,15 @@ import type {
   AgentWorkflowType,
 } from '../types/agents';
 
+type DiagramPreset = 'architecture' | 'process-flow' | 'storyboard' | 'learning-journey';
+
+interface DiagramPresetOption {
+  value: DiagramPreset;
+  label: string;
+  summary: string;
+  examplePrompt: string;
+}
+
 interface AgentPanelProps {
   isOpen: boolean;
   workspaceId: string;
@@ -26,6 +35,7 @@ const WORKFLOW_OPTIONS: Array<{ value: AgentWorkflowType; label: string }> = [
   { value: 'review', label: 'Review Mode' },
   { value: 'cleanup', label: 'Cleanup Suggestions' },
   { value: 'rewrite-selection', label: 'Selection Rewrite' },
+  { value: 'generate-diagram', label: 'Diagram Generator' },
 ];
 
 const SCOPE_OPTIONS: Array<{ value: AgentContextScope; label: string }> = [
@@ -49,8 +59,64 @@ const STATUS_LABELS: Record<AgentLifecycleState, string> = {
   failed: 'Failed',
 };
 
+const DIAGRAM_PRESETS: DiagramPresetOption[] = [
+  {
+    value: 'architecture',
+    label: 'Architecture Diagram',
+    summary: 'Services, storage, queues, and system boundaries.',
+    examplePrompt: 'Create a backend architecture for a messaging app.',
+  },
+  {
+    value: 'process-flow',
+    label: 'Process Flow',
+    summary: 'Sequential steps, decisions, and handoffs.',
+    examplePrompt: 'Create a process flow for launching a new feature from kickoff to release.',
+  },
+  {
+    value: 'storyboard',
+    label: 'Storyboard',
+    summary: 'Narrative frames or scenes that explain an idea over time.',
+    examplePrompt: 'Create a storyboard for how to learn storytelling.',
+  },
+  {
+    value: 'learning-journey',
+    label: 'Learning Journey',
+    summary: 'Progressive stages, milestones, and feedback loops.',
+    examplePrompt: 'Create a learning journey for onboarding a new product designer.',
+  },
+];
+
+const DIAGRAM_EXAMPLES = [
+  {
+    label: 'Messaging App Backend',
+    preset: 'architecture' as const,
+    prompt: 'Create a backend architecture for a messaging app.',
+    audience: 'Engineering and product stakeholders',
+    goal: 'Explain the request, storage, and delivery path in one pass.',
+  },
+  {
+    label: 'Storytelling Storyboard',
+    preset: 'storyboard' as const,
+    prompt: 'Create a storyboard for how to learn storytelling.',
+    audience: 'Learners or workshop attendees',
+    goal: 'Turn the learning path into a simple presentation sequence.',
+  },
+];
+
 function getDefaultScope(selectedShapeIds: string[]): AgentContextScope {
   return selectedShapeIds.length > 0 ? 'selection' : 'visible-board';
+}
+
+function getScopeForWorkflow(
+  workflow: AgentWorkflowType,
+  selectedShapeIds: string[],
+  scopeOverride: AgentContextScope | null
+): AgentContextScope {
+  if (workflow === 'generate-diagram') {
+    return 'full-board';
+  }
+
+  return scopeOverride ?? getDefaultScope(selectedShapeIds);
 }
 
 function getScopeDescription(scope: AgentContextScope, shapeCount: number): string {
@@ -63,6 +129,56 @@ function getScopeDescription(scope: AgentContextScope, shapeCount: number): stri
   }
 
   return 'Using the full workspace, even if some content is outside the current viewport.';
+}
+
+function getPromptPlaceholder(workflow: AgentWorkflowType, diagramPreset: DiagramPreset): string {
+  if (workflow !== 'generate-diagram') {
+    return 'Optional: focus the review on clarity, structure, or another goal.';
+  }
+
+  const preset = DIAGRAM_PRESETS.find((option) => option.value === diagramPreset);
+  return `Describe the work diagram you want to create. Example: ${preset?.examplePrompt ?? 'Create a simple architecture diagram.'}`;
+}
+
+function buildPromptForWorkflow(
+  workflow: AgentWorkflowType,
+  prompt: string,
+  diagramPreset: DiagramPreset,
+  audience: string,
+  presentationGoal: string
+): string {
+  if (workflow !== 'generate-diagram') {
+    return prompt;
+  }
+
+  const presetLabel = DIAGRAM_PRESETS.find((option) => option.value === diagramPreset)?.label ?? 'Diagram';
+  const sections = [
+    `Diagram type: ${presetLabel}`,
+    `Prompt: ${prompt.trim() || 'Create a simple work diagram.'}`,
+  ];
+
+  if (audience.trim()) {
+    sections.push(`Audience: ${audience.trim()}`);
+  }
+
+  if (presentationGoal.trim()) {
+    sections.push(`Presentation goal: ${presentationGoal.trim()}`);
+  }
+
+  return sections.join('\n');
+}
+
+function getWorkflowScaffoldMessage(workflow: AgentWorkflowType): string | null {
+  switch (workflow) {
+    case 'cleanup':
+    case 'rewrite-selection':
+      return 'Cleanup Suggestions and Selection Rewrite are scaffolded in the UI, but only Review Mode is wired in this first implementation slice.';
+    case 'generate-diagram':
+      return 'Diagram Generator now collects structured prompt context and examples. The OpenCode-backed provider lands in the next implementation task, so running this workflow will still report that the provider is unavailable.';
+    case 'review':
+    default:
+      return null;
+  }
 }
 
 function groupFindings(findings: AgentReviewFinding[]): Map<AgentReviewFindingCategory, AgentReviewFinding[]> {
@@ -87,10 +203,15 @@ export function AgentPanel({
   const [workflow, setWorkflow] = useState<AgentWorkflowType>('review');
   const [scopeOverride, setScopeOverride] = useState<AgentContextScope | null>(null);
   const [prompt, setPrompt] = useState('');
+  const [diagramPreset, setDiagramPreset] = useState<DiagramPreset>('architecture');
+  const [audience, setAudience] = useState('');
+  const [presentationGoal, setPresentationGoal] = useState('');
   const [status, setStatus] = useState<AgentLifecycleState>('idle');
   const [proposal, setProposal] = useState<AgentProposal | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const scope = scopeOverride ?? getDefaultScope(editorState.selectedShapeIds);
+  const scope = getScopeForWorkflow(workflow, editorState.selectedShapeIds, scopeOverride);
+  const workflowMessage = getWorkflowScaffoldMessage(workflow);
+  const isDiagramWorkflow = workflow === 'generate-diagram';
 
   const scopeShapeCount = useMemo(() => {
     if (scope === 'selection') {
@@ -114,6 +235,19 @@ export function AgentPanel({
 
   const handleWorkflowChange = (nextWorkflow: AgentWorkflowType) => {
     setWorkflow(nextWorkflow);
+    setScopeOverride(nextWorkflow === 'generate-diagram' ? 'full-board' : null);
+    setProposal(null);
+    setErrorMessage(null);
+    setStatus('idle');
+  };
+
+  const handleExampleApply = (example: (typeof DIAGRAM_EXAMPLES)[number]) => {
+    setWorkflow('generate-diagram');
+    setScopeOverride('full-board');
+    setDiagramPreset(example.preset);
+    setPrompt(example.prompt);
+    setAudience(example.audience);
+    setPresentationGoal(example.goal);
     setProposal(null);
     setErrorMessage(null);
     setStatus('idle');
@@ -130,7 +264,7 @@ export function AgentPanel({
     try {
       const result = await orchestrator.run({
         workflow,
-        prompt,
+        prompt: buildPromptForWorkflow(workflow, prompt, diagramPreset, audience, presentationGoal),
         scope,
         workspace: { id: workspaceId, name: workspaceName },
         shapes,
@@ -188,6 +322,7 @@ export function AgentPanel({
             <select
               aria-label="Context"
               value={scope}
+              disabled={isDiagramWorkflow}
               onChange={(event) => setScopeOverride(event.target.value as AgentContextScope)}
             >
               {SCOPE_OPTIONS.map((option) => (
@@ -201,13 +336,81 @@ export function AgentPanel({
 
         <div className="agent-context-summary">{getScopeDescription(scope, scopeShapeCount)}</div>
 
+        {isDiagramWorkflow && (
+          <>
+            <div className="agent-diagram-callout">
+              <strong>Diagram draft + presentation brief</strong>
+              <p>
+                This workflow prepares a simple work diagram and the talk track you can use to
+                present it. Context is locked to the full board for the first generation pass.
+              </p>
+            </div>
+
+            <div className="agent-preset-grid" role="list" aria-label="Diagram presets">
+              {DIAGRAM_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  className={`agent-preset-card${diagramPreset === preset.value ? ' is-active' : ''}`}
+                  onClick={() => setDiagramPreset(preset.value)}
+                >
+                  <strong>{preset.label}</strong>
+                  <span>{preset.summary}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="agent-form-grid">
+              <label className="agent-field">
+                <span>Audience</span>
+                <input
+                  aria-label="Audience"
+                  value={audience}
+                  onChange={(event) => setAudience(event.target.value)}
+                  placeholder="Who will you present this to?"
+                />
+              </label>
+
+              <label className="agent-field">
+                <span>Presentation Goal</span>
+                <input
+                  aria-label="Presentation Goal"
+                  value={presentationGoal}
+                  onChange={(event) => setPresentationGoal(event.target.value)}
+                  placeholder="What should the audience understand?"
+                />
+              </label>
+            </div>
+
+            <div className="agent-example-section">
+              <div className="agent-example-header">
+                <strong>Starter examples</strong>
+                <span>Use one as a fast starting point, then edit the prompt.</span>
+              </div>
+              <div className="agent-example-grid" role="list" aria-label="Diagram examples">
+                {DIAGRAM_EXAMPLES.map((example) => (
+                  <button
+                    key={example.label}
+                    type="button"
+                    className="agent-example-card"
+                    onClick={() => handleExampleApply(example)}
+                  >
+                    <strong>{example.label}</strong>
+                    <span>{example.prompt}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         <label className="agent-field">
           <span>Prompt</span>
           <textarea
             aria-label="Prompt"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="Optional: focus the review on clarity, structure, or another goal."
+            placeholder={getPromptPlaceholder(workflow, diagramPreset)}
             rows={4}
           />
         </label>
@@ -219,15 +422,14 @@ export function AgentPanel({
               Cancel
             </button>
             <button className="agent-primary-button" onClick={handleRun}>
-              Run
+              {isDiagramWorkflow ? 'Generate draft' : 'Run'}
             </button>
           </div>
         </div>
 
-        {workflow !== 'review' && (
+        {workflowMessage && (
           <div className="agent-message-card" data-tone="info">
-            Cleanup Suggestions and Selection Rewrite are scaffolded in the UI, but only Review
-            Mode is wired in this first implementation slice.
+            {workflowMessage}
           </div>
         )}
 

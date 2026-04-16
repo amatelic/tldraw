@@ -12,6 +12,8 @@ const shapeStyle = {
   strokeStyle: 'solid' as const,
   fillStyle: 'none' as const,
   opacity: 1,
+  blendMode: 'source-over' as const,
+  shadows: [],
   fontSize: 16,
   fontFamily: 'sans-serif',
   fontWeight: 'normal' as const,
@@ -183,6 +185,54 @@ describe('AgentPanel', () => {
     expect(
       screen.getByText(/only Review Mode is wired in this first implementation slice/i)
     ).toBeInTheDocument();
+  });
+
+  it('should render structured diagram workflow controls when diagram generator is selected', () => {
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    expect(screen.getByText('Diagram draft + presentation brief')).toBeInTheDocument();
+    expect(screen.getByLabelText('Audience')).toBeInTheDocument();
+    expect(screen.getByLabelText('Presentation Goal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate draft' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/OpenCode-backed provider lands in the next implementation task/i)
+    ).toBeInTheDocument();
+  });
+
+  it('should lock context to full board for diagram generation', () => {
+    renderPanel({ selectedShapeIds: ['shape-1'] });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    expect(screen.getByLabelText('Context')).toBeDisabled();
+    expect(
+      screen.getByText('Using the full workspace, even if some content is outside the current viewport.')
+    ).toBeInTheDocument();
+  });
+
+  it('should apply starter examples to the diagram workflow form', () => {
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'generate-diagram' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
+
+    expect(screen.getByLabelText('Workflow')).toHaveValue('generate-diagram');
+    expect(screen.getByLabelText('Prompt')).toHaveValue(
+      'Create a backend architecture for a messaging app.'
+    );
+    expect(screen.getByLabelText('Audience')).toHaveValue('Engineering and product stakeholders');
+    expect(screen.getByLabelText('Presentation Goal')).toHaveValue(
+      'Explain the request, storage, and delivery path in one pass.'
+    );
   });
 
   it('should render grouped findings after running review mode', async () => {

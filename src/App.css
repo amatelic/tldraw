@@ -519,6 +519,7 @@ body {
 }
 
 .agent-field select,
+.agent-field input,
 .agent-field textarea {
   width: 100%;
   border: 1px solid #d1d5db;
@@ -533,6 +534,11 @@ body {
   padding: 0 12px;
 }
 
+.agent-field input {
+  height: 42px;
+  padding: 0 12px;
+}
+
 .agent-field textarea {
   min-height: 112px;
   padding: 12px;
@@ -540,6 +546,7 @@ body {
 }
 
 .agent-field select:focus,
+.agent-field input:focus,
 .agent-field textarea:focus {
   outline: none;
   border-color: #2f80ed;
@@ -560,6 +567,84 @@ body {
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   color: #475569;
+}
+
+.agent-diagram-callout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef5ff 100%);
+  border: 1px solid #dbeafe;
+  color: #1e3a8a;
+}
+
+.agent-diagram-callout strong,
+.agent-example-header strong,
+.agent-preset-card strong,
+.agent-example-card strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.agent-diagram-callout p,
+.agent-example-header span,
+.agent-preset-card span,
+.agent-example-card span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agent-preset-grid,
+.agent-example-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.agent-preset-card,
+.agent-example-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #dbe1ea;
+  background: #ffffff;
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.agent-preset-card:hover,
+.agent-example-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.agent-preset-card.is-active {
+  border-color: #2f80ed;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px rgba(47, 128, 237, 0.08);
+}
+
+.agent-example-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-example-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #374151;
 }
 
 .agent-panel-actions {
@@ -1482,6 +1567,11 @@ body {
   }
 
   .agent-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-preset-grid,
+  .agent-example-grid {
     grid-template-columns: 1fr;
   }
 

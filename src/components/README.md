@@ -6,6 +6,7 @@ This directory contains all React UI components for the TLDraw Clone application
 
 Components are organized by functionality:
 - **Main UI**: Toolbar, Canvas, PropertiesPanel, ZoomControls
+- **Agent UI**: AgentPanel
 - **Dialogs**: ImageUploadDialog, AudioUploadDialog, EmbedDialog
 - **Workspace**: WorkspaceTabs, WorkspaceTab
 - **Utilities**: Tooltip, ColorPicker
@@ -16,6 +17,7 @@ Components are organized by functionality:
 |-----------|------|---------|-------|
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
 | Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~923 |
+| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~300 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
 | PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for shape styling | ~400 |
@@ -27,6 +29,39 @@ Components are organized by functionality:
 | AudioUploadDialog | `AudioUploadDialog.tsx` | Dialog for uploading audio | ~200 |
 
 ## Detailed Component Documentation
+
+### AgentPanel
+
+**Purpose**: Modal workflow surface for canvas-aware agent features.
+
+**Current Workflows**:
+- Review Mode
+- Cleanup Suggestions
+- Selection Rewrite
+- Diagram Generator
+
+**Diagram Generator UI**:
+- Preset cards for common work-diagram formats
+- Audience and presentation-goal fields
+- Starter examples for:
+  - backend architecture for a messaging app
+  - storyboard for learning storytelling
+- Full-board context lock for first-pass generation
+- Messaging that explains the workflow produces both a draft diagram and presentation guidance
+
+**Success Criteria**:
+- [ ] Diagram Generator appears as a distinct workflow, not generic chat UI
+- [ ] Context locks to full board for diagram generation
+- [ ] Presets and starter examples populate the prompt scaffolding
+- [ ] Review Mode behavior remains unchanged
+
+**Known Issues**:
+- Diagram Generator UI is scaffolded before the live provider is wired
+- Preview for generated diagrams and presentation briefs is not implemented yet
+
+**Dependencies**:
+- `AgentOrchestrator`
+- `types/agents.ts`
 
 ### Toolbar
 

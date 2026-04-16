@@ -680,38 +680,40 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 19: Add Diagram Generator Workflow UI
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Extend the agent panel with a dedicated workflow for generating simple work diagrams and collecting the minimum prompt context needed for useful results.
 
 **Acceptance Criteria**:
-- Add a "Diagram Generator" workflow to the agent panel
-- Add prompt scaffolding for:
+- ✅ Add a "Diagram Generator" workflow to the agent panel
+- ✅ Add prompt scaffolding for:
   - primary prompt
   - diagram preset/type
   - optional audience
   - optional presentation goal
-- Include starter examples for:
+- ✅ Include starter examples for:
   - backend architecture for a messaging app
   - storyboard for learning storytelling
-- Show workflow-specific loading and empty states
-- Avoid presenting this flow as a generic chat experience
+- ✅ Show workflow-specific loading and empty states
+- ✅ Avoid presenting this flow as a generic chat experience
 
-**Implementation Details**:
-1. Reuse the existing `AgentPanel` entry point
-2. Add preset chips or select options for work-oriented diagram types
-3. Add helper copy that explains the output includes both a diagram and presentation guidance
-4. Keep the first release scoped to full-board generation rather than selection rewrite
-
-**Files to Modify**:
+**Files Modified**:
 - `src/components/AgentPanel.tsx`
 - `src/components/AgentPanel.test.tsx`
+- `src/components/README.md`
 - `src/App.css`
+- `PROGRESS.md`
 
-**Testing Requirements**:
-- Component tests for workflow switching
-- Component tests for preset/example visibility
-- Component tests for workflow-specific prompt fields
+**Verification**:
+- `npx vitest run src/components/AgentPanel.test.tsx`
+- `npm run build`
+
+**Notes**:
+- Added a dedicated Diagram Generator workflow with preset cards, example starters, audience input, and presentation-goal scaffolding
+- Locked diagram generation to full-board scope for the first draft-generation slice
+- Running the workflow still reports that the provider is unavailable until Task 20 wires the OpenCode-backed implementation
+- `npx vitest run` still fails because existing Playwright-style files under `e2e/` are being picked up by Vitest
+- `npm run lint` still fails on pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
 
 ---
 
