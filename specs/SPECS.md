@@ -4,6 +4,12 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Active Tasks
 
+## Recent Updates
+
+- 2026-04-13: Extended the inspector redesign language into the app header/workspace rail and added Playwright coverage for the new chrome styling.
+- 2026-04-14: Converted the shell to a full-viewport canvas with floating header and inspector overlays, plus Playwright checks for viewport coverage.
+- 2026-04-15: Added a focused spec and task breakdown for a work-diagram agent with OpenCode transport and presentation-brief output.
+
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed
 **Priority**: HIGH
@@ -595,7 +601,251 @@ const isNameTruncated = (name: string): boolean => {
 
 ---
 
+### Task 17: Redesign Right-Side Inspector UI
+**Status**: ✅ Completed
+**Priority**: HIGH
+**Description**: Redesign the right-side properties panel to match the latest soft inspector reference with a more polished visual hierarchy and embedded color workflow.
+
+**Acceptance Criteria**:
+- ✅ Replace the old boxed sidebar styling with a softer floating inspector shell
+- ✅ Add compact collapsible sections with section metadata and tighter spacing
+- ✅ Recompose style controls into pill-style segmented groups and inline cards
+- ✅ Redesign the color picker to match the reference more closely
+- ✅ Keep existing behavior working for layout, text, color, opacity, and shadows
+- ✅ Add regression tests verifying the new UI shell and color picker structure
+- ✅ Document the redesign in `PROGRESS.md` and a dedicated sidepanel spec
+
+**Files Modified**:
+- `src/App.css`
+- `src/components/PropertiesPanel.tsx`
+- `src/components/PropertiesPanel.css`
+- `src/components/ColorPicker.tsx`
+- `src/components/ColorPicker.css`
+- `src/components/ColorPicker.test.tsx`
+- `src/components/README.md`
+- `PROGRESS.md`
+- `specs/right-panel-refactor-SPEC.md`
+
+**Files Created**:
+- `src/components/PropertiesPanel.test.tsx`
+
+**Verification**:
+- `npx vitest run`
+- `npm run build`
+- `npm run test:e2e`
+
+**Notes**:
+- `npm run lint` still reports pre-existing issues in `src/components/Canvas.tsx` and `src/components/Canvas.text-editing.test.tsx`
+- Export controls were not added as part of this redesign; the task focused on visual/interaction parity for the inspector itself
+- E2E coverage now includes a browser-level regression for legacy persisted sidepanel state
+
+---
+
+### Task 18: Add Diagram Generation Contracts & OpenCode Transport
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Extend the agent foundation so the app can request simple work diagrams from a server through OpenCode and receive structured diagram plus presentation output.
+
+**Acceptance Criteria**:
+- Add a new agent workflow for prompt-to-diagram generation
+- Extend the proposal schema to support create actions for shapes/connectors
+- Add a structured presentation brief contract to agent results
+- Add an OpenCode client/adapter layer that isolates transport concerns from UI code
+- Keep a mock or local fallback path for development and tests
+- Reject invalid diagram proposals safely before they reach the UI
+
+**Implementation Details**:
+1. Add a new workflow type such as `generate-diagram`
+2. Add create-action types for supported canvas primitives
+3. Add a presentation brief shape with:
+   - title
+   - objective
+   - audience
+   - summary
+   - narrative steps
+   - speaker notes
+   - assumptions
+   - open questions
+4. Add an OpenCode transport client that maps server responses into app contracts
+5. Keep the orchestrator transport-agnostic
+
+**Files to Create**:
+- `src/agents/openCodeClient.ts`
+- `src/agents/openCodeClient.test.ts`
+
+**Files to Modify**:
+- `src/types/agents.ts`
+- `src/agents/agentOrchestrator.ts`
+
+**Testing Requirements**:
+- Unit tests for response mapping
+- Unit tests for invalid proposal rejection
+- Tests covering mock fallback behavior
+
+---
+
+### Task 19: Add Diagram Generator Workflow UI
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Extend the agent panel with a dedicated workflow for generating simple work diagrams and collecting the minimum prompt context needed for useful results.
+
+**Acceptance Criteria**:
+- Add a "Diagram Generator" workflow to the agent panel
+- Add prompt scaffolding for:
+  - primary prompt
+  - diagram preset/type
+  - optional audience
+  - optional presentation goal
+- Include starter examples for:
+  - backend architecture for a messaging app
+  - storyboard for learning storytelling
+- Show workflow-specific loading and empty states
+- Avoid presenting this flow as a generic chat experience
+
+**Implementation Details**:
+1. Reuse the existing `AgentPanel` entry point
+2. Add preset chips or select options for work-oriented diagram types
+3. Add helper copy that explains the output includes both a diagram and presentation guidance
+4. Keep the first release scoped to full-board generation rather than selection rewrite
+
+**Files to Modify**:
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+- `src/App.css`
+
+**Testing Requirements**:
+- Component tests for workflow switching
+- Component tests for preset/example visibility
+- Component tests for workflow-specific prompt fields
+
+---
+
+### Task 20: Implement OpenCode-Backed Diagram Provider
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Implement the provider that sends diagram-generation requests through OpenCode and returns a validated diagram proposal.
+
+**Acceptance Criteria**:
+- Add a provider for the diagram-generation workflow
+- Provider sends structured request data, not only raw prompt text
+- Provider maps server output into supported app actions
+- Provider surfaces partial/low-confidence output as warnings instead of silent failure
+- Unsupported shapes or connector references are rejected safely
+
+**Implementation Details**:
+1. Add a provider such as `OpenCodeDiagramProvider`
+2. Include prompt, workspace metadata, and generation options in the request
+3. Normalize server output into supported shape creation actions only
+4. Return warnings when the server omits details that the UI should surface
+
+**Files to Create**:
+- `src/agents/providers/openCodeDiagramProvider.ts`
+- `src/agents/providers/openCodeDiagramProvider.test.ts`
+
+**Files to Modify**:
+- `src/agents/agentOrchestrator.ts`
+- `src/types/agents.ts`
+
+**Testing Requirements**:
+- Unit tests for request building
+- Unit tests for response normalization
+- Regression tests for malformed server payloads
+
+---
+
+### Task 21: Add Diagram Preview & Presentation Brief UI
+**Status**: 🔴 Not Started
+**Priority**: HIGH
+**Description**: Show users what the generated work diagram will create and how to present it before anything is applied to the board.
+
+**Acceptance Criteria**:
+- Preview shows a readable summary of planned sections, nodes, and connectors
+- Preview shows how many shapes will be added
+- Preview surfaces warnings and assumptions clearly
+- Preview includes a presentation brief with:
+  - title
+  - objective
+  - audience
+  - narrative order
+  - speaker notes
+  - open questions
+- Preview remains readable after generation and before apply
+
+**Implementation Details**:
+1. Extend `AgentPanel` result rendering beyond review findings
+2. Show diagram plan and presentation brief as separate sections
+3. Highlight missing fields or server warnings with clear UI feedback
+4. Keep the preview lightweight and text-first for the initial slice
+
+**Files to Modify**:
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+- `src/App.css`
+
+**Testing Requirements**:
+- Component tests for preview rendering
+- Component tests for warnings/error states
+- Regression tests for empty presentation sections
+
+---
+
+### Task 22: Apply Generated Diagrams to the Canvas
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Convert validated diagram proposals into real canvas shapes and connectors, applied as one undoable change set.
+
+**Acceptance Criteria**:
+- User can apply a generated diagram from preview
+- Applying the diagram creates supported shapes/connectors on the board
+- The full diagram generation is grouped into one undo step
+- Generated shapes are editable with existing canvas tools
+- Failed apply operations do not leave the board in a partial state
+
+**Implementation Details**:
+1. Add create-shape/create-connector apply helpers
+2. Reuse shared mutation infrastructure where possible so this work also benefits cleanup/rewrite workflows
+3. Keep the first supported primitive set intentionally small
+4. Select the generated draft after apply when practical
+
+**Files to Modify**:
+- `src/hooks/useCanvas.ts`
+- `src/agents/agentOrchestrator.ts`
+- `src/components/AgentPanel.tsx`
+
+**Testing Requirements**:
+- Integration tests for apply flow
+- Tests for grouped undo behavior
+- Tests ensuring invalid apply attempts are blocked
+
+---
+
+### Task 23: Add Example-Driven Coverage & Documentation for Diagram Generation
+**Status**: 🔴 Not Started
+**Priority**: MEDIUM
+**Description**: Document the diagram-generation workflow and add example-driven tests that lock in the expected experience for common work prompts.
+
+**Acceptance Criteria**:
+- Add documentation for the new workflow and output contract
+- Add regression coverage for the two starter examples:
+  - backend architecture for a messaging app
+  - storyboard for learning storytelling
+- Document the temporary OpenCode transport assumption
+- Document known limitations of the first release
+
+**Files to Modify**:
+- `specs/AGENT_WORKFLOWS_SPEC.md`
+- `specs/README.md`
+- `src/components/README.md`
+
+**Testing Requirements**:
+- Provider-level regression tests for example prompts
+- UI-level tests for example preview summaries
+- Documentation review to ensure setup and limitations are clear
+
+---
+
 ## Task Selection Workflow
+
 
 When working on tasks:
 1. Pick the highest priority task marked as "🔴 Not Started"

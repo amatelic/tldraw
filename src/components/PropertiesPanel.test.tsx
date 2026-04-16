@@ -14,6 +14,11 @@ describe('PropertiesPanel', () => {
     onAlign.mockClear();
     onDistribute.mockClear();
     onTidy.mockClear();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
   });
 
   it('renders the inspector shell and primary sections', () => {
@@ -59,11 +64,12 @@ describe('PropertiesPanel', () => {
 
     fireEvent.click(screen.getByTitle('Edit stroke color'));
 
-    expect(container.querySelector('.color-section-picker + .color-group')).toBeInTheDocument();
-    expect(container.querySelector('.color-picker-topbar')).toBeInTheDocument();
-    expect(container.querySelector('.color-picker-tabs')).toBeInTheDocument();
+    expect(container.querySelector('.floating-color-picker-layer')).not.toBeInTheDocument();
+    expect(document.body.querySelector('.floating-color-picker-layer')).toBeInTheDocument();
+    expect(document.body.querySelector('.color-picker-topbar')).toBeInTheDocument();
+    expect(document.body.querySelector('.color-picker-tabs')).toBeInTheDocument();
     expect(screen.getByText('Custom')).toBeInTheDocument();
-    expect(screen.getByText('Variables')).toBeDisabled();
+    expect(screen.getByRole('tab', { name: 'Variables' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
@@ -79,6 +85,77 @@ describe('PropertiesPanel', () => {
     fireEvent.click(screen.getByTitle('Disable fill'));
 
     expect(onChange).toHaveBeenCalledWith({ fillStyle: 'none' });
+  });
+
+  it('lets the fill picker enable a linear gradient background', () => {
+    render(
+      <PropertiesPanel
+        style={{ ...DEFAULT_STYLE, fillStyle: 'solid', fillColor: '#2563EB' }}
+        onChange={onChange}
+        selectedCount={1}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Edit fill color'));
+    fireEvent.click(screen.getByRole('button', { name: 'Linear' }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      fillStyle: 'solid',
+      fillColor: '#2563EB',
+      fillGradient: {
+        type: 'linear',
+        startColor: '#2563EB',
+        endColor: '#7c3aed',
+        angle: 45,
+      },
+    });
+  });
+
+  it('shows the embedded gradient controls inside the fill picker', () => {
+    const { container } = render(
+      <PropertiesPanel
+        style={{
+          ...DEFAULT_STYLE,
+          fillStyle: 'solid',
+          fillColor: '#16A34A',
+          fillGradient: {
+            type: 'radial',
+            startColor: '#BBF7D0',
+            endColor: '#15803D',
+            angle: 45,
+          },
+        }}
+        onChange={onChange}
+        selectedCount={1}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Edit fill color'));
+
+    expect(container.querySelector('.gradient-builder')).not.toBeInTheDocument();
+    expect(document.body.querySelector('.floating-color-picker-layer')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rounded' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Gradient preview')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Gradient angle')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Edit gradient start color')).toBeInTheDocument();
+    expect(screen.getByTitle('Edit gradient end color')).toBeInTheDocument();
+  });
+
+  it('lets the stroke width picker switch between comparison variants', () => {
+    render(<PropertiesPanel style={DEFAULT_STYLE} onChange={onChange} selectedCount={1} />);
+
+    expect(screen.getByRole('tab', { name: 'Visual' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: '4' }));
+    expect(onChange).toHaveBeenLastCalledWith({ strokeWidth: 4 });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Slider' }));
+    expect(screen.getByText('Live preview')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Stroke width slider'), { target: { value: '4' } });
+    expect(onChange).toHaveBeenLastCalledWith({ strokeWidth: 12 });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Compact' }));
+    fireEvent.click(screen.getByRole('radio', { name: '8px' }));
+    expect(onChange).toHaveBeenLastCalledWith({ strokeWidth: 8 });
   });
 
   it('renders text controls when a text selection is active', () => {
@@ -151,14 +228,12 @@ describe('PropertiesPanel', () => {
     fireEvent.click(screen.getByTitle('Shadow Color'));
 
     const shadowItem = container.querySelector('.shadow-item');
-    const picker = shadowItem?.querySelector('.shadow-color-picker-container');
     const shadowGrid = shadowItem?.querySelector('.shadow-grid');
     const opacityRow = shadowItem?.querySelector('.shadow-opacity-row');
 
-    expect(picker).toBeInTheDocument();
+    expect(document.body.querySelector('.floating-color-picker-layer')).toBeInTheDocument();
     expect(shadowGrid).toBeInTheDocument();
     expect(opacityRow).toBeInTheDocument();
-    expect(picker?.compareDocumentPosition(shadowGrid as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(picker?.compareDocumentPosition(opacityRow as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(shadowItem?.querySelector('.shadow-color-picker-container')).not.toBeInTheDocument();
   });
 });

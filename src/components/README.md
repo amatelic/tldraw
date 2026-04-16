@@ -168,6 +168,7 @@ interface CanvasProps {
 - Pre-computed drag update functions stored in ref
 - Debounced re-renders
 - Separate refs for all mutable state
+- Uses `useElementSize` to react to app-shell and layout resizes, not just browser window resizes
 
 **Success Criteria**:
 - [ ] All pointer interactions work smoothly
@@ -194,6 +195,7 @@ interface CanvasProps {
 - CanvasEngine (rendering)
 - All shape types
 - ToolType
+- `useElementSize` hook for resize-driven canvas refresh
 
 ---
 
@@ -244,28 +246,38 @@ interface TooltipProps {
 
 ### ColorPicker
 
-**Purpose**: Reusable floating color picker with a tactile, inspector-style HSLA workflow.
+**Purpose**: Reusable floating color picker with a tactile, inspector-style workflow for custom and preset colors.
 
 **Design**:
 - Centered popover header with close control and optional eyedropper
-- Segmented "Custom / Variables" tab strip (Variables is visual-only for now)
-- Large HSLA field with refined hue and alpha sliders
-- Grouped HSLA and Hex inputs styled like native design-tool controls
-- Light and dark theme support via local CSS variables
+- Segmented "Custom / Variables" tab strip with working preset swatches
+- Large saturation/lightness field with refined hue and alpha sliders
+- Switchable HSLA, RGBA, and Hex numeric formats styled like native design-tool controls
+- Light-only theme styling via local CSS variables
 
 **Features**:
 - Real-time color preview
 - Interactive gradient picker for saturation and lightness
 - Hue and alpha sliders with drag handles
-- Input validation for HSLA and Hex values
+- Input validation for HSLA, RGBA, and Hex values
+- Preset variable swatches for common inspector colors
+- Optional embedded fill-gradient editor with Solid, Linear, and Rounded modes
+- Gradient stop switching plus inline angle control for linear fills
 - Browser-supported eyedropper API integration
 - Full keyboard accessibility
 
 **Props**:
 ```typescript
 interface ColorPickerProps {
-  color: string;  // Hex color string (e.g., "#FF5733")
-  onChange: (color: string) => void;  // Returns hex color string
+  color: string;
+  alpha?: number;
+  onChange: (color: string, alpha: number) => void;
+  onClose?: () => void;
+  showAlpha?: boolean;
+  variables?: ColorPickerVariable[];
+  allowGradient?: boolean;
+  gradientValue?: FillGradient | null;
+  onGradientChange?: (gradient: FillGradient | null) => void;
 }
 ```
 
@@ -273,7 +285,8 @@ interface ColorPickerProps {
 ```tsx
 <ColorPicker 
   color="#FF5733" 
-  onChange={(newColor) => setStrokeColor(newColor)} 
+  alpha={1}
+  onChange={(newColor, nextAlpha) => setStrokeColor(newColor, nextAlpha)} 
 />
 ```
 
@@ -283,21 +296,26 @@ interface ColorPickerProps {
 - [ ] Alpha slider adjusts transparency (0-100%)
 - [ ] Hex input accepts valid hex colors and updates picker
 - [ ] HSL inputs accept valid HSL values and update picker
+- [ ] RGBA inputs accept valid values and update picker
+- [ ] Hex mode remains available from the format switcher
+- [ ] Variables tab applies preset swatches
+- [ ] Embedded gradient controls can switch between solid, linear, and rounded fills
+- [ ] Gradient stop edits update the active stop without leaving the picker
 - [ ] Header actions remain accessible in supported browsers
 - [ ] Eyedropper works in supported browsers
-- [ ] Dark mode displays correctly
 - [ ] All inputs are keyboard accessible
 
 **Constraints**:
 - Eyedropper requires browser support (Chrome/Edge 95+)
-- Variables tab is not yet wired to design tokens or theme variables
+- Preset variables currently ship from the component's default swatch list unless custom variables are passed in
+- Gradient editing is opt-in and only appears when `allowGradient` and `onGradientChange` are provided
 - Minimum picker size for touch interactions (300px width recommended)
 - Must handle invalid input gracefully
 
 **Known Issues**:
 - Eyedropper not supported in Firefox or Safari
 - Touch interactions on mobile may need optimization
-- The custom picker currently exposes HSLA only; RGB/OKLCH inputs are not implemented
+- Variables are local picker presets, not persisted design tokens yet
 
 **Dependencies**:
 - CSS variables from `index.css` for theming
@@ -342,7 +360,7 @@ interface ZoomControlsProps {
 **Design**:
 - Floating inspector shell with rounded surfaces and compact section rhythm
 - Collapsible sections with light metadata summaries in the header
-- Inline stroke/fill color cards with embedded ColorPicker popovers
+- Inline stroke/fill color cards with floating ColorPicker popovers
 - Compact typography and control groups inspired by modern design inspectors
 - Fixed overlay treatment so the canvas remains full-viewport beneath it
 
@@ -351,7 +369,8 @@ interface ZoomControlsProps {
   - Live position and size readouts from the selected shape or combined multi-select frame
   - Multi-select align, distribute, and tidy actions
 - **Style Section**: 
-  - Stroke width chooser (1, 2, 4, 8, 12)
+  - Stroke width chooser with three compareable picker treatments: Visual, Slider, and Compact
+  - All picker variants target the same discrete widths (1, 2, 4, 8, 12) so UI exploration does not change canvas behavior
   - Stroke style segmented control (solid, dashed, dotted)
   - Fill style segmented control (none, solid, pattern)
   - Opacity slider with inline percentage readout
@@ -362,10 +381,11 @@ interface ZoomControlsProps {
 - **Color Section**:
   - Separate stroke and fill rows with current hex values
   - Reduced quick swatch palette for both stroke and fill to keep the inspector calmer
-  - Section-level custom ColorPicker that opens above the inline color controls instead of pushing them deeper into the stack
+  - Section-level custom ColorPicker opens in a floating portal anchored to the trigger, so it does not inherit the inspector width
+  - Fill color opens the same ColorPicker with embedded solid/linear/rounded gradient controls, so stop editing stays in one place
 - **Effects Section**: 
   - Multiple shadows with individual controls (X offset, Y offset, Blur, Color, Opacity)
-  - Shadow ColorPicker opens before the shadow inputs and opacity slider so the picker is not buried inside the slider block
+  - Shadow ColorPicker uses the same floating portal so the picker layout stays stable even when the inspector is narrow
   - Add/remove shadow buttons
   - Empty state prompt when no shadows exist
 
@@ -376,7 +396,7 @@ interface ZoomControlsProps {
 
 **Theming**:
 - Uses local CSS variables in the component stylesheet for the inspector palette
-- Automatic dark mode detection via `prefers-color-scheme`
+- Dark mode is temporarily disabled so the inspector and picker always use the light palette
 - Shares scroll container behavior with the app shell via `App.css`
 - On narrow screens the floating desktop panel collapses toward a bottom-sheet overlay
 
@@ -409,11 +429,14 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 **Success Criteria**:
 - [ ] All style controls work and apply immediately
 - [ ] Changes apply immediately to selected shapes
+- [ ] Stroke width picker can switch between the three comparison layouts without losing functionality
 - [ ] Layout X/Y/W/H reflects the current selected frame bounds
 - [ ] Text-specific controls hidden for non-text shapes
 - [ ] Panel animates in/out smoothly
 - [ ] Sections can be collapsed/expanded independently
 - [ ] ColorPicker integration works for all color inputs
+- [ ] ColorPicker width stays stable regardless of inspector/sidebar width
+- [ ] Fill ColorPicker updates solid, linear, and rounded backgrounds immediately
 - [ ] Blend mode selector shows all 16 options
 - [ ] Multiple shadows can be added and configured
 - [ ] Shadow X/Y inputs work from negative to positive offsets
@@ -508,6 +531,7 @@ interface WorkspaceTabsProps {
 - Hover tooltip showing full name (after 3s)
 - Circular progress indicator during long-press
 - Pill-style active state with accent gradient to mirror the inspector color controls
+- Stable tab shell with an always-visible close affordance instead of hover-only chrome
 
 **Props**:
 ```typescript

@@ -7,6 +7,7 @@ This directory contains custom React hooks for reusable stateful logic.
 Hooks encapsulate complex logic that can be reused across components:
 - **useCanvas**: Canvas state management with history
 - **useKeyboard**: Global keyboard shortcuts
+- **useElementSize**: Shared element resize tracking for canvas-driven layout updates
 
 ## Hook Files
 
@@ -14,6 +15,7 @@ Hooks encapsulate complex logic that can be reused across components:
 |------|------|---------|-------|------------|
 | useCanvas | `useCanvas.ts` | Canvas state, history, shapes | 508 | High |
 | useKeyboard | `useKeyboard.ts` | Global keyboard shortcuts | 170 | Medium |
+| useElementSize | `useElementSize.ts` | Observe DOM element width/height changes | ~60 | Low |
 
 ## Detailed Hook Documentation
 
@@ -233,6 +235,44 @@ interface KeyboardShortcut {
 
 function useKeyboard(actions: KeyboardActions): void
 ```
+
+---
+
+### useElementSize
+
+**Purpose**: Observe a DOM element and return its current rendered width and height so components can react to layout-driven size changes.
+
+**Interface**:
+```typescript
+interface ElementSize {
+  width: number;
+  height: number;
+}
+
+function useElementSize<T extends Element>(
+  elementRef: React.RefObject<T | null>
+): ElementSize
+```
+
+**Behavior**:
+- Reads the current element size from `getBoundingClientRect()`
+- Uses `ResizeObserver` when available so panel toggles and app-shell resizes update immediately
+- Falls back to `window.resize` in environments without `ResizeObserver`
+- Avoids unnecessary state updates when the size has not changed
+
+**Success Criteria**:
+- [ ] Returns the initial rendered size after mount
+- [ ] Updates when the observed element changes size without a full window resize
+- [ ] Falls back cleanly when `ResizeObserver` is unavailable
+
+**Constraints**:
+- Returns `{ width: 0, height: 0 }` until the element is mounted
+- Measures layout size, not canvas backing-store pixels
+- Intended for stable refs to mounted DOM elements
+
+**Dependencies**:
+- Native `ResizeObserver` when available
+- `window.resize` as a compatibility fallback
 
 **Shortcuts**:
 

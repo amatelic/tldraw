@@ -6,6 +6,9 @@ This directory contains test configuration and setup files.
 
 Testing is done with Vitest + React Testing Library. Tests are co-located with source files, but this directory contains shared configuration.
 
+Browser E2E coverage is handled separately with Playwright using `playwright.config.ts` and specs in the repo-level `e2e/` directory.
+The Playwright setup prefers a locally installed `Google Chrome.app` on macOS to avoid Gatekeeper issues with older Homebrew Chromium installs. You can override the browser path with `PLAYWRIGHT_CHROME_PATH`.
+
 ## Files
 
 | File | Purpose | Lines |
@@ -227,6 +230,9 @@ vi.mock('./Tooltip', () => ({
 # Run all tests once
 npm test
 
+# Run browser E2E tests
+npm run test:e2e
+
 # Run tests in watch mode
 npm run test:watch
 
@@ -258,6 +264,7 @@ npm run test:coverage
 
 1. **Test Behavior, Not Implementation**: Test what component does, not how
 2. **Test Edge Cases**: Empty arrays, null values, boundaries
+3. **Use E2E for persistence/runtime regressions**: When a bug depends on browser storage, hydration, or full-app wiring, prefer a focused Playwright regression
 3. **Test User Interactions**: Click, type, hover as user would
 4. **Mock External Dependencies**: Don't test browser APIs or libraries
 5. **Keep Tests Fast**: Avoid real timers, network requests

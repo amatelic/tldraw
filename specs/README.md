@@ -14,11 +14,12 @@ Specs serve as:
 
 | File | Purpose | Lines | Status |
 |------|---------|-------|--------|
-| `SPECS.md` | Main task list (16 tasks) | ~600 | Active |
+| `SPECS.md` | Main task list (23 tasks) | ~800 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
 | `toolbar-refactor-SPEC.md` | Toolbar redesign spec | ~350 | Completed |
 | `AGENT_WORKFLOWS_SPEC.md` | AI agent integration | ~400 | Planning |
+| `AGENT_DIAGRAM_PRESENTATION_SPEC.md` | Work-diagram generation and presentation brief agent | ~250 | Planning |
 
 ## Active Tasks (from SPECS.md)
 
@@ -38,7 +39,8 @@ Specs serve as:
 9. **Fix ESLint Disable** - Fix `useCanvas` hook deps
 10. **Add Error Boundaries** - Error handling
 11. **Input Validation** - Workspace name validation
-12-16. **Agent Workflow Tasks** - AI integration features
+12-16. **Agent Workflow Tasks** - AI integration foundations
+18-23. **Diagram Generator Agent Tasks** - Work diagram creation and presentation guidance
 
 ## Task Status Legend
 
@@ -147,6 +149,15 @@ Planning document for AI agent integration:
 - Code generation
 - Review assistance
 - Documentation generation
+
+**Status**: Planning phase
+
+### AGENT_DIAGRAM_PRESENTATION_SPEC.md
+Focused planning document for prompt-to-diagram generation:
+- simple diagrams for work
+- OpenCode-backed server transport
+- structured presentation brief output
+- example flows for architecture and storyboard generation
 
 **Status**: Planning phase
 

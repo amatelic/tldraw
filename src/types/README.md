@@ -71,11 +71,24 @@ interface Bounds {
 
 Axis-aligned bounding box.
 
+#### FillGradient
+```typescript
+interface FillGradient {
+  type: 'linear' | 'radial';
+  startColor: string;
+  endColor: string;
+  angle: number;
+}
+```
+
+Optional fill background definition for shapes that need linear or rounded gradients.
+
 #### ShapeStyle
 ```typescript
 interface ShapeStyle {
   color: string;              // Stroke color (hex)
   fillColor: string;          // Fill color (hex)
+  fillGradient?: FillGradient | null;
   strokeWidth: number;        // Line width (1, 2, 4, 8, 12)
   strokeStyle: 'solid' | 'dashed' | 'dotted';
   fillStyle: 'none' | 'solid' | 'pattern';
@@ -91,6 +104,11 @@ interface ShapeStyle {
 ```
 
 Visual styling applied to shapes. Text-specific properties only apply to text shapes.
+
+**Gradient Fills**:
+- `fillGradient: null` means the fill uses `fillColor`
+- `fillGradient.type === 'linear'` uses `angle` plus `startColor`/`endColor`
+- `fillGradient.type === 'radial'` uses a rounded center-out gradient and ignores `angle` during rendering
 
 #### ShadowStyle
 ```typescript
@@ -384,6 +402,7 @@ Combined state for history management.
 const DEFAULT_STYLE: ShapeStyle = {
   color: '#000000',
   fillColor: '#000000',
+  fillGradient: null,
   strokeWidth: 2,
   strokeStyle: 'solid',
   fillStyle: 'none',
@@ -403,20 +422,16 @@ Default styling for new shapes.
 ```typescript
 const COLORS = [
   '#000000',  // Black
-  '#1e1e1e',  // Dark gray
   '#dc2626',  // Red
-  '#ea580c',  // Orange
-  '#ca8a04',  // Yellow
+  '#d97706',  // Amber
   '#16a34a',  // Green
-  '#0891b2',  // Cyan
   '#2563eb',  // Blue
-  '#9333ea',  // Purple
-  '#db2777',  // Pink
+  '#7c3aed',  // Purple
   '#9ca3af',  // Gray
 ] as const;
 ```
 
-11 preset colors for color picker.
+7 preset colors for the quick color picker.
 
 #### STROKE_WIDTHS
 ```typescript

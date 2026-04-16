@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import type { Workspace } from '../stores/workspaceStore';
 
 interface WorkspaceTabProps {
@@ -16,30 +16,33 @@ const TRUNCATE_LENGTH = 15;
 
 const smoothSpring = {
   type: 'spring' as const,
-  stiffness: 300,
-  damping: 30,
-  mass: 1,
+  stiffness: 360,
+  damping: 28,
+  mass: 0.85,
 };
 
 const tabVariants = {
   initial: {
     opacity: 0,
-    scale: 0.8,
-    x: -20,
+    scale: 0.94,
+    y: 10,
   },
   animate: {
     opacity: 1,
     scale: 1,
-    x: 0,
-    transition: smoothSpring,
+    y: 0,
+    transition: {
+      duration: 0.3,
+      ease: [0.16, 1, 0.3, 1] as const,
+    },
   },
   exit: {
     opacity: 0,
-    scale: 0.8,
-    x: 20,
+    scale: 0.96,
+    y: 8,
     transition: {
-      duration: 0.2,
-      ease: [0.4, 0, 0.2, 1] as const,
+      duration: 0.18,
+      ease: [0.4, 0, 1, 1] as const,
     },
   },
 };
@@ -61,6 +64,7 @@ export function WorkspaceTab({
   onClose,
   onRename,
 }: WorkspaceTabProps) {
+  const shouldReduceMotion = useReducedMotion();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(workspace.name);
   const [showMenu, setShowMenu] = useState(false);
@@ -205,14 +209,45 @@ export function WorkspaceTab({
 
   return (
     <motion.div
-      variants={tabVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
+      variants={shouldReduceMotion ? undefined : tabVariants}
+      initial={shouldReduceMotion ? false : 'initial'}
+      animate={shouldReduceMotion ? undefined : 'animate'}
+      exit={shouldReduceMotion ? undefined : 'exit'}
       layout
-      className={`workspace-tab ${isActive ? 'active' : ''}`}
+      className={`workspace-tab ${isActive ? 'active' : ''} ${canDelete ? 'workspace-tab-closable' : ''}`}
       layoutId={workspace.id}
+      transition={
+        shouldReduceMotion
+          ? { duration: 0 }
+          : {
+              ...smoothSpring,
+              layout: {
+                type: 'spring',
+                stiffness: 360,
+                damping: 30,
+                mass: 0.9,
+              },
+            }
+      }
+      whileTap={shouldReduceMotion ? undefined : { scale: 0.985 }}
     >
+      {isActive && !isEditing && (
+        <motion.span
+          className="workspace-tab-active-pill"
+          layoutId={shouldReduceMotion ? undefined : 'workspace-active-pill'}
+          transition={
+            shouldReduceMotion
+              ? { duration: 0 }
+              : {
+                  type: 'spring',
+                  stiffness: 380,
+                  damping: 30,
+                  mass: 0.86,
+                }
+          }
+        />
+      )}
+
       {isEditing ? (
         <input
           ref={inputRef}

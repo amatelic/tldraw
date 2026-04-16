@@ -43,9 +43,17 @@ export interface Bounds {
   height: number;
 }
 
+export interface FillGradient {
+  type: 'linear' | 'radial';
+  startColor: string;
+  endColor: string;
+  angle: number;
+}
+
 export interface ShapeStyle {
   color: string;
   fillColor: string;
+  fillGradient?: FillGradient | null;
   strokeWidth: number;
   strokeStyle: 'solid' | 'dashed' | 'dotted';
   fillStyle: 'none' | 'solid' | 'pattern';
@@ -184,6 +192,7 @@ export interface CanvasState {
 export const DEFAULT_STYLE: ShapeStyle = {
   color: '#000000',
   fillColor: '#000000',
+  fillGradient: null,
   strokeWidth: 2,
   strokeStyle: 'solid',
   fillStyle: 'none',
@@ -200,15 +209,11 @@ export const DEFAULT_STYLE: ShapeStyle = {
 
 export const COLORS = [
   '#000000',
-  '#1e1e1e',
   '#dc2626',
-  '#ea580c',
-  '#ca8a04',
+  '#d97706',
   '#16a34a',
-  '#0891b2',
   '#2563eb',
-  '#9333ea',
-  '#db2777',
+  '#7c3aed',
   '#9ca3af',
 ] as const;
 

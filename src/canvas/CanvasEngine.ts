@@ -12,12 +12,16 @@ import type {
   CameraState,
   ShapeStyle,
   TextShape,
+  FillGradient,
 } from '../types';
 
 export class CanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private dpr: number;
+  private static readonly ARROW_HEAD_MIN_LENGTH = 14;
+  private static readonly ARROW_HEAD_MAX_LENGTH = 24;
+  private static readonly ARROW_HEAD_ANGLE = Math.PI / 5;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -32,8 +36,10 @@ export class CanvasEngine {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
+    this.dpr = window.devicePixelRatio || 1;
     this.canvas.width = rect.width * this.dpr;
     this.canvas.height = rect.height * this.dpr;
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(this.dpr, this.dpr);
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
@@ -85,12 +91,46 @@ export class CanvasEngine {
     }
   }
 
-  private setFillStyle(style: ShapeStyle) {
+  private createFillGradient(bounds: Bounds, fillGradient: FillGradient): CanvasGradient {
+    const centerX = bounds.x + bounds.width / 2;
+    const centerY = bounds.y + bounds.height / 2;
+
+    if (fillGradient.type === 'radial') {
+      const radius = Math.max(bounds.width, bounds.height) / 2;
+      const gradient = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+      gradient.addColorStop(0, fillGradient.startColor);
+      gradient.addColorStop(1, fillGradient.endColor);
+      return gradient;
+    }
+
+    const angleInRadians = (fillGradient.angle * Math.PI) / 180;
+    const halfDiagonal = Math.sqrt(bounds.width ** 2 + bounds.height ** 2) / 2;
+    const deltaX = Math.cos(angleInRadians) * halfDiagonal;
+    const deltaY = Math.sin(angleInRadians) * halfDiagonal;
+    const gradient = this.ctx.createLinearGradient(
+      centerX - deltaX,
+      centerY - deltaY,
+      centerX + deltaX,
+      centerY + deltaY
+    );
+
+    gradient.addColorStop(0, fillGradient.startColor);
+    gradient.addColorStop(1, fillGradient.endColor);
+    return gradient;
+  }
+
+  private setFillStyle(style: ShapeStyle, bounds: Bounds) {
     if (style.fillStyle === 'none') {
       this.ctx.fillStyle = 'transparent';
       return;
     }
-    this.ctx.fillStyle = style.fillColor;
+
+    if (style.fillGradient) {
+      this.ctx.fillStyle = this.createFillGradient(bounds, style.fillGradient);
+    } else {
+      this.ctx.fillStyle = style.fillColor;
+    }
+
     this.ctx.globalAlpha = style.opacity * 0.3;
   }
 
@@ -314,7 +354,7 @@ export class CanvasEngine {
     this.ctx.rect(x, y, width, height);
 
     if (shape.style.fillStyle !== 'none') {
-      this.setFillStyle(shape.style);
+      this.setFillStyle(shape.style, shape.bounds);
       this.ctx.fill();
     }
 
@@ -326,7 +366,7 @@ export class CanvasEngine {
     this.ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, Math.PI * 2);
 
     if (shape.style.fillStyle !== 'none') {
-      this.setFillStyle(shape.style);
+      this.setFillStyle(shape.style, shape.bounds);
       this.ctx.fill();
     }
 
@@ -353,23 +393,29 @@ export class CanvasEngine {
 
   private drawArrowhead(shape: ArrowShape): void {
     const { start, end } = shape;
-    const arrowLength = 10;
-    const arrowAngle = Math.PI / 6;
+    const lineLength = Math.hypot(end.x - start.x, end.y - start.y);
+    const arrowLength = Math.min(
+      CanvasEngine.ARROW_HEAD_MAX_LENGTH,
+      Math.max(CanvasEngine.ARROW_HEAD_MIN_LENGTH, shape.style.strokeWidth * 5)
+    );
+    const cappedArrowLength = Math.min(arrowLength, Math.max(lineLength * 0.6, 8));
+    const arrowAngle = CanvasEngine.ARROW_HEAD_ANGLE;
     
     // Calculate arrowhead angle
     const angle = Math.atan2(end.y - start.y, end.x - start.x);
     
-    // Draw arrowhead
+    // Keep the arrowhead readable even when the shaft is dashed or dotted.
+    this.ctx.setLineDash([]);
     this.ctx.beginPath();
     this.ctx.moveTo(end.x, end.y);
     this.ctx.lineTo(
-      end.x - arrowLength * Math.cos(angle - arrowAngle),
-      end.y - arrowLength * Math.sin(angle - arrowAngle)
+      end.x - cappedArrowLength * Math.cos(angle - arrowAngle),
+      end.y - cappedArrowLength * Math.sin(angle - arrowAngle)
     );
     this.ctx.moveTo(end.x, end.y);
     this.ctx.lineTo(
-      end.x - arrowLength * Math.cos(angle + arrowAngle),
-      end.y - arrowLength * Math.sin(angle + arrowAngle)
+      end.x - cappedArrowLength * Math.cos(angle + arrowAngle),
+      end.y - cappedArrowLength * Math.sin(angle + arrowAngle)
     );
     this.ctx.stroke();
   }

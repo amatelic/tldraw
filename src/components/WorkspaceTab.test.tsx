@@ -50,8 +50,9 @@ describe('WorkspaceTab', () => {
 
   it('should render workspace name in full when ≤15 characters', () => {
     const shortName = 'Short Name';
-    render(
+    const { container } = render(
       <WorkspaceTab
+        tabButtonId="workspace-tab-test"
         workspace={{ ...mockWorkspace, name: shortName }}
         isActive={false}
         canDelete={true}
@@ -62,6 +63,7 @@ describe('WorkspaceTab', () => {
     );
 
     expect(screen.getByText(shortName)).toBeInTheDocument();
+    expect(container.querySelector('.workspace-tab')).toHaveClass('workspace-tab-closable');
   });
 
   it('should truncate workspace name when >15 characters', () => {

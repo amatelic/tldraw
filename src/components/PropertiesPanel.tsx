@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import type { BlendMode, Bounds, ShapeStyle, ShadowStyle } from '../types';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import type { BlendMode, Bounds, FillGradient, ShapeStyle, ShadowStyle } from '../types';
 import { COLORS, STROKE_WIDTHS, FONT_SIZES, FONT_FAMILIES, DEFAULT_STYLE } from '../types';
 import { ColorPicker } from './ColorPicker';
 import './PropertiesPanel.css';
@@ -99,6 +100,27 @@ function formatMeasurement(value: number | undefined): string {
   return `${Math.round(value)}`;
 }
 
+const FLOATING_PICKER_WIDTH = 430;
+const FLOATING_PICKER_GAP = 18;
+const FLOATING_PICKER_MARGIN = 16;
+type StrokeWidthPickerVariant = 'visual' | 'slider' | 'compact';
+type ColorPickerTarget = 'stroke' | 'fill';
+
+function getGradientPreview(fillGradient: FillGradient): string {
+  return fillGradient.type === 'linear'
+    ? `linear-gradient(${fillGradient.angle}deg, ${fillGradient.startColor}, ${fillGradient.endColor})`
+    : `radial-gradient(circle at center, ${fillGradient.startColor}, ${fillGradient.endColor})`;
+}
+
+const STROKE_WIDTH_VARIANTS: Array<{
+  value: StrokeWidthPickerVariant;
+  label: string;
+}> = [
+  { value: 'visual', label: 'Visual' },
+  { value: 'slider', label: 'Slider' },
+  { value: 'compact', label: 'Compact' },
+];
+
 export function PropertiesPanel({
   style,
   onChange,
@@ -123,13 +145,145 @@ export function PropertiesPanel({
     type: Boolean(hasTextSelection),
   });
 
-  const [activeColorPicker, setActiveColorPicker] = useState<'stroke' | 'fill' | null>(null);
+  const [activeColorPicker, setActiveColorPicker] = useState<ColorPickerTarget | null>(null);
   const [activeShadowColorPicker, setActiveShadowColorPicker] = useState<number | null>(null);
+  const [floatingPickerStyle, setFloatingPickerStyle] = useState<{ top: number; left: number } | null>(
+    null
+  );
+  const [strokeWidthPickerVariant, setStrokeWidthPickerVariant] =
+    useState<StrokeWidthPickerVariant>('visual');
+  const colorTriggerRefs = useRef<Record<ColorPickerTarget, HTMLButtonElement | null>>({
+    stroke: null,
+    fill: null,
+  });
+  const shadowTriggerRefs = useRef<Record<number, HTMLButtonElement | null>>({});
   const resolvedStyle: ShapeStyle = {
     ...DEFAULT_STYLE,
     ...style,
+    fillGradient: style.fillGradient ?? DEFAULT_STYLE.fillGradient,
     shadows: style.shadows ?? DEFAULT_STYLE.shadows,
   };
+
+  const activeFloatingPicker = useMemo(
+    () =>
+      activeColorPicker !== null
+        ? { type: 'color' as const, key: activeColorPicker }
+        : activeShadowColorPicker !== null
+          ? { type: 'shadow' as const, key: activeShadowColorPicker }
+          : null,
+    [activeColorPicker, activeShadowColorPicker]
+  );
+  const selectedStrokeWidthIndex = Math.max(
+    0,
+    STROKE_WIDTHS.findIndex((width) => width === resolvedStyle.strokeWidth)
+  );
+
+  const updateStrokeWidthFromIndex = useCallback(
+    (index: number) => {
+      const width = STROKE_WIDTHS[Math.max(0, Math.min(STROKE_WIDTHS.length - 1, index))];
+      onChange({ strokeWidth: width });
+    },
+    [onChange]
+  );
+
+  const getAnchorElement = useCallback((): HTMLButtonElement | null => {
+    if (!activeFloatingPicker) {
+      return null;
+    }
+
+    if (activeFloatingPicker.type === 'color') {
+      return colorTriggerRefs.current[activeFloatingPicker.key];
+    }
+
+    return shadowTriggerRefs.current[activeFloatingPicker.key] ?? null;
+  }, [activeFloatingPicker]);
+
+  const updateFloatingPickerPosition = useCallback(() => {
+    const anchorElement = getAnchorElement();
+    if (!anchorElement) {
+      setFloatingPickerStyle(null);
+      return;
+    }
+
+    const rect = anchorElement.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const preferredLeft = rect.left - FLOATING_PICKER_WIDTH - FLOATING_PICKER_GAP;
+    const fallbackLeft = rect.right + FLOATING_PICKER_GAP;
+    const left =
+      preferredLeft >= FLOATING_PICKER_MARGIN
+        ? preferredLeft
+        : fallbackLeft + FLOATING_PICKER_WIDTH <= viewportWidth - FLOATING_PICKER_MARGIN
+          ? fallbackLeft
+          : Math.max(
+              FLOATING_PICKER_MARGIN,
+              Math.min(
+                rect.left + rect.width / 2 - FLOATING_PICKER_WIDTH / 2,
+                viewportWidth - FLOATING_PICKER_WIDTH - FLOATING_PICKER_MARGIN
+              )
+            );
+    const estimatedHeight = 520;
+    const top = Math.max(
+      FLOATING_PICKER_MARGIN,
+      Math.min(
+        rect.top + rect.height / 2 - estimatedHeight / 2,
+        viewportHeight - estimatedHeight - FLOATING_PICKER_MARGIN
+      )
+    );
+
+    setFloatingPickerStyle({ top, left });
+  }, [getAnchorElement]);
+
+  useEffect(() => {
+    if (!activeFloatingPicker) return;
+
+    const handleViewportChange = () => {
+      updateFloatingPickerPosition();
+    };
+
+    const animationFrameId = requestAnimationFrame(updateFloatingPickerPosition);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [activeFloatingPicker, updateFloatingPickerPosition]);
+
+  useEffect(() => {
+    if (!activeFloatingPicker) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      const anchorElement = getAnchorElement();
+      if (anchorElement?.contains(target)) return;
+
+      const pickerLayer = document.querySelector('.floating-color-picker-layer');
+      if (pickerLayer?.contains(target)) return;
+
+      setActiveColorPicker(null);
+      setActiveShadowColorPicker(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveColorPicker(null);
+        setActiveShadowColorPicker(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeFloatingPicker, getAnchorElement]);
 
   const toggleSection = useCallback((section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({
@@ -144,14 +298,12 @@ export function PropertiesPanel({
     },
     [onChange]
   );
-
-
-   const handleFillColorChange = useCallback(
-     (color: string) => {
-       onChange({ fillColor: color, fillStyle: 'solid' });
-     },
-     [onChange]
-   );
+  const handleFillColorChange = useCallback(
+    (color: string) => {
+      onChange({ fillColor: color, fillStyle: 'solid', fillGradient: null });
+    },
+    [onChange]
+  );
  
    const handleAddShadow = useCallback(() => {
      const newShadow: ShadowStyle = {
@@ -195,18 +347,22 @@ export function PropertiesPanel({
 
   const renderColorGroup = useCallback(
      ({
-       label,
-       picker,
-       selectedColor,
-       isNone,
-       onSelect,
-       onTogglePicker,
-       onSelectNone,
+      label,
+      picker,
+      selectedColor,
+      isNone,
+      note,
+      previewStyle,
+      onSelect,
+      onTogglePicker,
+      onSelectNone,
      }: {
        label: 'Stroke' | 'Fill';
-       picker: 'stroke' | 'fill';
+       picker: ColorPickerTarget;
        selectedColor: string;
        isNone?: boolean;
+       note?: string;
+       previewStyle?: CSSProperties;
        onSelect: (color: string) => void;
        onTogglePicker: () => void;
        onSelectNone?: () => void;
@@ -216,7 +372,7 @@ export function PropertiesPanel({
            <div className="color-control-copy">
              <span className="property-label">{label}</span>
              <span className="color-value-note">
-               {isNone ? 'No fill' : `#${formatHex(selectedColor)}`}
+               {isNone ? 'No fill' : note ?? `#${formatHex(selectedColor)}`}
              </span>
            </div>
            <div className="color-control-actions">
@@ -231,9 +387,12 @@ export function PropertiesPanel({
              )}
              <button
                className={`color-preview-button ${activeColorPicker === picker ? 'active' : ''}`}
-               style={{ backgroundColor: isNone ? '#f1eef7' : selectedColor }}
+               style={previewStyle ?? { backgroundColor: isNone ? '#f1eef7' : selectedColor }}
                onClick={onTogglePicker}
                title={`Edit ${label.toLowerCase()} color`}
+               ref={(element) => {
+                 colorTriggerRefs.current[picker] = element;
+               }}
              >
                {isNone && <span className="color-preview-slash">/</span>}
              </button>
@@ -262,9 +421,25 @@ export function PropertiesPanel({
            </button>
          </div>
        </div>
-     ),
-     [activeColorPicker]
-   );
+   ),
+   [activeColorPicker]
+  );
+
+  const fillPreviewStyle: CSSProperties =
+    resolvedStyle.fillStyle === 'none'
+      ? { backgroundColor: '#f1eef7' }
+      : resolvedStyle.fillGradient
+        ? { background: getGradientPreview(resolvedStyle.fillGradient) }
+        : { backgroundColor: resolvedStyle.fillColor };
+
+  const fillNote =
+    resolvedStyle.fillStyle === 'none'
+      ? 'No fill'
+      : resolvedStyle.fillGradient
+        ? resolvedStyle.fillGradient.type === 'linear'
+          ? 'Linear gradient'
+          : 'Rounded gradient'
+        : `#${formatHex(resolvedStyle.fillColor)}`;
 
   const activeColorPickerConfig =
     activeColorPicker === 'stroke'
@@ -276,10 +451,86 @@ export function PropertiesPanel({
         ? {
             color: resolvedStyle.fillColor,
             onChange: handleFillColorChange,
+            allowGradient: true,
+            gradientValue: resolvedStyle.fillGradient ?? null,
+            onGradientChange: (gradient: FillGradient | null) =>
+              onChange({
+                fillStyle: 'solid',
+                fillColor: gradient?.startColor ?? resolvedStyle.fillColor,
+                fillGradient: gradient,
+              }),
           }
         : null;
+  const activeShadowPickerConfig =
+    activeShadowColorPicker !== null ? resolvedStyle.shadows[activeShadowColorPicker] : null;
+
+  const floatingColorPicker = activeColorPickerConfig
+    ? createPortal(
+        <div
+          className="floating-color-picker-layer"
+          style={
+            floatingPickerStyle
+              ? {
+                  top: `${floatingPickerStyle.top}px`,
+                  left: `${floatingPickerStyle.left}px`,
+                  width: `${FLOATING_PICKER_WIDTH}px`,
+                }
+              : undefined
+          }
+        >
+          <ColorPicker
+            color={activeColorPickerConfig.color}
+            alpha={1}
+            onChange={activeColorPickerConfig.onChange}
+            onClose={() => setActiveColorPicker(null)}
+            showAlpha={false}
+            allowGradient={'allowGradient' in activeColorPickerConfig && activeColorPickerConfig.allowGradient}
+            gradientValue={
+              'gradientValue' in activeColorPickerConfig
+                ? activeColorPickerConfig.gradientValue
+                : null
+            }
+            onGradientChange={
+              'onGradientChange' in activeColorPickerConfig
+                ? activeColorPickerConfig.onGradientChange
+                : undefined
+            }
+          />
+        </div>,
+        document.body
+      )
+    : activeShadowPickerConfig
+      ? createPortal(
+          <div
+            className="floating-color-picker-layer"
+            style={
+              floatingPickerStyle
+                ? {
+                    top: `${floatingPickerStyle.top}px`,
+                    left: `${floatingPickerStyle.left}px`,
+                    width: `${FLOATING_PICKER_WIDTH}px`,
+                  }
+                : undefined
+            }
+          >
+            <ColorPicker
+              color={activeShadowPickerConfig.color}
+              alpha={activeShadowPickerConfig.opacity}
+              onChange={(color, alpha) => {
+                if (activeShadowColorPicker === null) return;
+                handleShadowColorChange(activeShadowColorPicker, color);
+                handleUpdateShadow(activeShadowColorPicker, { opacity: alpha });
+              }}
+              onClose={() => setActiveShadowColorPicker(null)}
+              showAlpha={true}
+            />
+          </div>,
+          document.body
+        )
+      : null;
  
    return (
+    <>
     <div className="properties-panel">
       <div className="panel-header">
         <div>
@@ -472,18 +723,96 @@ export function PropertiesPanel({
               <span className="property-label">Stroke Weight</span>
               <span className="property-inline-value">{resolvedStyle.strokeWidth}px</span>
             </div>
-            <div className="stroke-width-options">
-              {STROKE_WIDTHS.map((width) => (
-                <button
-                  key={width}
-                  className={`stroke-width-button ${resolvedStyle.strokeWidth === width ? 'active' : ''}`}
-                  onClick={() => onChange({ strokeWidth: width })}
-                  title={`${width}px`}
-                >
-                  <div className="stroke-width-line" style={{ height: width }} />
-                  <span>{width}</span>
-                </button>
-              ))}
+            <div className="stroke-width-picker">
+              <div className="stroke-width-variant-toggle" role="tablist" aria-label="Stroke width picker style">
+                {STROKE_WIDTH_VARIANTS.map((variant) => (
+                  <button
+                    key={variant.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={strokeWidthPickerVariant === variant.value}
+                    className={`stroke-width-variant-button ${strokeWidthPickerVariant === variant.value ? 'active' : ''}`}
+                    onClick={() => setStrokeWidthPickerVariant(variant.value)}
+                  >
+                    {variant.label}
+                  </button>
+                ))}
+              </div>
+
+              {strokeWidthPickerVariant === 'visual' && (
+                <div className="stroke-width-rail" role="radiogroup" aria-label="Stroke width">
+                  {STROKE_WIDTHS.map((width) => (
+                    <button
+                      key={width}
+                      type="button"
+                      role="radio"
+                      aria-checked={resolvedStyle.strokeWidth === width}
+                      className={`stroke-width-rail-option ${resolvedStyle.strokeWidth === width ? 'active' : ''}`}
+                      onClick={() => onChange({ strokeWidth: width })}
+                      title={`${width}px`}
+                    >
+                      <div className="stroke-width-rail-preview">
+                        <div className="stroke-width-line" style={{ height: width }} />
+                      </div>
+                      <span>{width}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {strokeWidthPickerVariant === 'slider' && (
+                <div className="stroke-width-slider-card">
+                  <div className="stroke-width-slider-preview">
+                    <span className="stroke-width-slider-label">Live preview</span>
+                    <div
+                      className="stroke-width-slider-preview-line"
+                      style={{ height: resolvedStyle.strokeWidth }}
+                    />
+                  </div>
+                  <input
+                    className="stroke-width-slider"
+                    type="range"
+                    min="0"
+                    max={String(STROKE_WIDTHS.length - 1)}
+                    step="1"
+                    value={selectedStrokeWidthIndex}
+                    aria-label="Stroke width slider"
+                    onChange={(event) => updateStrokeWidthFromIndex(Number(event.target.value))}
+                  />
+                  <div className="stroke-width-slider-stops">
+                    {STROKE_WIDTHS.map((width, index) => (
+                      <button
+                        key={width}
+                        type="button"
+                        className={`stroke-width-slider-stop ${resolvedStyle.strokeWidth === width ? 'active' : ''}`}
+                        onClick={() => updateStrokeWidthFromIndex(index)}
+                      >
+                        {width}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {strokeWidthPickerVariant === 'compact' && (
+                <div className="stroke-width-chip-row" role="radiogroup" aria-label="Stroke width compact">
+                  {STROKE_WIDTHS.map((width) => (
+                    <button
+                      key={width}
+                      type="button"
+                      role="radio"
+                      aria-checked={resolvedStyle.strokeWidth === width}
+                      className={`stroke-width-chip ${resolvedStyle.strokeWidth === width ? 'active' : ''}`}
+                      onClick={() => onChange({ strokeWidth: width })}
+                    >
+                      <div className="stroke-width-chip-preview">
+                        <div className="stroke-width-line" style={{ height: width }} />
+                      </div>
+                      <span>{width}px</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -683,18 +1012,6 @@ export function PropertiesPanel({
         onToggle={() => toggleSection('color')}
       >
         <div className="property-stack">
-          {activeColorPickerConfig && (
-            <div className="color-picker-container color-section-picker">
-              <ColorPicker
-                color={activeColorPickerConfig.color}
-                alpha={1}
-                onChange={activeColorPickerConfig.onChange}
-                onClose={() => setActiveColorPicker(null)}
-                showAlpha={false}
-              />
-            </div>
-          )}
-
           {renderColorGroup({
             label: 'Stroke',
             picker: 'stroke',
@@ -709,7 +1026,9 @@ export function PropertiesPanel({
             picker: 'fill',
             selectedColor: resolvedStyle.fillColor,
             isNone: resolvedStyle.fillStyle === 'none',
-            onSelect: (color) => onChange({ fillColor: color, fillStyle: 'solid' }),
+            note: fillNote,
+            previewStyle: fillPreviewStyle,
+            onSelect: (color) => onChange({ fillColor: color, fillStyle: 'solid', fillGradient: null }),
             onTogglePicker: () =>
               setActiveColorPicker(activeColorPicker === 'fill' ? null : 'fill'),
             onSelectNone: () => onChange({ fillStyle: 'none' }),
@@ -745,6 +1064,9 @@ export function PropertiesPanel({
                     <button
                       className="shadow-color-button"
                       style={{ backgroundColor: shadow.color }}
+                      ref={(element) => {
+                        shadowTriggerRefs.current[index] = element;
+                      }}
                       onClick={() =>
                         setActiveShadowColorPicker(
                           activeShadowColorPicker === index ? null : index
@@ -763,21 +1085,6 @@ export function PropertiesPanel({
                     </button>
                   </div>
                 </div>
-
-                {activeShadowColorPicker === index && (
-                  <div className="shadow-color-picker-container">
-                    <ColorPicker
-                      color={shadow.color}
-                      alpha={shadow.opacity}
-                      onChange={(color, alpha) => {
-                        handleShadowColorChange(index, color);
-                        handleUpdateShadow(index, { opacity: alpha });
-                      }}
-                      onClose={() => setActiveShadowColorPicker(null)}
-                      showAlpha={true}
-                    />
-                  </div>
-                )}
 
                 <div className="shadow-grid">
                   <div className="shadow-input-group">
@@ -857,5 +1164,7 @@ export function PropertiesPanel({
         </div>
       </CollapsibleSection>
     </div>
+    {floatingColorPicker}
+    </>
   );
 }

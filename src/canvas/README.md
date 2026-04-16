@@ -46,7 +46,7 @@ private imageCache: Map<string, HTMLImageElement>;
 
 | Method | Purpose |
 |--------|---------|
-| `resize()` | Updates canvas size for DPR |
+| `resize()` | Updates canvas size for DPR and resets the context transform before re-scaling |
 | `clear()` | Clears entire canvas |
 | `applyCamera(camera)` | Saves context, applies camera transform |
 | `restoreCamera()` | Restores context |
@@ -62,7 +62,8 @@ private imageCache: Map<string, HTMLImageElement>;
 | Method | Purpose |
 |--------|---------|
 | `setStrokeStyle(style)` | Apply stroke color, width, dash |
-| `setFillStyle(style)` | Apply fill color and opacity |
+| `createFillGradient(bounds, fillGradient)` | Build a linear or radial gradient for fills |
+| `setFillStyle(style, bounds)` | Apply solid or gradient fills with opacity |
 | `hexToRgba(hex, opacity)` | Convert hex color to rgba format |
 | `createShapePath(shape)` | Create shape path without drawing |
 | `createRectanglePath(shape)` | Create rectangle path |
@@ -121,13 +122,25 @@ canvas.height = rect.height * dpr
 canvas.style.width = `${rect.width}px`
 canvas.style.height = `${rect.height}px`
 
-// Context scaling
+// Reset then scale the context so repeated resizes do not compound transforms
+ctx.setTransform(1, 0, 0, 1, 0, 0)
 ctx.scale(dpr, dpr)
 ```
 
 This ensures crisp rendering on Retina/4K displays.
 
+**Resize Integration**:
+- Canvas size changes are driven from the React `useElementSize` hook in the UI layer
+- This allows the drawing surface to refresh when the application layout changes width or height, even if the browser window itself did not resize
+- `resize()` is idempotent and safe to call repeatedly during those layout updates
+
 **Rendering Shapes**:
+
+### Gradient Fill Support
+Rectangle and circle fills can now render optional gradients from `ShapeStyle.fillGradient`:
+- `linear` gradients use the stored `angle` plus `startColor` and `endColor`
+- `radial` gradients create a rounded center-out fill using `startColor` and `endColor`
+- when `fillGradient` is absent, the engine falls back to the legacy solid `fillColor`
 
 ### Blend Mode Support
 All shapes support blend modes through Canvas 2D's `globalCompositeOperation`. The blend mode is applied before drawing and restored after:
@@ -258,7 +271,9 @@ ctx.lineTo(end.x, end.y)
 Line plus arrowhead calculated with trigonometry:
 ```typescript
 const angle = Math.atan2(end.y - start.y, end.x - start.x)
-// Draw two lines at ±30° from end point
+// Draw two lines at a wider ±36° from the end point
+// Arrowhead length scales with stroke width and stays between 14px and 24px
+// The arrowhead itself is always rendered as solid segments for readability
 ```
 
 ### Pencil (Freehand)

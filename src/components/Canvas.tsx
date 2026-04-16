@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import type { Point, Shape } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { createShapeId, getGroupDescendants, getRootGroup } from '../types';
+import { useElementSize } from '../hooks/useElementSize';
 
 interface CanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -76,6 +77,7 @@ export function Canvas({
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [originalText, setOriginalText] = useState<string>('');
+  const canvasSize = useElementSize(canvasRef);
 
   // Update refs when props change
   useEffect(() => {
@@ -143,15 +145,15 @@ export function Canvas({
       engineRef.current = new CanvasEngine(canvasRef.current);
       render();
     }
-
-    const handleResize = () => {
-      engineRef.current?.resize();
-      render();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
   }, [canvasRef, render]);
+
+  useEffect(() => {
+    if (!engineRef.current) return;
+    if (canvasSize.width === 0 || canvasSize.height === 0) return;
+
+    engineRef.current.resize();
+    render();
+  }, [canvasSize.height, canvasSize.width, render]);
 
   // Re-render when shapes change
   useEffect(() => {

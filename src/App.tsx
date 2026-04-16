@@ -13,9 +13,10 @@ import { EmbedDialog } from './components/EmbedDialog';
 import { AgentPanel } from './components/AgentPanel';
 import { AgentOrchestrator } from './agents/agentOrchestrator';
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
+import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
-import type { ToolType, Shape, ShapeStyle } from './types';
-import { createShapeId } from './types';
+import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
+import { createShapeId, getGroupBounds } from './types';
 import './App.css';
 
 const MAX_WORKSPACES = 10;
@@ -25,7 +26,6 @@ function App() {
   const [showAudioDialog, setShowAudioDialog] = useState(false);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
-  const [agentViewport, setAgentViewport] = useState<{ width: number; height: number } | null>(null);
   const [agentOrchestrator] = useState(() => new AgentOrchestrator([new ReviewModeProvider()]));
   const workspaceStore = useWorkspaceStore();
   const hasInitializedWorkspaceRef = useRef(false);
@@ -71,30 +71,42 @@ function App() {
     groupShapes,
     ungroupShapes,
   } = useCanvas(activeWorkspace.id);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const syncViewport = () => {
-      setAgentViewport({
-        width: canvas.clientWidth,
-        height: canvas.clientHeight,
-      });
-    };
-
-    syncViewport();
-
-    const observer = new ResizeObserver(syncViewport);
-    observer.observe(canvas);
-
-    return () => observer.disconnect();
-  }, [canvasRef]);
+  const canvasSize = useElementSize(canvasRef);
+  const agentViewport =
+    canvasSize.width > 0 && canvasSize.height > 0
+      ? { width: canvasSize.width, height: canvasSize.height }
+      : null;
 
   // Check if any selected shape is text
   const hasTextSelection = shapes.some(
     (s) => editorState.selectedShapeIds.includes(s.id) && s.type === 'text'
   );
+
+  const selectedShapes = shapes.filter((shape) => editorState.selectedShapeIds.includes(shape.id));
+
+  const selectedLayoutBounds: Bounds | null =
+    selectedShapes.length === 0
+      ? null
+      : selectedShapes.reduce<Bounds | null>((accumulator, shape) => {
+          const shapeBounds =
+            shape.type === 'group' ? getGroupBounds(shape.id, shapes) ?? shape.bounds : shape.bounds;
+
+          if (!accumulator) {
+            return { ...shapeBounds };
+          }
+
+          const minX = Math.min(accumulator.x, shapeBounds.x);
+          const minY = Math.min(accumulator.y, shapeBounds.y);
+          const maxX = Math.max(accumulator.x + accumulator.width, shapeBounds.x + shapeBounds.width);
+          const maxY = Math.max(accumulator.y + accumulator.height, shapeBounds.y + shapeBounds.height);
+
+          return {
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+          };
+        }, null);
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -493,10 +505,16 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <div className="header-top">
-          <div className="header-title">
-            <h1>TLDraw Clone</h1>
-          </div>
+        <div className="header-body">
+          <WorkspaceTabs
+            workspaces={workspaceStore.workspaces}
+            activeId={workspaceStore.activeWorkspaceId}
+            onSwitch={workspaceStore.switchWorkspace}
+            onAdd={handleAddWorkspace}
+            onDelete={handleDeleteWorkspace}
+            onRename={handleRenameWorkspace}
+            maxWorkspaces={MAX_WORKSPACES}
+          />
 
           <div className="header-actions">
             <button
@@ -546,16 +564,6 @@ function App() {
             </button>
           </div>
         </div>
-
-        <WorkspaceTabs
-          workspaces={workspaceStore.workspaces}
-          activeId={workspaceStore.activeWorkspaceId}
-          onSwitch={workspaceStore.switchWorkspace}
-          onAdd={handleAddWorkspace}
-          onDelete={handleDeleteWorkspace}
-          onRename={handleRenameWorkspace}
-          maxWorkspaces={MAX_WORKSPACES}
-        />
       </header>
 
       <main className="app-main">
@@ -612,6 +620,7 @@ function App() {
               <PropertiesPanel
                 style={editorState.shapeStyle}
                 onChange={updateShapeStyle}
+                layoutBounds={selectedLayoutBounds}
                 hasTextSelection={hasTextSelection}
                 onAlign={handleAlign}
                 onDistribute={handleDistribute}

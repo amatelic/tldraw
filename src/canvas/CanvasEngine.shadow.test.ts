@@ -4,6 +4,8 @@ import type { RectangleShape, CircleShape, LineShape, ArrowShape, PencilShape } 
 
 // Mock canvas and context
 const createMockContext = () => ({
+  setTransform: vi.fn(),
+  scale: vi.fn(),
   save: vi.fn(),
   restore: vi.fn(),
   translate: vi.fn(),

@@ -31,6 +31,11 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Fill style - None, solid, or pattern fills
 - [x] Opacity control - Adjust shape transparency
 - [x] Text styling - Font size, family, weight, style, alignment
+- [x] Context-aware inspector - Show relevant sections based on selection type
+- [x] Right-side inspector redesign - Floating soft-surface panel with collapsible sections, metadata headers, inline color cards, and embedded popover color picker
+- [x] Live layout readouts - Inspector now shows X/Y/W/H from the selected shape or selection frame
+- [x] Multi-select arrange controls - Align, distribute, and tidy actions in the layout section
+- [x] Shadow editor - Add, remove, recolor, and tune multiple shadows from the effects section
 
 ### View & Navigation
 - [x] Zoom in/out - Scale canvas up to 5x, down to 0.1x
@@ -62,6 +67,11 @@ This document tracks the implementation progress of the TLDraw Clone application
 ### UI/UX
 - [x] Toolbar - Tool selection with icons and keyboard shortcuts
 - [x] Properties panel - Real-time style editing
+- [x] Redesigned side panel UI - Inspector-style shell aligned to the April 13 reference
+- [x] Header chrome redesign - Top bar and workspace rail now share the same soft-surface/pill styling language as the inspector
+- [x] Full-viewport canvas layout - Drawing surface now spans the full window while header, inspector, toolbar, and zoom controls float above it
+- [x] Workspace rail motion polish - Entry/exit transitions and pill spacing refined for tabs and add button
+- [x] Shared active-tab motion - Active workspace now transitions through a moving highlight pill
 - [x] Zoom controls - Visual zoom level indicator
 - [x] Workspace tabs - Tab bar with add/delete/rename
 - [x] Dialogs - Image and audio upload dialogs
@@ -82,7 +92,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [ ] Pause/stop functionality
 
 ### Text Feature
-- [ ] Inline text editing (currently adds new text shape each time)
+- [ ] Text tool still auto-switches back to select after placing a text shape
 - [ ] Text selection and cursor positioning
 - [ ] Rich text formatting (bold/italic per character)
 
@@ -115,15 +125,18 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [ ] Layers/z-index management
 - [ ] Shape locking
 - [ ] Snap to grid
-- [ ] Alignment tools (align left, center, etc.)
-- [ ] Distribution tools
 - [ ] Shape templates/library
 
 ### Testing
-- [ ] Unit tests for utilities
-- [ ] Component tests
-- [ ] Canvas engine tests
-- [ ] E2E tests
+- [x] Component tests for key editor UI pieces including PropertiesPanel and ColorPicker
+- [x] Canvas text-editing regression tests
+- [x] Agent workflow provider tests
+- [x] E2E regression coverage for the sidepanel legacy-state path
+- [x] E2E browser-style regression coverage for the redesigned header shell and workspace rail
+- [x] E2E viewport-layout coverage for full-canvas floating chrome behavior
+- [ ] Additional unit tests for remaining utilities
+- [ ] Additional Canvas engine tests
+- [ ] Additional E2E tests
 
 ## 🐛 Known Bugs & Issues
 
@@ -203,10 +216,23 @@ useEffect(() => {
 
 ## 📊 Test Coverage Status
 
-- **Unit Tests**: 0% - Not implemented
-- **Component Tests**: 0% - Not implemented
-- **Integration Tests**: 0% - Not implemented
-- **E2E Tests**: 0% - Not implemented
+- **Unit Tests**: In progress - utility, canvas, and provider coverage exists but is not complete
+- **Component Tests**: In progress - interactive coverage exists for Toolbar, PropertiesPanel, ColorPicker, Workspace tabs, dialogs, and text editing
+- **Integration Tests**: In progress - text editing and agent provider flows have regression coverage
+- **E2E Tests**: In progress - legacy-state inspector regression and header chrome checks now run in Playwright
+
+## 📌 Recent Milestones
+
+### April 13, 2026
+- Completed a full right-side inspector redesign to match the latest UI reference more closely
+- Extended the same visual language to the application header and workspace tab rail
+
+### April 14, 2026
+- Switched the application shell to a full-viewport canvas with floating header, inspector, toolbar, and zoom controls
+- Rebuilt the color workflow around a tactile floating popover with centered header, segmented tabs, larger gradient surface, and grouped HSLA/hex controls
+- Added UI-focused regression coverage for the new inspector shell and color picker presentation
+- Added a Playwright E2E regression test that seeds legacy persisted workspace state and verifies the inspector no longer crashes when `shapeStyle.shadows` is missing
+- Verified the redesign with `npx vitest run` and `npm run build`
 
 ## 🎯 Next Priority Items
 
