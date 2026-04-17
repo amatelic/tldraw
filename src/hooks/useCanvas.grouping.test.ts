@@ -21,10 +21,13 @@ vi.mock('../stores/workspaceStore', () => ({
         shapeStyle: {
           color: '#000000',
           fillColor: '#000000',
+          fillGradient: null,
           strokeWidth: 2,
           strokeStyle: 'solid',
           fillStyle: 'none',
           opacity: 1,
+          blendMode: 'source-over',
+          shadows: [],
           fontSize: 16,
           fontFamily: 'sans-serif',
           fontWeight: 'normal',
@@ -379,6 +382,224 @@ describe('useCanvas - Grouping', () => {
       const allShapes = result.current.getAllShapesInGroup('non-existent-id');
 
       expect(allShapes).toEqual([]);
+    });
+  });
+
+  describe('layer ordering', () => {
+    it('should bring selected shapes to the front', () => {
+      const { result } = renderHook(() => useCanvas(workspaceId));
+
+      const shape1: Shape = {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape2: Shape = {
+        id: 'shape-2',
+        type: 'rectangle',
+        bounds: { x: 120, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape3: Shape = {
+        id: 'shape-3',
+        type: 'rectangle',
+        bounds: { x: 240, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        result.current.addShape(shape1);
+        result.current.addShape(shape2);
+        result.current.addShape(shape3);
+        result.current.bringShapesToFront(['shape-1']);
+      });
+
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-2', 'shape-3', 'shape-1']);
+    });
+
+    it('should send selected shapes to the back', () => {
+      const { result } = renderHook(() => useCanvas(workspaceId));
+
+      const shape1: Shape = {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape2: Shape = {
+        id: 'shape-2',
+        type: 'rectangle',
+        bounds: { x: 120, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape3: Shape = {
+        id: 'shape-3',
+        type: 'rectangle',
+        bounds: { x: 240, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        result.current.addShape(shape1);
+        result.current.addShape(shape2);
+        result.current.addShape(shape3);
+        result.current.sendShapesToBack(['shape-3']);
+      });
+
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-3', 'shape-1', 'shape-2']);
+    });
+
+    it('should move grouped shapes and their descendants together when bringing to front', () => {
+      const { result } = renderHook(() => useCanvas(workspaceId));
+
+      const shape1: Shape = {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape2: Shape = {
+        id: 'shape-2',
+        type: 'rectangle',
+        bounds: { x: 120, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape3: Shape = {
+        id: 'shape-3',
+        type: 'rectangle',
+        bounds: { x: 240, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        result.current.addShape(shape1);
+        result.current.addShape(shape2);
+        result.current.addShape(shape3);
+        result.current.groupShapes(['shape-1', 'shape-2']);
+      });
+
+      const group = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
+
+      act(() => {
+        result.current.bringShapesToFront([group.id]);
+      });
+
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-3', 'shape-1', 'shape-2', group.id]);
+    });
+  });
+
+  describe('selection normalization', () => {
+    it('should normalize child selections to the root group id', () => {
+      const { result } = renderHook(() => useCanvas(workspaceId));
+
+      const shape1: Shape = {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape2: Shape = {
+        id: 'shape-2',
+        type: 'rectangle',
+        bounds: { x: 120, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        result.current.addShape(shape1);
+        result.current.addShape(shape2);
+        result.current.groupShapes(['shape-1', 'shape-2']);
+      });
+
+      const group = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
+
+      act(() => {
+        result.current.selectShapes(['shape-1']);
+      });
+
+      expect(result.current.editorState.selectedShapeIds).toEqual([group.id]);
+    });
+
+    it('should group top-level entities when child ids are provided', () => {
+      const { result } = renderHook(() => useCanvas(workspaceId));
+
+      const shape1: Shape = {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape2: Shape = {
+        id: 'shape-2',
+        type: 'rectangle',
+        bounds: { x: 120, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      const shape3: Shape = {
+        id: 'shape-3',
+        type: 'rectangle',
+        bounds: { x: 240, y: 0, width: 100, height: 100 },
+        style: result.current.editorState.shapeStyle,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      act(() => {
+        result.current.addShape(shape1);
+        result.current.addShape(shape2);
+        result.current.addShape(shape3);
+        result.current.groupShapes(['shape-1', 'shape-2']);
+      });
+
+      const innerGroup = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
+
+      act(() => {
+        result.current.groupShapes(['shape-1', 'shape-3']);
+      });
+
+      const outerGroup = result.current.shapes.find(
+        (shape) => shape.type === 'group' && shape.id !== innerGroup.id
+      ) as GroupShape;
+
+      expect(outerGroup.childrenIds).toContain(innerGroup.id);
+      expect(outerGroup.childrenIds).toContain('shape-3');
+      expect(result.current.editorState.selectedShapeIds).toEqual([outerGroup.id]);
     });
   });
 });

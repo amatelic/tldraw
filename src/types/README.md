@@ -110,6 +110,17 @@ interface Bounds {
 
 Axis-aligned bounding box.
 
+### Selection Helper Utilities
+
+`index.ts` also exposes shared selection helpers so canvas, hooks, and app-level actions all agree on what a selectable entity means.
+
+Key helpers:
+- `getTopLevelSelectableShape(shapeId, shapes)` resolves grouped children up to their root group
+- `normalizeShapeIdsForSelection(shapeIds, shapes)` deduplicates selection sets to top-level IDs
+- `getSelectableShapeBounds(shapeId, shapes)` returns bounds for one selectable entity, including live group bounds
+- `getSelectionBounds(shapeIds, shapes)` combines a selection into one frame
+- `boundsIntersect(a, b)` supports marquee selection and other bounds math
+
 #### FillGradient
 ```typescript
 interface FillGradient {

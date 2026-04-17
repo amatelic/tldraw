@@ -16,6 +16,10 @@ interface PropertiesPanelProps {
   onDistribute?: (axis: 'horizontal' | 'vertical') => void;
   onTidy?: () => void;
   selectedCount?: number;
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  canGroup?: boolean;
+  canUngroup?: boolean;
 }
 
 interface CollapsibleSectionProps {
@@ -147,6 +151,10 @@ export function PropertiesPanel({
   onDistribute,
   onTidy,
   selectedCount = 0,
+  onGroup,
+  onUngroup,
+  canGroup = false,
+  canUngroup = false,
 }: PropertiesPanelProps) {
   const [expandedSections, setExpandedSections] = useState<{
     layout: boolean;
@@ -852,6 +860,40 @@ export function PropertiesPanel({
               </svg>
               Tidy selection
             </button>
+          </div>
+        )}
+
+        {(canGroup || canUngroup) && (
+          <div className="layout-inline-actions layout-inline-actions-single">
+            {canGroup && onGroup && (
+              <button
+                className="layout-wide-action"
+                onClick={onGroup}
+                title="Group Selection"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="4" y="4" width="6" height="6" />
+                  <rect x="14" y="4" width="6" height="6" />
+                  <rect x="9" y="14" width="6" height="6" />
+                </svg>
+                Group selection
+              </button>
+            )}
+            {canUngroup && onUngroup && (
+              <button
+                className="layout-wide-action"
+                onClick={onUngroup}
+                title="Ungroup Selection"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="4" y="4" width="6" height="6" />
+                  <rect x="14" y="4" width="6" height="6" />
+                  <rect x="9" y="14" width="6" height="6" />
+                  <path d="M10 10l4 4M14 10l-4 4" />
+                </svg>
+                Ungroup
+              </button>
+            )}
           </div>
         )}
       </CollapsibleSection>

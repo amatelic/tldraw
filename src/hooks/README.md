@@ -21,10 +21,11 @@ Hooks encapsulate complex logic that can be reused across components:
 
 ### useCanvas
 
-**Purpose**: Main canvas state management hook providing drawing operations, camera control, history (undo/redo), text editing, grouping, and layer ordering.
+**Purpose**: Main canvas state management hook providing drawing operations, camera control, history (undo/redo), normalized selection state, text editing, grouping, and layer ordering.
 
 **⚠️ WARNING**: This is the most complex hook in the application. It manages:
 - Shape state and operations
+- Selection normalization for grouped content
 - Camera (pan/zoom) state
 - History for undo/redo
 - Workspace persistence
@@ -177,6 +178,7 @@ const defaultEditorState: EditorState = {
 - [ ] Invalid generated drafts fail without partial board changes
 - [ ] Camera can be panned and zoomed
 - [ ] Selection works correctly
+- [ ] Selection normalizes grouped child ids to top-level selectable entities
 - [ ] Auto-saves to workspace store
 - [ ] Text editing state managed correctly
 - [ ] Selected shapes can be grouped and ungrouped
@@ -189,6 +191,7 @@ const defaultEditorState: EditorState = {
 - Maximum 50 history states
 - Auto-save debounced at 100ms
 - Shape updates during drag not saved to history
+- Selection APIs normalize grouped child ids to their top-level group before storing selection state
 - Layer ordering normalizes child selections up to their root group so grouped content moves as one stack item
 - Generated rectangle/circle labels are applied as companion text shapes because those primitives do not yet render inline text
 

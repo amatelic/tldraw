@@ -144,13 +144,14 @@ interface ToolbarProps {
 **Responsibilities**:
 1. Render shapes using CanvasEngine
 2. Handle pointer events (down/move/up) for drawing
-3. Handle selection and dragging
+3. Handle single selection, additive multi-selection, marquee selection, and dragging
 4. Handle panning and zooming
 5. Text editing with textarea overlay
 6. Embed iframe overlays
 7. Audio playback toggle
 8. Double-click for text editing
 9. Right-click context menu for selection actions
+10. Render combined multi-selection and marquee feedback overlays
 
 **Props**:
 ```typescript
@@ -191,25 +192,36 @@ interface CanvasProps {
 
 1. **Pointer Down**:
    - Pan tool: Start panning
-   - Select tool: Check for shape click, start drag or clear selection
+   - Select tool: single-click selects, `Shift + Click` toggles top-level entities, dragging a selected entity moves the full current selection, and dragging from empty canvas starts marquee selection
    - Drawing tools (rectangle, circle, line, arrow, pencil): Start drawing
    - Eraser: Delete clicked shape
    - Text: Create text shape and start editing
 
 2. **Pointer Move**:
    - Panning: Update camera position
+   - Marquee selection: Update the live selection rectangle
    - Dragging: Update shape positions using pre-computed functions
    - Drawing: Update shape preview or add pencil points
 
 3. **Pointer Up**:
    - Stop panning/dragging/drawing
+   - Commit marquee selection when active
    - Finalize shape if meaningful size (>5px)
 
 4. **Context Menu**:
    - Right-clicking a shape opens a lightweight selection menu
    - Right-clicking an unselected shape selects it before opening the menu
+   - Right-clicking an already selected shape preserves the current selection
    - Menu actions currently include delete, group/ungroup, bring to front, and send to back
    - Menu closes on outside click, Escape, tool changes, or when selection clears
+
+**Selection Model**:
+- Child shapes inside groups resolve to their top-level group for canvas selection
+- `Shift + Click` adds or removes top-level entities from the current selection
+- Empty-canvas drag creates a marquee that selects intersecting top-level entities
+- `Shift + drag` adds marquee hits to the existing selection
+- Multi-selection keeps per-shape outlines and adds a combined selection frame without per-shape resize handles
+- `Space + drag`, middle click, and the pan tool all pan the board; `Shift + drag` is reserved for additive marquee selection
 
 **Text Editing**:
 - Overlay textarea positioned over text shape
@@ -234,6 +246,9 @@ interface CanvasProps {
 - [ ] All pointer interactions work smoothly
 - [ ] Shapes render correctly with all styles
 - [ ] Selection indicators visible
+- [ ] `Shift + Click` supports additive multi-selection
+- [ ] Empty-canvas drag creates marquee selection
+- [ ] Multi-selection shows a combined frame without a wall of resize handles
 - [ ] Text editing works with proper positioning
 - [ ] Right-click menu exposes core selection actions without breaking drag/draw flows
 - [ ] Embed overlays move correctly
@@ -247,6 +262,7 @@ interface CanvasProps {
 - Textarea position must match zoom level
 - Embed iframes need pointer-events management
 - Embed resize handles clamp to a minimum frame of 160x120 world units
+- Select-mode `Shift + drag` is reserved for additive marquee selection, not panning
 
 **Known Issues**:
 - Very large component (~1050 lines) - hard to maintain
@@ -431,7 +447,8 @@ interface ZoomControlsProps {
 - **Layout Section**:
   - Live position and size readouts from the selected shape or combined multi-select frame
   - Single selected frame-like shapes can edit X, Y, W, and H directly from the inspector inputs
-  - Multi-select align, distribute, and tidy actions
+  - Multi-select align, distribute, tidy, and group actions
+  - Single selected groups expose an ungroup action in the same section
 - **Style Section**: 
   - Stroke width chooser with three compareable picker treatments: Visual, Slider, and Compact
   - All picker variants target the same discrete widths (1, 2, 4, 8, 12) so UI exploration does not change canvas behavior
@@ -469,7 +486,17 @@ interface ZoomControlsProps {
 interface PropertiesPanelProps {
   style: ShapeStyle;
   onChange: (updates: Partial<ShapeStyle>) => void;
+  layoutBounds?: Bounds | null;
+  onLayoutBoundsChange?: (bounds: Partial<Bounds>) => void;
   hasTextSelection?: boolean;
+  onAlign?: (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
+  onDistribute?: (axis: 'horizontal' | 'vertical') => void;
+  onTidy?: () => void;
+  selectedCount?: number;
+  onGroup?: () => void;
+  onUngroup?: () => void;
+  canGroup?: boolean;
+  canUngroup?: boolean;
 }
 ```
 
@@ -510,6 +537,7 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - [ ] Add shadow button creates new shadow with defaults
 - [ ] Remove shadow button deletes individual shadows
 - [ ] Multi-select arrange actions remain available
+- [ ] Group and ungroup actions appear in the layout section when selection state allows them
 - [ ] Dark mode displays correctly with component tokens
 - [ ] Panel is scrollable when content overflows
 

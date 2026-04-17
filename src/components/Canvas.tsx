@@ -1,7 +1,17 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import type { Point, Shape } from '../types';
+import type { Bounds, Point, Shape } from '../types';
 import { CanvasEngine } from '../canvas/CanvasEngine';
-import { createShapeId, getGroupDescendants, getRootGroup } from '../types';
+import {
+  boundsIntersect,
+  createShapeId,
+  generateBounds,
+  getGroupDescendants,
+  getSelectionBounds,
+  getSelectableShapeBounds,
+  getTopLevelSelectableShape,
+  isPointInShape,
+  normalizeShapeIdsForSelection,
+} from '../types';
 import { useElementSize } from '../hooks/useElementSize';
 
 interface CanvasProps {
@@ -174,6 +184,12 @@ export function Canvas({
   const originalTextRef = useRef('');
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [marqueeBounds, setMarqueeBounds] = useState<Bounds | null>(null);
+  const marqueeStartRef = useRef<Point | null>(null);
+  const marqueeModeRef = useRef<'replace' | 'add' | null>(null);
+  const pendingAudioToggleRef = useRef<Extract<Shape, { type: 'audio' }> | null>(null);
+  const spaceKeyDownRef = useRef(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const canvasSize = useElementSize(canvasRef);
 
   // Update refs when props change
@@ -192,6 +208,46 @@ export function Canvas({
   useEffect(() => {
     isPanningRef.current = isPanning;
   }, [isPanning]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        spaceKeyDownRef.current = true;
+        setIsSpacePressed(true);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        spaceKeyDownRef.current = false;
+        setIsSpacePressed(false);
+      }
+    };
+
+    const handleBlur = () => {
+      spaceKeyDownRef.current = false;
+      setIsSpacePressed(false);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   // Compute editing shape directly from props
   const editingShape = useMemo(() => {
@@ -255,6 +311,7 @@ export function Canvas({
   const render = useCallback(() => {
     if (!engineRef.current) return;
     const engine = engineRef.current;
+    const showSelectionHandles = selectedIds.length === 1;
     engine.clear();
     engine.drawGrid(cameraRef.current);
     engine.applyCamera(cameraRef.current);
@@ -265,7 +322,7 @@ export function Canvas({
       const isEditing = editingTextId === shape.id;
       if (shape.type === 'embed') return;
       if (!isEditing) {
-        engine.drawShape(shape, isSelected);
+        engine.drawShape(shape, isSelected, showSelectionHandles);
       }
     });
 
@@ -315,73 +372,6 @@ export function Canvas({
     },
     [canvasRef]
   );
-
-  // Check if a point is inside a shape
-  const isPointInShape = (point: Point, shape: Shape): boolean => {
-    switch (shape.type) {
-      case 'rectangle':
-        return (
-          point.x >= shape.bounds.x &&
-          point.x <= shape.bounds.x + shape.bounds.width &&
-          point.y >= shape.bounds.y &&
-          point.y <= shape.bounds.y + shape.bounds.height
-        );
-      case 'circle': {
-        const dx = point.x - shape.center.x;
-        const dy = point.y - shape.center.y;
-        return dx * dx + dy * dy <= shape.radius * shape.radius;
-      }
-      case 'line': {
-        const { start, end } = shape;
-        const lineLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
-        if (lineLength === 0) return false;
-        const t =
-          ((point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y)) /
-          lineLength ** 2;
-        const closestX = start.x + t * (end.x - start.x);
-        const closestY = start.y + t * (end.y - start.y);
-        const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
-        return distance <= 5;
-      }
-      case 'arrow': {
-        const { start, end } = shape;
-        const arrowLength = Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2);
-        if (arrowLength === 0) return false;
-        const t =
-          ((point.x - start.x) * (end.x - start.x) + (point.y - start.y) * (end.y - start.y)) /
-          arrowLength ** 2;
-        const closestX = start.x + t * (end.x - start.x);
-        const closestY = start.y + t * (end.y - start.y);
-        const distance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2);
-        return distance <= 5;
-      }
-      case 'pencil':
-        return shape.points.some((p) => {
-          const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2);
-          return d <= 10;
-        });
-      case 'image':
-      case 'audio':
-      case 'text':
-      case 'embed':
-        return (
-          point.x >= shape.bounds.x &&
-          point.x <= shape.bounds.x + shape.bounds.width &&
-          point.y >= shape.bounds.y &&
-          point.y <= shape.bounds.y + shape.bounds.height
-        );
-      case 'group':
-        // Groups are selected by their bounds
-        return (
-          point.x >= shape.bounds.x &&
-          point.x <= shape.bounds.x + shape.bounds.width &&
-          point.y >= shape.bounds.y &&
-          point.y <= shape.bounds.y + shape.bounds.height
-        );
-      default:
-        return false;
-    }
-  };
 
   // OPTIMIZED: Create drag update function for a shape
   const createDragUpdateFn = useCallback(
@@ -489,6 +479,65 @@ export function Canvas({
     [onShapeUpdate]
   );
 
+  const findShapeAtPoint = useCallback((point: Point): Shape | null => {
+    return [...shapesRef.current].reverse().find((shape) => isPointInShape(point, shape)) ?? null;
+  }, []);
+
+  const findSelectableShapeAtPoint = useCallback(
+    (point: Point): Shape | null => {
+      const hitShape = findShapeAtPoint(point);
+      if (!hitShape) return null;
+
+      return getTopLevelSelectableShape(hitShape.id, shapesRef.current);
+    },
+    [findShapeAtPoint]
+  );
+
+  const prepareDragSelection = useCallback(
+    (selectionIds: string[]) => {
+      const normalizedSelectionIds = normalizeShapeIdsForSelection(selectionIds, shapesRef.current);
+
+      selectedShapesStartRef.current.clear();
+      dragUpdateFnsRef.current.clear();
+
+      normalizedSelectionIds.forEach((id) => {
+        const shape = shapesRef.current.find((candidate) => candidate.id === id);
+        if (!shape) {
+          return;
+        }
+
+        const startPos = { x: shape.bounds.x, y: shape.bounds.y };
+        selectedShapesStartRef.current.set(id, startPos);
+        dragUpdateFnsRef.current.set(id, createDragUpdateFn(shape, startPos));
+
+        if (shape.type === 'group') {
+          const descendants = getGroupDescendants(id, shapesRef.current);
+          descendants.forEach((descendant) => {
+            if (dragUpdateFnsRef.current.has(descendant.id)) {
+              return;
+            }
+
+            const descStartPos = { x: descendant.bounds.x, y: descendant.bounds.y };
+            selectedShapesStartRef.current.set(descendant.id, descStartPos);
+            dragUpdateFnsRef.current.set(descendant.id, createDragUpdateFn(descendant, descStartPos));
+          });
+        }
+      });
+    },
+    [createDragUpdateFn]
+  );
+
+  const getMarqueeSelectionIds = useCallback((bounds: Bounds): string[] => {
+    const intersectingIds = shapesRef.current
+      .filter((shape) => {
+        const selectableBounds = getSelectableShapeBounds(shape.id, shapesRef.current);
+        return selectableBounds ? boundsIntersect(bounds, selectableBounds) : false;
+      })
+      .map((shape) => shape.id);
+
+    return normalizeShapeIdsForSelection(intersectingIds, shapesRef.current);
+  }, []);
+
   // Toggle audio playback
   const toggleAudio = useCallback(
     (shape: Extract<Shape, { type: 'audio' }>) => {
@@ -524,6 +573,7 @@ export function Canvas({
       e.preventDefault();
       const screenPoint = getPointerPoint(e);
       const worldPoint = screenToWorld(screenPoint);
+      pendingAudioToggleRef.current = null;
 
       // If currently editing text, commit the changes
       if (editingTextIdRef.current) {
@@ -532,7 +582,7 @@ export function Canvas({
       }
 
       // Middle mouse or Space + drag for panning
-      if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
+      if (e.button === 1 || (e.button === 0 && spaceKeyDownRef.current)) {
         setIsPanning(true);
         lastPanPointRef.current = screenPoint;
         return;
@@ -545,52 +595,45 @@ export function Canvas({
           lastPanPointRef.current = screenPoint;
           return;
         } else if (toolRef.current === 'select') {
-          // Check if clicking on a shape
-          const clickedShape = [...shapesRef.current]
-            .reverse()
-            .find((s) => isPointInShape(worldPoint, s));
+          setContextMenu(null);
+          const clickedShape = findSelectableShapeAtPoint(worldPoint);
 
           if (clickedShape) {
-            // Handle audio playback toggle
-            if (clickedShape.type === 'audio') {
-              toggleAudio(clickedShape as Extract<Shape, { type: 'audio' }>);
+            if (e.shiftKey) {
+              const nextSelectionIds = selectedIdsRef.current.includes(clickedShape.id)
+                ? selectedIdsRef.current.filter((id) => id !== clickedShape.id)
+                : normalizeShapeIdsForSelection(
+                    [...selectedIdsRef.current, clickedShape.id],
+                    shapesRef.current
+                  );
+
+              onSelectionChange(nextSelectionIds);
               return;
             }
 
-            // Check if the clicked shape is inside a group - if so, select the group
-            const rootGroup = getRootGroup(clickedShape.id, shapesRef.current);
-            const shapeToSelect = rootGroup || clickedShape;
+            const nextSelectionIds = selectedIdsRef.current.includes(clickedShape.id)
+              ? normalizeShapeIdsForSelection(selectedIdsRef.current, shapesRef.current)
+              : [clickedShape.id];
 
-            if (!selectedIdsRef.current.includes(shapeToSelect.id)) {
-              onSelectionChange([shapeToSelect.id]);
+            if (!selectedIdsRef.current.includes(clickedShape.id)) {
+              onSelectionChange(nextSelectionIds);
             }
+
+            if (
+              clickedShape.type === 'audio' &&
+              nextSelectionIds.length === 1 &&
+              nextSelectionIds[0] === clickedShape.id
+            ) {
+              pendingAudioToggleRef.current = clickedShape as Extract<Shape, { type: 'audio' }>;
+            }
+
             onDraggingChange(true);
             dragStartRef.current = worldPoint;
-
-            // OPTIMIZED: Pre-compute drag update functions
-            dragUpdateFnsRef.current.clear();
-            selectedIdsRef.current.forEach((id) => {
-              const shape = shapesRef.current.find((s) => s.id === id);
-              if (shape) {
-                const startPos = { x: shape.bounds.x, y: shape.bounds.y };
-                selectedShapesStartRef.current.set(id, startPos);
-                dragUpdateFnsRef.current.set(id, createDragUpdateFn(shape, startPos));
-                
-                // If this is a group, also add drag functions for all children
-                if (shape.type === 'group') {
-                  const descendants = getGroupDescendants(id, shapesRef.current);
-                  descendants.forEach((descendant) => {
-                    if (!dragUpdateFnsRef.current.has(descendant.id)) {
-                      const descStartPos = { x: descendant.bounds.x, y: descendant.bounds.y };
-                      selectedShapesStartRef.current.set(descendant.id, descStartPos);
-                      dragUpdateFnsRef.current.set(descendant.id, createDragUpdateFn(descendant, descStartPos));
-                    }
-                  });
-                }
-              }
-            });
+            prepareDragSelection(nextSelectionIds);
           } else {
-            onSelectionChange([]);
+            marqueeStartRef.current = worldPoint;
+            marqueeModeRef.current = e.shiftKey ? 'add' : 'replace';
+            setMarqueeBounds(generateBounds(worldPoint, worldPoint));
           }
         } else if (['rectangle', 'circle', 'line', 'arrow', 'pencil'].includes(toolRef.current)) {
           onDrawingChange(true);
@@ -644,17 +687,17 @@ export function Canvas({
       }
     },
     [
-      screenToWorld,
-      onSelectionChange,
-      onDraggingChange,
-      onDrawingChange,
-      onShapeDelete,
-      onShapeAdd,
-      onTextEditStart,
-      onTextEditCommit,
-      toggleAudio,
       getPointerPoint,
-      createDragUpdateFn,
+      findSelectableShapeAtPoint,
+      onDrawingChange,
+      onDraggingChange,
+      onSelectionChange,
+      onShapeAdd,
+      onShapeDelete,
+      onTextEditCommit,
+      onTextEditStart,
+      prepareDragSelection,
+      screenToWorld,
     ]
   );
 
@@ -665,9 +708,7 @@ export function Canvas({
       const worldPoint = screenToWorld(screenPoint);
 
       // Check if double-clicking on a text shape
-      const clickedShape = [...shapesRef.current]
-        .reverse()
-        .find((s) => isPointInShape(worldPoint, s));
+      const clickedShape = findShapeAtPoint(worldPoint);
 
       if (clickedShape && clickedShape.type === 'text') {
         // If already editing another text, commit it first
@@ -677,7 +718,7 @@ export function Canvas({
         onTextEditStart(clickedShape.id);
       }
     },
-    [screenToWorld, onTextEditStart, onTextEditCommit, getPointerPoint]
+    [findShapeAtPoint, screenToWorld, onTextEditStart, onTextEditCommit, getPointerPoint]
   );
 
   const handleContextMenu = useCallback(
@@ -699,20 +740,15 @@ export function Canvas({
       };
       const worldPoint = screenToWorld(screenPoint);
 
-      const clickedShape = [...shapesRef.current]
-        .reverse()
-        .find((shape) => isPointInShape(worldPoint, shape));
+      const clickedShape = findSelectableShapeAtPoint(worldPoint);
 
       if (!clickedShape) {
         setContextMenu(null);
         return;
       }
 
-      const rootGroup = getRootGroup(clickedShape.id, shapesRef.current);
-      const shapeToSelect = rootGroup || clickedShape;
-
-      if (!selectedIdsRef.current.includes(shapeToSelect.id)) {
-        onSelectionChange([shapeToSelect.id]);
+      if (!selectedIdsRef.current.includes(clickedShape.id)) {
+        onSelectionChange([clickedShape.id]);
       }
 
       setContextMenu({
@@ -720,7 +756,7 @@ export function Canvas({
         y: screenPoint.y,
       });
     },
-    [canvasRef, onSelectionChange, screenToWorld]
+    [canvasRef, findSelectableShapeAtPoint, onSelectionChange, screenToWorld]
   );
 
   const handlePointerMove = useCallback(
@@ -738,10 +774,19 @@ export function Canvas({
 
       const worldPoint = screenToWorld(screenPoint);
 
+      if (toolRef.current === 'select' && marqueeStartRef.current) {
+        setMarqueeBounds(generateBounds(marqueeStartRef.current, worldPoint));
+        return;
+      }
+
       if (toolRef.current === 'select' && isDraggingRef.current) {
         if (dragStartRef.current) {
           const dx = worldPoint.x - dragStartRef.current.x;
           const dy = worldPoint.y - dragStartRef.current.y;
+
+          if (pendingAudioToggleRef.current && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+            pendingAudioToggleRef.current = null;
+          }
 
           // OPTIMIZED: Use pre-computed drag update functions
           dragUpdateFnsRef.current.forEach((updateFn) => {
@@ -783,6 +828,8 @@ export function Canvas({
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
+      const screenPoint = getPointerPoint(e);
+      const worldPoint = screenToWorld(screenPoint);
 
       if (isPanningRef.current) {
         setIsPanning(false);
@@ -791,6 +838,40 @@ export function Canvas({
       }
 
       if (toolRef.current === 'select') {
+        if (marqueeStartRef.current) {
+          const nextMarqueeBounds = generateBounds(marqueeStartRef.current, worldPoint);
+          const hasMeaningfulArea = nextMarqueeBounds.width > 2 || nextMarqueeBounds.height > 2;
+
+          if (hasMeaningfulArea) {
+            const marqueeSelectionIds = getMarqueeSelectionIds(nextMarqueeBounds);
+            const nextSelectionIds =
+              marqueeModeRef.current === 'add'
+                ? normalizeShapeIdsForSelection(
+                    [...selectedIdsRef.current, ...marqueeSelectionIds],
+                    shapesRef.current
+                  )
+                : marqueeSelectionIds;
+
+            onSelectionChange(nextSelectionIds);
+          } else if (marqueeModeRef.current !== 'add') {
+            onSelectionChange([]);
+          }
+
+          marqueeStartRef.current = null;
+          marqueeModeRef.current = null;
+          setMarqueeBounds(null);
+          return;
+        }
+
+        if (pendingAudioToggleRef.current && dragStartRef.current) {
+          const dx = worldPoint.x - dragStartRef.current.x;
+          const dy = worldPoint.y - dragStartRef.current.y;
+          if (Math.abs(dx) <= 2 && Math.abs(dy) <= 2) {
+            toggleAudio(pendingAudioToggleRef.current);
+          }
+        }
+
+        pendingAudioToggleRef.current = null;
         onDraggingChange(false);
         dragStartRef.current = null;
         selectedShapesStartRef.current.clear();
@@ -813,7 +894,7 @@ export function Canvas({
         }
       }
     },
-    [onShapeAdd, onDrawingChange, onDraggingChange, render]
+    [getMarqueeSelectionIds, getPointerPoint, onShapeAdd, onDrawingChange, onDraggingChange, onSelectionChange, render, screenToWorld, toggleAudio]
   );
 
   const handleWheel = useCallback(
@@ -1037,6 +1118,33 @@ export function Canvas({
   }, [shapes, worldToScreen]);
 
   const embedOverlays = getEmbedOverlays();
+  const toScreenFrame = useCallback(
+    (bounds: Bounds | null) => {
+      if (!bounds) return null;
+
+      const topLeft = worldToScreen({ x: bounds.x, y: bounds.y });
+      const bottomRight = worldToScreen({
+        x: bounds.x + bounds.width,
+        y: bounds.y + bounds.height,
+      });
+
+      return {
+        left: topLeft.x,
+        top: topLeft.y,
+        width: bottomRight.x - topLeft.x,
+        height: bottomRight.y - topLeft.y,
+      };
+    },
+    [worldToScreen]
+  );
+  const multiSelectionFrame = useMemo(() => {
+    if (selectedIds.length < 2) {
+      return null;
+    }
+
+    return toScreenFrame(getSelectionBounds(selectedIds, shapes));
+  }, [selectedIds, shapes, toScreenFrame]);
+  const marqueeScreenFrame = useMemo(() => toScreenFrame(marqueeBounds), [marqueeBounds, toScreenFrame]);
 
   const embedDragRef = useRef<{
     shapeId: string;
@@ -1153,7 +1261,13 @@ export function Canvas({
         style={{
           cursor:
             tool === 'select'
-              ? 'default'
+              ? isPanning
+                ? 'grabbing'
+                : isSpacePressed
+                  ? 'grab'
+                  : marqueeBounds
+                    ? 'crosshair'
+                    : 'default'
               : tool === 'pan'
                 ? isPanning
                   ? 'grabbing'
@@ -1163,6 +1277,43 @@ export function Canvas({
                   : 'crosshair',
         }}
       />
+      {multiSelectionFrame && tool === 'select' && !editingShape && (
+        <div
+          aria-hidden="true"
+          data-testid="multi-selection-frame"
+          style={{
+            position: 'absolute',
+            left: `${multiSelectionFrame.left}px`,
+            top: `${multiSelectionFrame.top}px`,
+            width: `${multiSelectionFrame.width}px`,
+            height: `${multiSelectionFrame.height}px`,
+            border: '1px dashed rgba(37, 99, 235, 0.92)',
+            borderRadius: '6px',
+            background: 'rgba(37, 99, 235, 0.04)',
+            boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.78) inset',
+            pointerEvents: 'none',
+            zIndex: 15,
+          }}
+        />
+      )}
+      {marqueeScreenFrame && (
+        <div
+          aria-hidden="true"
+          data-testid="marquee-selection"
+          style={{
+            position: 'absolute',
+            left: `${marqueeScreenFrame.left}px`,
+            top: `${marqueeScreenFrame.top}px`,
+            width: `${marqueeScreenFrame.width}px`,
+            height: `${marqueeScreenFrame.height}px`,
+            border: '1px dashed rgba(37, 99, 235, 0.88)',
+            borderRadius: '6px',
+            background: 'rgba(37, 99, 235, 0.12)',
+            pointerEvents: 'none',
+            zIndex: 16,
+          }}
+        />
+      )}
       {editingShape && (
         <textarea
           ref={textareaRef}

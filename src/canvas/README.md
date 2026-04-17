@@ -52,7 +52,7 @@ private imageCache: Map<string, HTMLImageElement>;
 | `restoreCamera()` | Restores context |
 | `screenToWorld(point, camera)` | Convert screen to world coordinates |
 | `worldToScreen(point, camera)` | Convert world to screen coordinates |
-| `drawShape(shape, isSelected?)` | Render any shape type with blend mode support |
+| `drawShape(shape, isSelected?, showSelectionHandles?)` | Render any shape type with blend mode support |
 | `drawGrid(camera, gridSize?)` | Render background grid |
 | `drawPreviewShape(start, end, type, style)` | Draw preview during drag |
 | `createShapeFromPoints(start, end, type, style)` | Create shape object from drag |
@@ -83,7 +83,7 @@ private imageCache: Map<string, HTMLImageElement>;
 | `drawAudio(shape)` | Render audio waveform |
 | `drawText(shape)` | Render text with word wrap |
 | `drawEmbed(shape)` | Render embed placeholder |
-| `drawSelectionIndicator(shape)` | Render selection border and handles |
+| `drawSelectionIndicator(shape, showHandles?)` | Render selection border and optionally resize handles |
 | `getShapeBounds(shape)` | Calculate shape bounds |
 | `getResizeHandles(bounds)` | Get 8 resize handle positions |
 
@@ -133,6 +133,11 @@ This ensures crisp rendering on Retina/4K displays.
 - Canvas size changes are driven from the React `useElementSize` hook in the UI layer
 - This allows the drawing surface to refresh when the application layout changes width or height, even if the browser window itself did not resize
 - `resize()` is idempotent and safe to call repeatedly during those layout updates
+
+**Selection Rendering**:
+- CanvasEngine still renders per-shape selection outlines on the bitmap canvas
+- Resize handles are now only drawn for single selection; multi-selection can request outlines without handles
+- The combined multi-selection frame and marquee rectangle are rendered in the React `Canvas` layer as DOM overlays so they stay easy to evolve without complicating the engine
 
 **Rendering Shapes**:
 

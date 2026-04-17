@@ -442,6 +442,93 @@ export function getRootGroup(shapeId: string, shapes: Shape[]): GroupShape | nul
   return null;
 }
 
+/**
+ * Resolve a shape ID to the top-level selectable entity on the canvas.
+ * Children inside groups normalize up to their outermost parent group.
+ */
+export function getTopLevelSelectableShape(shapeId: string, shapes: Shape[]): Shape | null {
+  const shape = shapes.find((candidate) => candidate.id === shapeId);
+  if (!shape) return null;
+
+  return getRootGroup(shapeId, shapes) ?? shape;
+}
+
+/**
+ * Normalize arbitrary shape IDs to distinct top-level selectable IDs.
+ */
+export function normalizeShapeIdsForSelection(shapeIds: string[], shapes: Shape[]): string[] {
+  const normalizedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  for (const shapeId of shapeIds) {
+    const selectableShape = getTopLevelSelectableShape(shapeId, shapes);
+    if (!selectableShape || seenIds.has(selectableShape.id)) {
+      continue;
+    }
+
+    seenIds.add(selectableShape.id);
+    normalizedIds.push(selectableShape.id);
+  }
+
+  return normalizedIds;
+}
+
+/**
+ * Get the selection bounds for a single selectable canvas entity.
+ */
+export function getSelectableShapeBounds(shapeId: string, shapes: Shape[]): Bounds | null {
+  const selectableShape = getTopLevelSelectableShape(shapeId, shapes);
+  if (!selectableShape) return null;
+
+  if (selectableShape.type === 'group') {
+    return getGroupBounds(selectableShape.id, shapes) ?? selectableShape.bounds;
+  }
+
+  return selectableShape.bounds;
+}
+
+/**
+ * Get the combined bounds for a selection of shapes after top-level normalization.
+ */
+export function getSelectionBounds(shapeIds: string[], shapes: Shape[]): Bounds | null {
+  const normalizedIds = normalizeShapeIdsForSelection(shapeIds, shapes);
+
+  let combinedBounds: Bounds | null = null;
+
+  for (const shapeId of normalizedIds) {
+    const bounds = getSelectableShapeBounds(shapeId, shapes);
+    if (!bounds) continue;
+
+    if (!combinedBounds) {
+      combinedBounds = { ...bounds };
+      continue;
+    }
+
+    const minX = Math.min(combinedBounds.x, bounds.x);
+    const minY = Math.min(combinedBounds.y, bounds.y);
+    const maxX = Math.max(combinedBounds.x + combinedBounds.width, bounds.x + bounds.width);
+    const maxY = Math.max(combinedBounds.y + combinedBounds.height, bounds.y + bounds.height);
+
+    combinedBounds = {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  }
+
+  return combinedBounds;
+}
+
+export function boundsIntersect(a: Bounds, b: Bounds): boolean {
+  return (
+    a.x <= b.x + b.width &&
+    a.x + a.width >= b.x &&
+    a.y <= b.y + b.height &&
+    a.y + a.height >= b.y
+  );
+}
+
 export function isPointInShape(point: Point, shape: Shape): boolean {
   switch (shape.type) {
     case 'rectangle':

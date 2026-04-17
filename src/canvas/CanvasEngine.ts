@@ -277,7 +277,7 @@ export class CanvasEngine {
     // For image, audio, text, embed, group - shadows are handled differently or not supported
   }
 
-  drawShape(shape: Shape, isSelected: boolean = false) {
+  drawShape(shape: Shape, isSelected: boolean = false, showSelectionHandles: boolean = true) {
     // Save current composite operation
     const prevComposite = this.ctx.globalCompositeOperation;
     
@@ -340,7 +340,7 @@ export class CanvasEngine {
     }
 
     if (isSelected) {
-      this.drawSelectionIndicator(shape);
+      this.drawSelectionIndicator(shape, showSelectionHandles);
     }
     
     // Restore composite operation
@@ -668,7 +668,7 @@ export class CanvasEngine {
     }
   }
 
-  private drawSelectionIndicator(shape: Shape) {
+  private drawSelectionIndicator(shape: Shape, showHandles: boolean = true) {
     const bounds = this.getShapeBounds(shape);
     const padding = 4;
 
@@ -687,18 +687,19 @@ export class CanvasEngine {
     );
     this.ctx.stroke();
 
-    // Draw resize handles
-    const handles = this.getResizeHandles(bounds);
-    this.ctx.fillStyle = '#fff';
-    this.ctx.strokeStyle = '#2563eb';
-    this.ctx.setLineDash([]);
+    if (showHandles) {
+      const handles = this.getResizeHandles(bounds);
+      this.ctx.fillStyle = '#fff';
+      this.ctx.strokeStyle = '#2563eb';
+      this.ctx.setLineDash([]);
 
-    handles.forEach((handle) => {
-      this.ctx.beginPath();
-      this.ctx.rect(handle.x - 4, handle.y - 4, 8, 8);
-      this.ctx.fill();
-      this.ctx.stroke();
-    });
+      handles.forEach((handle) => {
+        this.ctx.beginPath();
+        this.ctx.rect(handle.x - 4, handle.y - 4, 8, 8);
+        this.ctx.fill();
+        this.ctx.stroke();
+      });
+    }
 
     this.ctx.restore();
   }

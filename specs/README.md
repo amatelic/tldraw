@@ -18,7 +18,7 @@ Specs serve as:
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
 | `EMBED_LAYOUT_INTERACTIONS_SPEC.md` | Embed movement, resize, and inspector layout editing rules | ~180 | Completed |
-| `MULTI_SELECTION_GROUPING_SPEC.md` | Multi-select, marquee, and grouping interaction contract | ~250 | Planning |
+| `MULTI_SELECTION_GROUPING_SPEC.md` | Multi-select, marquee, and grouping interaction contract | ~250 | Implemented |
 | `toolbar-refactor-SPEC.md` | Toolbar redesign spec | ~350 | Completed |
 | `AGENT_WORKFLOWS_SPEC.md` | AI agent integration | ~400 | Planning |
 | `AGENT_DIAGRAM_PRESENTATION_SPEC.md` | Work-diagram generation and presentation brief agent | ~250 | Planning |
@@ -32,13 +32,13 @@ Specs serve as:
 - **Task 21** - Diagram preview and presentation brief UI
 - **Task 22** - Apply generated diagrams to the canvas
 - **Task 24** - Versioned workspace JSON export
+- **Task 25** - Multi-selection canvas interactions for grouping
 
 ### In Progress 🟡
 - **Task 11** - Workspace name truncation and long-press menu
 
 ### Next Planning / Not Started 🔴
 - **Task 23** - Example-driven coverage and documentation for diagram generation
-- **Task 25** - Multi-selection canvas interactions for grouping
 
 ## Task Status Legend
 
@@ -151,7 +151,7 @@ Documents:
 **Implementation Date**: April 2026
 **Status**: Completed and merged
 
-## Planning Specs
+## Interaction Specs
 
 ### Multi-Selection & Grouping
 **File**: `MULTI_SELECTION_GROUPING_SPEC.md`
@@ -163,7 +163,7 @@ Documents:
 - inspector and context-menu group/ungroup affordances
 - top-level selection normalization for grouped children
 
-**Status**: Planning / ready for implementation
+**Status**: Implemented / reference
 
 ## Architecture Specs
 

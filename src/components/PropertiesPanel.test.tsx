@@ -9,6 +9,8 @@ describe('PropertiesPanel', () => {
   const onAlign = vi.fn();
   const onDistribute = vi.fn();
   const onTidy = vi.fn();
+  const onGroup = vi.fn();
+  const onUngroup = vi.fn();
 
   beforeEach(() => {
     onChange.mockClear();
@@ -16,6 +18,8 @@ describe('PropertiesPanel', () => {
     onAlign.mockClear();
     onDistribute.mockClear();
     onTidy.mockClear();
+    onGroup.mockClear();
+    onUngroup.mockClear();
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 0;
@@ -307,6 +311,40 @@ describe('PropertiesPanel', () => {
     expect(onTidy).toHaveBeenCalled();
     expect(screen.getByTitle('Align Left')).toBeInTheDocument();
     expect(screen.getByTitle('Distribute Horizontally')).toBeInTheDocument();
+  });
+
+  it('shows group selection action for multi-select and calls it', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={2}
+        canGroup
+        onGroup={onGroup}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Group Selection'));
+
+    expect(onGroup).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /group selection/i })).toBeInTheDocument();
+  });
+
+  it('shows ungroup action for a selected group and calls it', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={1}
+        canUngroup
+        onUngroup={onUngroup}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle('Ungroup Selection'));
+
+    expect(onUngroup).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /ungroup/i })).toBeInTheDocument();
   });
 
   it('falls back safely for legacy styles missing newer fields', () => {

@@ -10,7 +10,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - 2026-04-14: Converted the shell to a full-viewport canvas with floating header and inspector overlays, plus Playwright checks for viewport coverage.
 - 2026-04-15: Added a focused spec and task breakdown for a work-diagram agent with OpenCode transport and presentation-brief output.
 - 2026-04-16: Added embed resize handles, inspector-driven layout editing for single selected frame-like shapes, a dedicated interaction spec for embed/layout behavior, and Playwright coverage for canvas resize plus inspector size edits.
-- 2026-04-16: Added a dedicated planning spec for multi-selection and grouping to close the UX gap between existing grouping internals and missing canvas selection interactions.
+- 2026-04-16: Implemented multi-selection canvas interactions with additive click selection, marquee selection, combined multi-select framing, inspector group/ungroup actions, and regression coverage.
 
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed
@@ -906,32 +906,24 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 25: Add Multi-Selection Canvas Interactions for Grouping
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: HIGH
 **Description**: Complete the user-facing selection workflow needed to make grouping usable: additive selection, marquee selection, and consistent group/ungroup entry points.
 
 **Acceptance Criteria**:
-- Select tool supports additive selection via `Shift + Click`
-- Dragging on empty canvas with the select tool creates a marquee selection box
-- Marquee selection resolves to top-level selectable entities, not raw grouped descendants
-- `Shift + drag` marquee adds to the current selection
-- `Shift + drag` no longer triggers panning in select mode
-- Group action is available from keyboard, context menu, and inspector when selection contains 2+ distinct top-level entities
-- Ungroup action is available from keyboard, context menu, and inspector when a single group is selected
-- Grouping selects the newly created group
-- Ungrouping selects the released children
-- A combined multi-selection frame is shown for 2+ selected top-level entities
-- Undo/redo preserves group and ungroup flows without partial state
-
-**Implementation Details**:
-1. Add shared selection-normalization helpers so selection, grouping, and layer actions agree on top-level IDs
-2. Update `Canvas.tsx` pointer handling for additive click selection, marquee selection, and drag-preserving multi-select behavior
-3. Remove the undocumented `Shift + drag` pan shortcut from select-mode pointer handling
-4. Add inspector affordances for group/ungroup alongside existing multi-select arrange controls
-5. Extend component and hook tests for pointer selection and grouped interactions
+- ✅ Select tool supports additive selection via `Shift + Click`
+- ✅ Dragging on empty canvas with the select tool creates a marquee selection box
+- ✅ Marquee selection resolves to top-level selectable entities, not raw grouped descendants
+- ✅ `Shift + drag` marquee adds to the current selection
+- ✅ `Shift + drag` no longer triggers panning in select mode
+- ✅ Group action is available from keyboard, context menu, and inspector when selection contains 2+ distinct top-level entities
+- ✅ Ungroup action is available from keyboard, context menu, and inspector when a single group is selected
+- ✅ Grouping selects the newly created group
+- ✅ Ungrouping selects the released children
+- ✅ A combined multi-selection frame is shown for 2+ selected top-level entities
+- ✅ Undo/redo preserves group and ungroup flows without partial state
 
 **Files to Create**:
-- `specs/MULTI_SELECTION_GROUPING_SPEC.md`
 - `src/components/Canvas.selection.test.tsx`
 
 **Files to Modify**:
@@ -939,17 +931,30 @@ const isNameTruncated = (name: string): boolean => {
 - `src/components/Canvas.tsx`
 - `src/components/PropertiesPanel.tsx`
 - `src/components/PropertiesPanel.test.tsx`
-- `src/components/Canvas.context-menu.test.tsx`
 - `src/hooks/useCanvas.ts`
 - `src/hooks/useCanvas.grouping.test.ts`
-- `src/hooks/useKeyboard.ts`
 - `src/types/index.ts`
 - `src/canvas/CanvasEngine.ts`
+- `src/components/README.md`
+- `src/hooks/README.md`
+- `src/types/README.md`
+- `src/canvas/README.md`
+- `specs/MULTI_SELECTION_GROUPING_SPEC.md`
+- `specs/SPECS.md`
+- `specs/README.md`
 
-**Testing Requirements**:
-- Component tests for click selection, additive selection, marquee selection, and selection-preserving drag
-- Hook tests for grouping/ungrouping with normalized top-level selection
-- Regression tests for context menu and inspector affordances
+**Verification**:
+- `npx vitest run src/components/Canvas.selection.test.tsx src/components/Canvas.context-menu.test.tsx src/components/PropertiesPanel.test.tsx src/hooks/useCanvas.grouping.test.ts`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added shared selection-normalization helpers so grouped children resolve to top-level selectable entities across canvas, hook, and app layers
+- Added additive `Shift + Click` selection, empty-space marquee selection, additive `Shift + drag` marquee behavior, and a combined multi-select frame
+- Removed the old select-mode `Shift + drag` pan behavior and aligned panning with middle-click plus `Space + drag`
+- Added inspector group/ungroup affordances so the feature is discoverable without relying on shortcuts
+- Preserved audio playback by toggling it only on a click release for a singly selected audio shape, so audio items remain selectable and draggable
 
 **Related Spec**:
 - `specs/MULTI_SELECTION_GROUPING_SPEC.md`

@@ -1,6 +1,12 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import type { Point, Shape, ShapeStyle, EditorState, GroupShape } from '../types';
-import { DEFAULT_STYLE, createShapeId, generateBounds, getGroupDescendants, getRootGroup } from '../types';
+import {
+  DEFAULT_STYLE,
+  createShapeId,
+  generateBounds,
+  getGroupDescendants,
+  normalizeShapeIdsForSelection,
+} from '../types';
 import { validateGenerationProposalForCanvas } from '../agents/agentOrchestrator';
 import type {
   AgentCreateConnectorAction,
@@ -57,20 +63,7 @@ interface UseCanvasReturn {
 const MAX_HISTORY_SIZE = 50;
 
 function normalizeShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): string[] {
-  const normalizedIds: string[] = [];
-  const seenIds = new Set<string>();
-
-  for (const shapeId of shapeIds) {
-    const rootGroup = getRootGroup(shapeId, shapes);
-    const normalizedId = rootGroup?.id ?? shapeId;
-
-    if (!seenIds.has(normalizedId)) {
-      seenIds.add(normalizedId);
-      normalizedIds.push(normalizedId);
-    }
-  }
-
-  return normalizedIds;
+  return normalizeShapeIdsForSelection(shapeIds, shapes);
 }
 
 function expandShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): Set<string> {
@@ -498,13 +491,17 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   }, [saveToHistory, editorState.selectedShapeIds]);
 
   const selectShapes = useCallback((ids: string[]) => {
-    setPresent((prev) => ({
-      ...prev,
-      editorState: {
-        ...prev.editorState,
-        selectedShapeIds: ids,
-      },
-    }));
+    setPresent((prev) => {
+      const normalizedIds = normalizeShapeIdsForSelection(ids, prev.shapes);
+
+      return {
+        ...prev,
+        editorState: {
+          ...prev.editorState,
+          selectedShapeIds: normalizedIds,
+        },
+      };
+    });
   }, []);
 
   const clearSelection = useCallback(() => {
@@ -772,14 +769,15 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
    * Group selected shapes into a new group
    */
   const groupShapes = useCallback((shapeIds: string[]) => {
-    if (shapeIds.length < 2) return; // Need at least 2 shapes to group
-
     setPresent((prev) => {
-      saveToHistory(prev.shapes, prev.editorState);
+      const normalizedShapeIds = normalizeShapeIdsForSelection(shapeIds, prev.shapes);
+      if (normalizedShapeIds.length < 2) return prev;
 
       // Find common parent (if all shapes have same parent)
-      const shapesToGroup = prev.shapes.filter((s) => shapeIds.includes(s.id));
+      const shapesToGroup = prev.shapes.filter((s) => normalizedShapeIds.includes(s.id));
       if (shapesToGroup.length < 2) return prev;
+
+      saveToHistory(prev.shapes, prev.editorState);
 
       const parentIds = new Set(shapesToGroup.map((s) => s.parentId));
       const commonParentId = parentIds.size === 1 ? Array.from(parentIds)[0] : undefined;
@@ -809,7 +807,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
           width: maxX - minX,
           height: maxY - minY,
         },
-        childrenIds: shapeIds,
+        childrenIds: normalizedShapeIds,
         style: { ...prev.editorState.shapeStyle },
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -820,7 +818,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
       return {
         ...prev,
         shapes: prev.shapes.map((shape) => {
-          if (shapeIds.includes(shape.id)) {
+          if (normalizedShapeIds.includes(shape.id)) {
             return { ...shape, parentId: groupId };
           }
           return shape;

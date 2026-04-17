@@ -2,7 +2,7 @@
 
 ## Status
 
-- Status: Draft
+- Status: ✅ Implemented
 - Last updated: 2026-04-16
 - Primary implementation targets:
   - `src/App.tsx`

@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCanvas } from './hooks/useCanvas';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -17,7 +17,7 @@ import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvi
 import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
-import { createShapeId, getGroupBounds } from './types';
+import { createShapeId, getSelectionBounds, normalizeShapeIdsForSelection } from './types';
 import {
   createWorkspaceExportFilename,
   downloadWorkspaceExport,
@@ -88,43 +88,25 @@ function App() {
     canvasSize.width > 0 && canvasSize.height > 0
       ? { width: canvasSize.width, height: canvasSize.height }
       : null;
+  const normalizedSelectedShapeIds = useMemo(
+    () => normalizeShapeIdsForSelection(editorState.selectedShapeIds, shapes),
+    [editorState.selectedShapeIds, shapes]
+  );
 
   // Check if any selected shape is text
   const hasTextSelection = shapes.some(
-    (s) => editorState.selectedShapeIds.includes(s.id) && s.type === 'text'
+    (s) => normalizedSelectedShapeIds.includes(s.id) && s.type === 'text'
   );
 
-  const selectedShapes = shapes.filter((shape) => editorState.selectedShapeIds.includes(shape.id));
+  const selectedShapes = shapes.filter((shape) => normalizedSelectedShapeIds.includes(shape.id));
   const singleSelectedShape = selectedShapes.length === 1 ? selectedShapes[0] : null;
-  const canGroupSelected = editorState.selectedShapeIds.length >= 2;
+  const canGroupSelected = normalizedSelectedShapeIds.length >= 2;
   const canUngroupSelected =
-    editorState.selectedShapeIds.length === 1 && selectedShapes[0]?.type === 'group';
+    normalizedSelectedShapeIds.length === 1 && selectedShapes[0]?.type === 'group';
   const canEditSelectedLayout =
     singleSelectedShape !== null && LAYOUT_EDITABLE_SHAPE_TYPES.includes(singleSelectedShape.type);
 
-  const selectedLayoutBounds: Bounds | null =
-    selectedShapes.length === 0
-      ? null
-      : selectedShapes.reduce<Bounds | null>((accumulator, shape) => {
-          const shapeBounds =
-            shape.type === 'group' ? getGroupBounds(shape.id, shapes) ?? shape.bounds : shape.bounds;
-
-          if (!accumulator) {
-            return { ...shapeBounds };
-          }
-
-          const minX = Math.min(accumulator.x, shapeBounds.x);
-          const minY = Math.min(accumulator.y, shapeBounds.y);
-          const maxX = Math.max(accumulator.x + accumulator.width, shapeBounds.x + shapeBounds.width);
-          const maxY = Math.max(accumulator.y + accumulator.height, shapeBounds.y + shapeBounds.height);
-
-          return {
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY,
-          };
-        }, null);
+  const selectedLayoutBounds: Bounds | null = getSelectionBounds(normalizedSelectedShapeIds, shapes);
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -296,14 +278,14 @@ function App() {
 
   // Grouping helper functions
   const handleGroupSelected = useCallback(() => {
-    if (editorState.selectedShapeIds.length >= 2) {
-      groupShapes(editorState.selectedShapeIds);
+    if (normalizedSelectedShapeIds.length >= 2) {
+      groupShapes(normalizedSelectedShapeIds);
     }
-  }, [groupShapes, editorState.selectedShapeIds]);
+  }, [groupShapes, normalizedSelectedShapeIds]);
 
   const handleUngroupSelected = useCallback(() => {
     // Check if any selected shape is a group
-    const selectedGroups = editorState.selectedShapeIds.filter((id) => {
+    const selectedGroups = normalizedSelectedShapeIds.filter((id) => {
       const shape = shapes.find((s) => s.id === id);
       return shape?.type === 'group';
     });
@@ -312,23 +294,23 @@ function App() {
     if (selectedGroups.length > 0) {
       ungroupShapes(selectedGroups[0]);
     }
-  }, [ungroupShapes, editorState.selectedShapeIds, shapes]);
+  }, [normalizedSelectedShapeIds, shapes, ungroupShapes]);
 
   const handleBringSelectedToFront = useCallback(() => {
-    if (editorState.selectedShapeIds.length === 0) return;
-    bringShapesToFront(editorState.selectedShapeIds);
-  }, [bringShapesToFront, editorState.selectedShapeIds]);
+    if (normalizedSelectedShapeIds.length === 0) return;
+    bringShapesToFront(normalizedSelectedShapeIds);
+  }, [bringShapesToFront, normalizedSelectedShapeIds]);
 
   const handleSendSelectedToBack = useCallback(() => {
-    if (editorState.selectedShapeIds.length === 0) return;
-    sendShapesToBack(editorState.selectedShapeIds);
-  }, [sendShapesToBack, editorState.selectedShapeIds]);
+    if (normalizedSelectedShapeIds.length === 0) return;
+    sendShapesToBack(normalizedSelectedShapeIds);
+  }, [normalizedSelectedShapeIds, sendShapesToBack]);
 
   // Alignment handler
   const handleAlign = useCallback(
     (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => {
       const selectedShapes = shapes.filter((s) =>
-        editorState.selectedShapeIds.includes(s.id)
+        normalizedSelectedShapeIds.includes(s.id)
       );
 
       if (selectedShapes.length < 2) return;
@@ -415,14 +397,14 @@ function App() {
           break;
       }
     },
-    [shapes, editorState.selectedShapeIds, updateShape]
+    [normalizedSelectedShapeIds, shapes, updateShape]
   );
 
   // Distribute handler
   const handleDistribute = useCallback(
     (direction: 'horizontal' | 'vertical') => {
       const selectedShapes = shapes.filter((s) =>
-        editorState.selectedShapeIds.includes(s.id)
+        normalizedSelectedShapeIds.includes(s.id)
       );
 
       if (selectedShapes.length < 3) return;
@@ -465,13 +447,13 @@ function App() {
         });
       }
     },
-    [shapes, editorState.selectedShapeIds, updateShape]
+    [normalizedSelectedShapeIds, shapes, updateShape]
   );
 
   // Tidy handler - arranges shapes in a grid layout
   const handleTidy = useCallback(() => {
     const selectedShapes = shapes.filter((s) =>
-      editorState.selectedShapeIds.includes(s.id)
+      normalizedSelectedShapeIds.includes(s.id)
     );
 
     if (selectedShapes.length < 2) return;
@@ -523,7 +505,7 @@ function App() {
         },
       });
     });
-  }, [shapes, editorState.selectedShapeIds, updateShape]);
+  }, [normalizedSelectedShapeIds, shapes, updateShape]);
 
   const handleLayoutBoundsChange = useCallback(
     (updates: Partial<Bounds>) => {
@@ -619,7 +601,7 @@ function App() {
             <button
               className="action-button delete"
               onClick={deleteSelectedShapes}
-              disabled={editorState.selectedShapeIds.length === 0}
+              disabled={normalizedSelectedShapeIds.length === 0}
               title="Delete Selected (Delete)"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -638,7 +620,7 @@ function App() {
           <Canvas
             canvasRef={canvasRef}
             shapes={shapes}
-            selectedIds={editorState.selectedShapeIds}
+            selectedIds={normalizedSelectedShapeIds}
             tool={editorState.tool}
             style={editorState.shapeStyle}
             camera={editorState.camera}
@@ -676,7 +658,7 @@ function App() {
         </div>
 
         <AnimatePresence mode="popLayout">
-          {editorState.selectedShapeIds.length > 0 && (
+          {normalizedSelectedShapeIds.length > 0 && (
             <motion.div
               initial={{ x: 240, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -698,7 +680,11 @@ function App() {
                 onAlign={handleAlign}
                 onDistribute={handleDistribute}
                 onTidy={handleTidy}
-                selectedCount={editorState.selectedShapeIds.length}
+                selectedCount={normalizedSelectedShapeIds.length}
+                onGroup={handleGroupSelected}
+                onUngroup={handleUngroupSelected}
+                canGroup={canGroupSelected}
+                canUngroup={canUngroupSelected}
               />
             </motion.div>
           )}
@@ -734,7 +720,7 @@ function App() {
           shapes={shapes}
           editorState={{
             camera: editorState.camera,
-            selectedShapeIds: editorState.selectedShapeIds,
+            selectedShapeIds: normalizedSelectedShapeIds,
           }}
           viewport={agentViewport}
           orchestrator={agentOrchestrator}
