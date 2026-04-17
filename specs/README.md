@@ -14,34 +14,31 @@ Specs serve as:
 
 | File | Purpose | Lines | Status |
 |------|---------|-------|--------|
-| `SPECS.md` | Main task list (23 tasks) | ~800 | Active |
+| `SPECS.md` | Main task list (25 tasks) | ~900 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
 | `EMBED_LAYOUT_INTERACTIONS_SPEC.md` | Embed movement, resize, and inspector layout editing rules | ~180 | Completed |
+| `MULTI_SELECTION_GROUPING_SPEC.md` | Multi-select, marquee, and grouping interaction contract | ~250 | Planning |
 | `toolbar-refactor-SPEC.md` | Toolbar redesign spec | ~350 | Completed |
 | `AGENT_WORKFLOWS_SPEC.md` | AI agent integration | ~400 | Planning |
 | `AGENT_DIAGRAM_PRESENTATION_SPEC.md` | Work-diagram generation and presentation brief agent | ~250 | Planning |
 
 ## Active Tasks (from SPECS.md)
 
-### Completed ✅
-1. **Vitest Testing Framework** - Full test setup with coverage
-2. **Text Shape In-Place Editing** - Double-click to edit text
+`SPECS.md` is the source of truth for task status. Current highlights:
+
+### Recently Completed ✅
+- **Task 20** - OpenCode-backed diagram provider
+- **Task 21** - Diagram preview and presentation brief UI
+- **Task 22** - Apply generated diagrams to the canvas
+- **Task 24** - Versioned workspace JSON export
 
 ### In Progress 🟡
-3. **Workspace Name Truncation & Long-Press Menu** - Tab enhancements
+- **Task 11** - Workspace name truncation and long-press menu
 
-### Not Started 🔴
-4. **Text Tool Auto-Switch Behavior** - Auto-switch to select after text
-5. **Export to PNG/SVG** - Export drawings
-6. **Shape Grouping/Ungrouping** - Group multiple shapes
-7. **Auto-save Race Condition** - Fix timing issues
-8. **Remove Unused Parameter** - Fix `canDeleteWorkspace`
-9. **Fix ESLint Disable** - Fix `useCanvas` hook deps
-10. **Add Error Boundaries** - Error handling
-11. **Input Validation** - Workspace name validation
-12-16. **Agent Workflow Tasks** - AI integration foundations
-18-23. **Diagram Generator Agent Tasks** - Work diagram creation and presentation guidance
+### Next Planning / Not Started 🔴
+- **Task 23** - Example-driven coverage and documentation for diagram generation
+- **Task 25** - Multi-selection canvas interactions for grouping
 
 ## Task Status Legend
 
@@ -154,6 +151,20 @@ Documents:
 **Implementation Date**: April 2026
 **Status**: Completed and merged
 
+## Planning Specs
+
+### Multi-Selection & Grouping
+**File**: `MULTI_SELECTION_GROUPING_SPEC.md`
+
+Documents:
+- additive click selection
+- marquee selection
+- combined multi-selection framing
+- inspector and context-menu group/ungroup affordances
+- top-level selection normalization for grouped children
+
+**Status**: Planning / ready for implementation
+
 ## Architecture Specs
 
 ### AGENT_WORKFLOWS_SPEC.md
@@ -228,7 +239,7 @@ Move completed specs to `specs/archive/` when:
 
 1. **Spec Drift**: SPECS.md may not reflect current priorities
 2. **Outdated Specs**: Completed specs not archived
-3. **Missing Specs**: Some features lack detailed specs
+3. **Missing Specs**: Some features still lack detailed interaction-level specs
 
 ## Best Practices
 
