@@ -7,11 +7,15 @@ import {
   getGroupDescendants,
   normalizeShapeIdsForSelection,
 } from '../types';
-import { validateGenerationProposalForCanvas } from '../agents/agentOrchestrator';
+import {
+  validateGenerationProposalForCanvas,
+  validateMutationProposalForCanvas,
+} from '../agents/agentOrchestrator';
 import type {
   AgentCreateConnectorAction,
   AgentCreateShapeAction,
   AgentGenerationProposal,
+  AgentMutationProposal,
 } from '../types/agents';
 import { CanvasEngine } from '../canvas/CanvasEngine';
 import { useWorkspaceStore } from '../stores/workspaceStore';
@@ -48,6 +52,11 @@ interface UseCanvasReturn {
   commitTextEdit: () => void;
   cancelTextEdit: () => void;
   applyGeneratedDiagram: (proposal: AgentGenerationProposal) => {
+    success: boolean;
+    error: string | null;
+    appliedShapeIds: string[];
+  };
+  applyMutationProposal: (proposal: AgentMutationProposal) => {
     success: boolean;
     error: string | null;
     appliedShapeIds: string[];
@@ -248,6 +257,30 @@ function createGeneratedNodeLabel(
     style,
     createdAt: timestamp,
     updatedAt: timestamp,
+  };
+}
+
+function applyShapeBounds(shape: Shape, nextBounds: Partial<Shape['bounds']>): Shape {
+  const bounds = {
+    ...shape.bounds,
+    ...nextBounds,
+  };
+
+  if (shape.type === 'circle') {
+    return {
+      ...shape,
+      bounds,
+      center: {
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height / 2,
+      },
+      radius: Math.min(bounds.width, bounds.height) / 2,
+    };
+  }
+
+  return {
+    ...shape,
+    bounds,
   };
 }
 
@@ -763,6 +796,100 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     [editorState.shapeStyle, saveToHistory, shapes]
   );
 
+  const applyMutationProposal = useCallback(
+    (proposal: AgentMutationProposal) => {
+      if (proposal.actions.length === 0) {
+        return {
+          success: false,
+          error: 'This proposal does not include any changes to apply.',
+          appliedShapeIds: [],
+        };
+      }
+
+      const validation = validateMutationProposalForCanvas(proposal, shapes);
+      if (!validation.isValid) {
+        return {
+          success: false,
+          error: validation.error ?? 'The proposed changes are invalid.',
+          appliedShapeIds: [],
+        };
+      }
+
+      const actionLookup = new Map(proposal.actions.map((action) => [action.targetId, action]));
+      const deletedShapeIds = new Set(
+        proposal.actions
+          .filter((action): action is Extract<AgentMutationProposal['actions'][number], { type: 'delete-shape' }> =>
+            action.type === 'delete-shape'
+          )
+          .map((action) => action.targetId)
+      );
+
+      setPresent((prev) => {
+        saveToHistory(prev.shapes, prev.editorState);
+
+        const nextShapes = prev.shapes
+          .filter((shape) => !deletedShapeIds.has(shape.id))
+          .map((shape) => {
+            const action = actionLookup.get(shape.id);
+            if (!action || action.type !== 'update-shape') {
+              return shape;
+            }
+
+            let nextShape: Shape = shape;
+
+            if (action.changes.bounds) {
+              nextShape = applyShapeBounds(nextShape, action.changes.bounds);
+            }
+
+            if (action.changes.style) {
+              nextShape = {
+                ...nextShape,
+                style: {
+                  ...nextShape.style,
+                  ...action.changes.style,
+                },
+              };
+            }
+
+            if (typeof action.changes.text === 'string' && nextShape.type === 'text') {
+              nextShape = {
+                ...nextShape,
+                text: action.changes.text,
+              };
+            }
+
+            return {
+              ...nextShape,
+              updatedAt: Date.now(),
+            };
+          });
+
+        const remainingSelectedIds = proposal.actions
+          .map((action) => action.targetId)
+          .filter((shapeId) => nextShapes.some((shape) => shape.id === shapeId));
+
+        return {
+          shapes: nextShapes,
+          editorState: {
+            ...prev.editorState,
+            selectedShapeIds: remainingSelectedIds,
+          },
+        };
+      });
+
+      const appliedShapeIds = proposal.actions
+        .map((action) => action.targetId)
+        .filter((shapeId) => !deletedShapeIds.has(shapeId));
+
+      return {
+        success: true,
+        error: null,
+        appliedShapeIds,
+      };
+    },
+    [saveToHistory, shapes]
+  );
+
   // GROUPING METHODS
 
   /**
@@ -943,6 +1070,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     commitTextEdit,
     cancelTextEdit,
     applyGeneratedDiagram,
+    applyMutationProposal,
     // Grouping
     groupShapes,
     ungroupShapes,

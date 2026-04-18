@@ -726,6 +726,17 @@ body {
   background: #f9fafb;
 }
 
+.agent-primary-button:disabled,
+.agent-secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.agent-primary-button:disabled:hover,
+.agent-secondary-button:disabled:hover {
+  background: inherit;
+}
+
 .agent-message-card[data-tone='info'] {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
@@ -888,6 +899,57 @@ body {
   font-size: 14px;
   color: #4b5563;
   line-height: 1.5;
+}
+
+.agent-rewrite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agent-rewrite-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.agent-rewrite-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.agent-rewrite-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-rewrite-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-rewrite-column p {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.agent-rewrite-arrow {
+  font-size: 18px;
+  font-weight: 700;
+  color: #3b82f6;
 }
 
 .agent-finding-header {
@@ -1696,6 +1758,15 @@ body {
 
   .agent-brief-card-wide {
     grid-column: span 1;
+  }
+
+  .agent-rewrite-copy {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-rewrite-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 
   .agent-panel-actions {

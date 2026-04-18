@@ -576,17 +576,17 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 16: Implement Selection Rewrite Workflow
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Implement a selection-scoped agent workflow that rewrites selected text content and optionally proposes small layout adjustments.
 
 **Acceptance Criteria**:
-- Workflow is available only when the current selection contains text-capable shapes
-- User can enter a short rewrite prompt
-- Workflow only targets the current selection
-- Preview clearly shows before/after text changes
-- Apply updates the selected text shapes only
-- Applying the rewrite is undoable in one step
+- ✅ Workflow is available only when the current selection contains text-capable shapes
+- ✅ User can enter a short rewrite prompt
+- ✅ Workflow only targets the current selection
+- ✅ Preview clearly shows before/after text changes
+- ✅ Apply updates the selected text shapes only
+- ✅ Applying the rewrite is undoable in one step
 
 **Implementation Details**:
 1. Reject the workflow with helpful UI if no text-capable shapes are selected
@@ -607,6 +607,20 @@ const isNameTruncated = (name: string): boolean => {
 - Unit tests for rewrite proposal generation
 - Component tests for before/after preview
 - Integration test confirming only selected text shapes change
+
+**Verification**:
+- `npx vitest run src/agents/providers/selectionRewriteProvider.test.ts src/hooks/useCanvas.mutation.test.ts src/components/AgentPanel.test.tsx src/agents/agentOrchestrator.test.ts`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added a deterministic `SelectionRewriteProvider` so the workflow is available without waiting on server-side rewrite transport
+- Locked Selection Rewrite to the current selection and disabled it when no selected text shapes exist
+- Added before/after rewrite preview plus apply handling inside `AgentPanel`
+- Added a grouped mutation-apply path in `useCanvas` so rewrite proposals apply atomically and undo in one step
+- Reused orchestrator mutation validation so invalid rewrite actions are blocked before canvas mutation
+- Cleanup Suggestions remains scaffolded and is still the next missing agent workflow after this slice
 
 ---
 

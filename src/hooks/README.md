@@ -13,7 +13,7 @@ Hooks encapsulate complex logic that can be reused across components:
 
 | Hook | File | Purpose | Lines | Complexity |
 |------|------|---------|-------|------------|
-| useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and agent draft apply | ~650 | High |
+| useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and agent proposal apply | ~740 | High |
 | useKeyboard | `useKeyboard.ts` | Global keyboard shortcuts | 170 | Medium |
 | useElementSize | `useElementSize.ts` | Observe DOM element width/height changes | ~60 | Low |
 
@@ -86,6 +86,12 @@ interface UseCanvasReturn {
     appliedShapeIds: string[];
   };
 
+  applyMutationProposal: (proposal: AgentMutationProposal) => {
+    success: boolean;
+    error: string | null;
+    appliedShapeIds: string[];
+  };
+
   // Grouping and layering
   groupShapes: (shapeIds: string[]) => void;
   ungroupShapes: (groupId: string) => void;
@@ -124,6 +130,7 @@ const [future, setFuture] = useState<HistoryState[]>([]);
    - deleteSelectedShapes
    - updateShapeStyle (when applied to selection)
    - applyGeneratedDiagram
+   - applyMutationProposal
    - groupShapes / ungroupShapes
    - bringShapesToFront / sendShapesToBack
 
@@ -176,6 +183,7 @@ const defaultEditorState: EditorState = {
 - [ ] Undo/redo works for all significant operations
 - [ ] Generated diagram drafts apply atomically in one undo step
 - [ ] Invalid generated drafts fail without partial board changes
+- [ ] Mutation proposals such as Selection Rewrite apply atomically in one undo step
 - [ ] Camera can be panned and zoomed
 - [ ] Selection works correctly
 - [ ] Selection normalizes grouped child ids to top-level selectable entities
@@ -194,6 +202,7 @@ const defaultEditorState: EditorState = {
 - Selection APIs normalize grouped child ids to their top-level group before storing selection state
 - Layer ordering normalizes child selections up to their root group so grouped content moves as one stack item
 - Generated rectangle/circle labels are applied as companion text shapes because those primitives do not yet render inline text
+- Selection Rewrite validation is intentionally strict in Phase 1: only text updates are allowed, with no layout or style mutations
 
 **Known Issues**:
 1. **ESLint Warning**: `react-hooks/exhaustive-deps` disabled for initialData useMemo
@@ -207,7 +216,9 @@ const defaultEditorState: EditorState = {
 
 3. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
 
-4. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
+4. **Cleanup Apply Is Still Pending**: The generic mutation apply path exists now, but Cleanup Suggestions still needs its own provider and preview UX.
+
+5. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
 
 **Testing Requirements**:
 

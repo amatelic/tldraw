@@ -4,6 +4,7 @@ import {
   buildAgentContext,
   validateAgentProposal,
   validateGenerationProposalForCanvas,
+  validateMutationProposalForCanvas,
 } from './agentOrchestrator';
 import type { Shape } from '../types';
 import type { AgentGenerationProposal, AgentProvider } from '../types/agents';
@@ -381,6 +382,57 @@ describe('validateAgentProposal', () => {
 
     expect(result.isValid).toBe(false);
     expect(result.error).toContain('unknown target');
+  });
+
+  it('should validate rewrite-selection proposals before canvas apply starts', () => {
+    const result = validateMutationProposalForCanvas(
+      {
+        kind: 'mutation',
+        workflow: 'rewrite-selection',
+        summary: 'Prepared one rewrite.',
+        actions: [
+          {
+            type: 'update-shape',
+            targetId: 'shape-b',
+            description: 'Rewrite the label for clarity.',
+            changes: {
+              text: 'Launch Plan',
+            },
+          },
+        ],
+      },
+      baseShapes
+    );
+
+    expect(result.isValid).toBe(true);
+    expect(result.error).toBeNull();
+  });
+
+  it('should reject rewrite-selection proposals that try to do more than text updates', () => {
+    const result = validateMutationProposalForCanvas(
+      {
+        kind: 'mutation',
+        workflow: 'rewrite-selection',
+        summary: 'Prepared one rewrite.',
+        actions: [
+          {
+            type: 'update-shape',
+            targetId: 'shape-b',
+            description: 'Rewrite and move the label.',
+            changes: {
+              text: 'Launch Plan',
+              bounds: {
+                x: 100,
+              },
+            },
+          },
+        ],
+      },
+      baseShapes
+    );
+
+    expect(result.isValid).toBe(false);
+    expect(result.error).toContain('only supports text updates');
   });
 });
 

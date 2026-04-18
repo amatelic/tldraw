@@ -3,8 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentOrchestrator } from '../agents/agentOrchestrator';
 import { OpenCodeDiagramProvider } from '../agents/providers/openCodeDiagramProvider';
 import { ReviewModeProvider } from '../agents/providers/reviewModeProvider';
+import { SelectionRewriteProvider } from '../agents/providers/selectionRewriteProvider';
 import type { Shape } from '../types';
-import type { AgentGenerationProposal } from '../types/agents';
+import type { AgentGenerationProposal, AgentMutationProposal } from '../types/agents';
 import { AgentPanel } from './AgentPanel';
 
 const shapeStyle = {
@@ -106,11 +107,19 @@ function renderPanel(options?: {
     success: boolean;
     error: string | null;
   };
+  onApplyMutationProposal?: (proposal: AgentMutationProposal) => {
+    success: boolean;
+    error: string | null;
+  };
   onClose?: ReturnType<typeof vi.fn>;
 }) {
   const orchestrator =
     options?.orchestrator ??
-    new AgentOrchestrator([new ReviewModeProvider(), new OpenCodeDiagramProvider()]);
+    new AgentOrchestrator([
+      new ReviewModeProvider(),
+      new SelectionRewriteProvider(),
+      new OpenCodeDiagramProvider(),
+    ]);
 
   return render(
     <AgentPanel
@@ -126,6 +135,9 @@ function renderPanel(options?: {
       orchestrator={orchestrator}
       onApplyGenerationProposal={
         options?.onApplyGenerationProposal ?? vi.fn(() => ({ success: true, error: null }))
+      }
+      onApplyMutationProposal={
+        options?.onApplyMutationProposal ?? vi.fn(() => ({ success: true, error: null }))
       }
       onClose={options?.onClose ?? vi.fn()}
     />
@@ -149,6 +161,7 @@ describe('AgentPanel', () => {
         viewport={{ width: 600, height: 400 }}
         orchestrator={orchestrator}
         onApplyGenerationProposal={vi.fn(() => ({ success: true, error: null }))}
+        onApplyMutationProposal={vi.fn(() => ({ success: true, error: null }))}
         onClose={vi.fn()}
       />
     );
@@ -173,6 +186,7 @@ describe('AgentPanel', () => {
         viewport={{ width: 600, height: 400 }}
         orchestrator={orchestrator}
         onApplyGenerationProposal={vi.fn(() => ({ success: true, error: null }))}
+        onApplyMutationProposal={vi.fn(() => ({ success: true, error: null }))}
         onClose={onClose}
       />
     );
@@ -201,7 +215,7 @@ describe('AgentPanel', () => {
     });
 
     expect(
-      screen.getByText(/only Review Mode is wired in this first implementation slice/i)
+      screen.getByText(/Cleanup Suggestions are still scaffolded in the UI/i)
     ).toBeInTheDocument();
   });
 
@@ -232,6 +246,12 @@ describe('AgentPanel', () => {
     expect(
       screen.getByText('Using the full workspace, even if some content is outside the current viewport.')
     ).toBeInTheDocument();
+  });
+
+  it('should disable selection rewrite when the current selection has no text shapes', () => {
+    renderPanel({ selectedShapeIds: ['shape-2'] });
+
+    expect(screen.getByRole('option', { name: 'Selection Rewrite' })).toBeDisabled();
   });
 
   it('should apply starter examples to the diagram workflow form', () => {
@@ -270,6 +290,32 @@ describe('AgentPanel', () => {
       expect(screen.getByText(/Preview ready/i)).toBeInTheDocument();
       expect(screen.getByText('Consistency Issues')).toBeInTheDocument();
       expect(screen.getByText('Suggested Next Edits')).toBeInTheDocument();
+    });
+  });
+
+  it('should render a before-and-after preview for selection rewrite', async () => {
+    renderPanel({ selectedShapeIds: ['shape-1'] });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'rewrite-selection' },
+    });
+
+    expect(screen.getByLabelText('Context')).toBeDisabled();
+    expect(screen.getByText('Selection rewrite')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'Shorten these labels for presentation slides.' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft rewrite' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Prepared 1 rewrite/i)).toBeInTheDocument();
+      expect(screen.getByText('Rewrite preview')).toBeInTheDocument();
+      expect(screen.getByText('Before')).toBeInTheDocument();
+      expect(screen.getByText('After')).toBeInTheDocument();
+      expect(screen.getByText('Review this flow')).toBeInTheDocument();
+      expect(screen.getByText('Review Flow')).toBeInTheDocument();
     });
   });
 
@@ -394,6 +440,32 @@ describe('AgentPanel', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('should apply a selection rewrite from preview and close the panel on success', async () => {
+    const onClose = vi.fn();
+    const onApplyMutationProposal = vi.fn(() => ({ success: true, error: null }));
+
+    renderPanel({ onApplyMutationProposal, onClose, selectedShapeIds: ['shape-1'] });
+
+    fireEvent.change(screen.getByLabelText('Workflow'), {
+      target: { value: 'rewrite-selection' },
+    });
+    fireEvent.change(screen.getByLabelText('Prompt'), {
+      target: { value: 'Shorten these labels for presentation slides.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Draft rewrite' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply rewrite' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply rewrite' }));
+
+    await waitFor(() => {
+      expect(onApplyMutationProposal).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('should not mutate the input shapes when running review mode', async () => {

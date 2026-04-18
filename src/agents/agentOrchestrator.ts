@@ -6,6 +6,7 @@ import type {
   AgentGeneratedConnector,
   AgentGeneratedShape,
   AgentGenerationProposal,
+  AgentMutationProposal,
   AgentProposal,
   AgentProposalValidationResult,
   AgentProvider,
@@ -150,26 +151,7 @@ export function validateAgentProposal(
     return validateGenerationProposal(proposal, shapeLookup);
   }
 
-  for (const action of proposal.actions) {
-    const targetShape = shapeLookup.get(action.targetId);
-    if (!targetShape) {
-      return {
-        isValid: false,
-        error: `Mutation action references unknown shape "${action.targetId}".`,
-      };
-    }
-
-    if (action.type === 'update-shape' && typeof action.changes.text === 'string') {
-      if (targetShape.type !== 'text') {
-        return {
-          isValid: false,
-          error: `Only text shapes can receive text updates. Invalid target "${action.targetId}".`,
-        };
-      }
-    }
-  }
-
-  return { isValid: true, error: null };
+  return validateMutationProposalForCanvas(proposal, shapeLookup.values());
 }
 
 export function validateGenerationProposalForCanvas(
@@ -197,6 +179,82 @@ export function validateGenerationProposalForCanvas(
 
   const availableShapeIds = new Set([...existingShapeIds, ...getCreatedShapeIds(proposal.actions)]);
   return validateGenerationSections(proposal, availableShapeIds);
+}
+
+export function validateMutationProposalForCanvas(
+  proposal: AgentMutationProposal,
+  existingShapes: Iterable<Pick<Shape, 'id' | 'type'>>
+): AgentProposalValidationResult {
+  const shapeLookup = new Map(Array.from(existingShapes, (shape) => [shape.id, shape]));
+
+  if (!isNonEmptyText(proposal.summary)) {
+    return {
+      isValid: false,
+      error: 'Mutation proposals must include a non-empty summary.',
+    };
+  }
+
+  for (const action of proposal.actions) {
+    if (!isNonEmptyText(action.description)) {
+      return {
+        isValid: false,
+        error: 'Mutation actions must include a non-empty description.',
+      };
+    }
+
+    const targetShape = shapeLookup.get(action.targetId);
+    if (!targetShape) {
+      return {
+        isValid: false,
+        error: `Mutation action references unknown shape "${action.targetId}".`,
+      };
+    }
+
+    if (
+      action.type === 'update-shape' &&
+      typeof action.changes.text === 'string' &&
+      targetShape.type !== 'text'
+    ) {
+      return {
+        isValid: false,
+        error: `Only text shapes can receive text updates. Invalid target "${action.targetId}".`,
+      };
+    }
+
+    if (proposal.workflow !== 'rewrite-selection') {
+      continue;
+    }
+
+    if (action.type === 'delete-shape') {
+      return {
+        isValid: false,
+        error: 'Selection rewrite only supports text updates in this first implementation slice.',
+      };
+    }
+
+    if (action.changes.bounds || action.changes.style) {
+      return {
+        isValid: false,
+        error: 'Selection rewrite only supports text updates in this first implementation slice.',
+      };
+    }
+
+    if (typeof action.changes.text !== 'string') {
+      return {
+        isValid: false,
+        error: 'Selection rewrite actions must include rewritten text.',
+      };
+    }
+
+    if (targetShape.type !== 'text') {
+      return {
+        isValid: false,
+        error: `Only text shapes can receive text rewrites. Invalid target "${action.targetId}".`,
+      };
+    }
+  }
+
+  return { isValid: true, error: null };
 }
 
 function isFinitePoint(point: AgentGeneratedConnector['start']): boolean {

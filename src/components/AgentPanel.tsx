@@ -5,6 +5,7 @@ import type {
   AgentContextScope,
   AgentGenerationProposal,
   AgentLifecycleState,
+  AgentMutationProposal,
   AgentProposal,
   AgentReviewFinding,
   AgentReviewFindingCategory,
@@ -30,6 +31,13 @@ interface AgentPanelProps {
   viewport?: AgentViewport | null;
   orchestrator: AgentOrchestrator;
   onApplyGenerationProposal: (proposal: AgentGenerationProposal) => Promise<{
+    success: boolean;
+    error: string | null;
+  }> | {
+    success: boolean;
+    error: string | null;
+  };
+  onApplyMutationProposal: (proposal: AgentMutationProposal) => Promise<{
     success: boolean;
     error: string | null;
   }> | {
@@ -124,6 +132,10 @@ function getScopeForWorkflow(
     return 'full-board';
   }
 
+  if (workflow === 'rewrite-selection') {
+    return 'selection';
+  }
+
   return scopeOverride ?? getDefaultScope(selectedShapeIds);
 }
 
@@ -140,6 +152,10 @@ function getScopeDescription(scope: AgentContextScope, shapeCount: number): stri
 }
 
 function getPromptPlaceholder(workflow: AgentWorkflowType, diagramPreset: DiagramPreset): string {
+  if (workflow === 'rewrite-selection') {
+    return 'Describe how to rewrite the selected text. Example: Shorten these labels for presentation slides.';
+  }
+
   if (workflow !== 'generate-diagram') {
     return 'Optional: focus the review on clarity, structure, or another goal.';
   }
@@ -179,11 +195,11 @@ function buildPromptForWorkflow(
 function getWorkflowScaffoldMessage(workflow: AgentWorkflowType): string | null {
   switch (workflow) {
     case 'cleanup':
-    case 'rewrite-selection':
-      return 'Cleanup Suggestions and Selection Rewrite are scaffolded in the UI, but only Review Mode is wired in this first implementation slice.';
+      return 'Cleanup Suggestions are still scaffolded in the UI, but the first fully editable workflow after Review Mode is Selection Rewrite.';
     case 'generate-diagram':
-      return 'Diagram Generator now sends structured requests through the OpenCode-backed provider. Full preview UI lands next, so this step focuses on provider wiring and validation.';
+      return 'Diagram Generator sends structured requests through the OpenCode-backed provider and lets you preview the draft before applying it.';
     case 'review':
+    case 'rewrite-selection':
     default:
       return null;
   }
@@ -257,6 +273,10 @@ function renderStringList(items: string[], fallback: string) {
   );
 }
 
+function isTextShape(shape: Shape): shape is Extract<Shape, { type: 'text' }> {
+  return shape.type === 'text';
+}
+
 export function AgentPanel({
   isOpen,
   workspaceId,
@@ -266,6 +286,7 @@ export function AgentPanel({
   viewport,
   orchestrator,
   onApplyGenerationProposal,
+  onApplyMutationProposal,
   onClose,
 }: AgentPanelProps) {
   const [workflow, setWorkflow] = useState<AgentWorkflowType>('review');
@@ -281,6 +302,19 @@ export function AgentPanel({
   const scope = getScopeForWorkflow(workflow, editorState.selectedShapeIds, scopeOverride);
   const workflowMessage = getWorkflowScaffoldMessage(workflow);
   const isDiagramWorkflow = workflow === 'generate-diagram';
+  const isSelectionRewriteWorkflow = workflow === 'rewrite-selection';
+  const isScopeLockedWorkflow = isDiagramWorkflow || isSelectionRewriteWorkflow;
+
+  const selectedTextShapes = useMemo(
+    () =>
+      shapes.filter(
+        (shape): shape is Extract<Shape, { type: 'text' }> =>
+          editorState.selectedShapeIds.includes(shape.id) && isTextShape(shape)
+      ),
+    [editorState.selectedShapeIds, shapes]
+  );
+
+  const shapeLookup = useMemo(() => new Map(shapes.map((shape) => [shape.id, shape])), [shapes]);
 
   const scopeShapeCount = useMemo(() => {
     if (scope === 'selection') {
@@ -322,13 +356,46 @@ export function AgentPanel({
     };
   }, [proposal]);
 
+  const rewritePreview = useMemo(() => {
+    if (proposal?.kind !== 'mutation' || proposal.workflow !== 'rewrite-selection') {
+      return null;
+    }
+
+    const textChanges = proposal.actions
+      .filter(
+        (action): action is Extract<AgentMutationProposal['actions'][number], { type: 'update-shape' }> =>
+          action.type === 'update-shape' && typeof action.changes.text === 'string'
+      )
+      .map((action) => {
+        const targetShape = shapeLookup.get(action.targetId);
+        const beforeText = targetShape && isTextShape(targetShape) ? targetShape.text : '';
+
+        return {
+          id: action.targetId,
+          description: action.description,
+          beforeText,
+          afterText: action.changes.text ?? '',
+        };
+      });
+
+    return {
+      textChanges,
+    };
+  }, [proposal, shapeLookup]);
+
   if (!isOpen) {
     return null;
   }
 
   const handleWorkflowChange = (nextWorkflow: AgentWorkflowType) => {
     setWorkflow(nextWorkflow);
-    setScopeOverride(nextWorkflow === 'generate-diagram' ? 'full-board' : null);
+    setScopeOverride(
+      nextWorkflow === 'generate-diagram'
+        ? 'full-board'
+        : nextWorkflow === 'rewrite-selection'
+          ? 'selection'
+          : null
+    );
     setProposal(null);
     setErrorMessage(null);
     setStatus('idle');
@@ -347,6 +414,13 @@ export function AgentPanel({
   };
 
   const handleRun = async () => {
+    if (workflow === 'rewrite-selection' && selectedTextShapes.length === 0) {
+      setProposal(null);
+      setStatus('failed');
+      setErrorMessage('Selection Rewrite needs at least one selected text shape.');
+      return;
+    }
+
     setProposal(null);
     setErrorMessage(null);
     setStatus('collecting-context');
@@ -374,7 +448,7 @@ export function AgentPanel({
   };
 
   const handleApplyDraft = async () => {
-    if (proposal?.kind !== 'generation') {
+    if (!proposal || (proposal.kind !== 'generation' && proposal.kind !== 'mutation')) {
       return;
     }
 
@@ -382,10 +456,13 @@ export function AgentPanel({
     setIsApplyingDraft(true);
 
     try {
-      const result = await onApplyGenerationProposal(proposal);
+      const result =
+        proposal.kind === 'generation'
+          ? await onApplyGenerationProposal(proposal)
+          : await onApplyMutationProposal(proposal);
 
       if (!result.success) {
-        setErrorMessage(result.error ?? 'The generated diagram could not be applied.');
+        setErrorMessage(result.error ?? 'The proposed changes could not be applied.');
         return;
       }
 
@@ -425,7 +502,11 @@ export function AgentPanel({
               onChange={(event) => handleWorkflowChange(event.target.value as AgentWorkflowType)}
             >
               {WORKFLOW_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
+                <option
+                  key={option.value}
+                  value={option.value}
+                  disabled={option.value === 'rewrite-selection' && selectedTextShapes.length === 0}
+                >
                   {option.label}
                 </option>
               ))}
@@ -437,7 +518,7 @@ export function AgentPanel({
             <select
               aria-label="Context"
               value={scope}
-              disabled={isDiagramWorkflow}
+              disabled={isScopeLockedWorkflow}
               onChange={(event) => setScopeOverride(event.target.value as AgentContextScope)}
             >
               {SCOPE_OPTIONS.map((option) => (
@@ -450,6 +531,16 @@ export function AgentPanel({
         </div>
 
         <div className="agent-context-summary">{getScopeDescription(scope, scopeShapeCount)}</div>
+
+        {isSelectionRewriteWorkflow && (
+          <div className="agent-diagram-callout">
+            <strong>Selection rewrite</strong>
+            <p>
+              This workflow only rewrites the selected text shapes. You will get a before-and-after
+              preview before anything changes on the board.
+            </p>
+          </div>
+        )}
 
         {isDiagramWorkflow && (
           <>
@@ -536,8 +627,12 @@ export function AgentPanel({
             <button className="agent-secondary-button" onClick={onClose}>
               Cancel
             </button>
-            <button className="agent-primary-button" onClick={handleRun}>
-              {isDiagramWorkflow ? 'Generate draft' : 'Run'}
+            <button
+              className="agent-primary-button"
+              onClick={handleRun}
+              disabled={isSelectionRewriteWorkflow && selectedTextShapes.length === 0}
+            >
+              {isDiagramWorkflow ? 'Generate draft' : isSelectionRewriteWorkflow ? 'Draft rewrite' : 'Run'}
             </button>
           </div>
         </div>
@@ -582,6 +677,66 @@ export function AgentPanel({
             )}
           </div>
         )}
+
+        {status === 'preview-ready' &&
+          proposal?.kind === 'mutation' &&
+          proposal.workflow === 'rewrite-selection' &&
+          rewritePreview && (
+            <div className="agent-results">
+              <div className="agent-results-summary">{proposal.summary}</div>
+
+              <div className="agent-stat-grid">
+                <div className="agent-stat-card">
+                  <strong>{rewritePreview.textChanges.length}</strong>
+                  <span>Text rewrites</span>
+                </div>
+                <div className="agent-stat-card">
+                  <strong>{selectedTextShapes.length}</strong>
+                  <span>Selected text shapes</span>
+                </div>
+              </div>
+
+              <section className="agent-result-group">
+                <h3>Rewrite preview</h3>
+                {rewritePreview.textChanges.length === 0 ? (
+                  <div className="agent-empty-state">No text changes were proposed for this selection.</div>
+                ) : (
+                  <div className="agent-rewrite-list">
+                    {rewritePreview.textChanges.map((change) => (
+                      <article key={change.id} className="agent-rewrite-card">
+                        <strong>{change.description}</strong>
+                        <div className="agent-rewrite-copy">
+                          <div className="agent-rewrite-column">
+                            <span className="agent-rewrite-label">Before</span>
+                            <p>{change.beforeText || 'No text found.'}</p>
+                          </div>
+                          <div className="agent-rewrite-arrow" aria-hidden="true">
+                            →
+                          </div>
+                          <div className="agent-rewrite-column">
+                            <span className="agent-rewrite-label">After</span>
+                            <p>{change.afterText}</p>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <div className="agent-panel-actions agent-panel-actions-inline">
+                <div className="agent-button-row">
+                  <button
+                    className="agent-primary-button"
+                    onClick={handleApplyDraft}
+                    disabled={isApplyingDraft || rewritePreview.textChanges.length === 0}
+                  >
+                    {isApplyingDraft ? 'Applying...' : 'Apply rewrite'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         {status === 'preview-ready' && proposal?.kind === 'generation' && generationPreview && (
           <div className="agent-results">

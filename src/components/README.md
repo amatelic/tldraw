@@ -40,6 +40,14 @@ Components are organized by functionality:
 - Selection Rewrite
 - Diagram Generator
 
+**Selection Rewrite UI**:
+- Workflow option enables only when the current selection includes at least one text shape
+- Context locks to `Selection` because this pass only rewrites the current text selection
+- Prompt accepts a short rewrite intent such as clarifying or shortening labels
+- Preview shows before/after text for each proposed rewrite action
+- Apply action updates the targeted text shapes in one undoable batch
+- Helpful validation message appears if the workflow is requested without text-capable shapes selected
+
 **Diagram Generator UI**:
 - Preset cards for common work-diagram formats
 - Audience and presentation-goal fields
@@ -58,6 +66,10 @@ Components are organized by functionality:
 - Inline error messaging when a generated draft fails validation during apply
 
 **Success Criteria**:
+- [ ] Selection Rewrite only becomes available when selected text exists
+- [ ] Selection Rewrite stays scoped to the current selection
+- [ ] Selection Rewrite previews before/after text before apply
+- [ ] Selection Rewrite applies successfully and closes back to the board
 - [ ] Diagram Generator appears as a distinct workflow, not generic chat UI
 - [ ] Context locks to full board for diagram generation
 - [ ] Presets and starter examples populate the prompt scaffolding
@@ -66,6 +78,7 @@ Components are organized by functionality:
 - [ ] Review Mode behavior remains unchanged
 
 **Known Issues**:
+- Cleanup Suggestions remains scaffolded and is still not wired to a provider/apply flow
 - Rectangle and circle node labels are applied as separate text shapes because the canvas primitives do not yet support inline text
 - Applied connector endpoints are static; moving nodes later does not auto-reroute the generated arrows/lines
 

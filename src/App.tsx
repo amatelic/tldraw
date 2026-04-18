@@ -14,6 +14,7 @@ import { AgentPanel } from './components/AgentPanel';
 import { AgentOrchestrator } from './agents/agentOrchestrator';
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
 import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvider';
+import { SelectionRewriteProvider } from './agents/providers/selectionRewriteProvider';
 import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
@@ -34,7 +35,12 @@ function App() {
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
   const [agentOrchestrator] = useState(
-    () => new AgentOrchestrator([new ReviewModeProvider(), new OpenCodeDiagramProvider()])
+    () =>
+      new AgentOrchestrator([
+        new ReviewModeProvider(),
+        new SelectionRewriteProvider(),
+        new OpenCodeDiagramProvider(),
+      ])
   );
   const workspaceStore = useWorkspaceStore();
   const hasInitializedWorkspaceRef = useRef(false);
@@ -78,6 +84,7 @@ function App() {
     commitTextEdit,
     cancelTextEdit,
     applyGeneratedDiagram,
+    applyMutationProposal,
     groupShapes,
     ungroupShapes,
     bringShapesToFront,
@@ -725,6 +732,7 @@ function App() {
           viewport={agentViewport}
           orchestrator={agentOrchestrator}
           onApplyGenerationProposal={applyGeneratedDiagram}
+          onApplyMutationProposal={applyMutationProposal}
           onClose={() => setIsAgentPanelOpen(false)}
         />
       )}
