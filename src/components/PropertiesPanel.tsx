@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { BlendMode, Bounds, FillGradient, ShapeStyle, ShadowStyle } from '../types';
 import { COLORS, STROKE_WIDTHS, FONT_SIZES, FONT_FAMILIES, DEFAULT_STYLE } from '../types';
 import { ColorPicker } from './ColorPicker';
+import type { SelectedInspectorItem } from './selectedInspectorItems';
 import './PropertiesPanel.css';
 
 interface PropertiesPanelProps {
@@ -16,6 +17,7 @@ interface PropertiesPanelProps {
   onDistribute?: (axis: 'horizontal' | 'vertical') => void;
   onTidy?: () => void;
   selectedCount?: number;
+  selectedItems?: SelectedInspectorItem[];
   onGroup?: () => void;
   onUngroup?: () => void;
   canGroup?: boolean;
@@ -37,13 +39,15 @@ function CollapsibleSection({
   onToggle,
   children,
 }: CollapsibleSectionProps) {
+  const sectionId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
   return (
     <div className="properties-section">
       <button
         className="section-header"
         onClick={onToggle}
         aria-expanded={isExpanded}
-        aria-controls={`section-${title}`}
+        aria-controls={sectionId}
       >
         <span className="section-header-copy">
           <span className="section-title">{title}</span>
@@ -62,7 +66,7 @@ function CollapsibleSection({
         </svg>
       </button>
       {isExpanded && (
-        <div className="section-content" id={`section-${title}`}>
+        <div className="section-content" id={sectionId}>
           {children}
         </div>
       )}
@@ -151,18 +155,21 @@ export function PropertiesPanel({
   onDistribute,
   onTidy,
   selectedCount = 0,
+  selectedItems = [],
   onGroup,
   onUngroup,
   canGroup = false,
   canUngroup = false,
 }: PropertiesPanelProps) {
   const [expandedSections, setExpandedSections] = useState<{
+    selectedItems: boolean;
     layout: boolean;
     style: boolean;
     color: boolean;
     effects: boolean;
     type: boolean;
   }>({
+    selectedItems: true,
     layout: true,
     style: true,
     color: true,
@@ -210,6 +217,7 @@ export function PropertiesPanel({
     0,
     STROKE_WIDTHS.findIndex((width) => width === resolvedStyle.strokeWidth)
   );
+  const hasSelectedItemsSection = selectedCount > 1 && selectedItems.length > 0;
   const canEditLayout = Boolean(layoutBounds && onLayoutBoundsChange && selectedCount === 1);
   const layoutSourceKey = `${layoutBounds?.x ?? ''}:${layoutBounds?.y ?? ''}:${layoutBounds?.width ?? ''}:${layoutBounds?.height ?? ''}`;
   const displayedLayoutDraft =
@@ -681,6 +689,27 @@ export function PropertiesPanel({
           {selectedCount} {selectedCount === 1 ? 'layer' : 'layers'}
         </div>
       </div>
+
+      {hasSelectedItemsSection && (
+        <CollapsibleSection
+          title="Selected Items"
+          meta={`${selectedItems.length} selected`}
+          isExpanded={expandedSections.selectedItems}
+          onToggle={() => toggleSection('selectedItems')}
+        >
+          <ul className="selected-items-list" aria-label="Selected items">
+            {selectedItems.map((item) => (
+              <li key={item.id} className="selected-item-row">
+                <div className="selected-item-copy">
+                  <span className="selected-item-type">{item.typeLabel}</span>
+                  <span className="selected-item-hierarchy">{item.hierarchyLabel}</span>
+                </div>
+                <span className="selected-item-layer-badge">L{item.layerIndex}</span>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSection>
+      )}
 
       <CollapsibleSection
         title="Layout"

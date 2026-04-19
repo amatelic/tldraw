@@ -34,6 +34,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Context-aware inspector - Show relevant sections based on selection type
 - [x] Right-side inspector redesign - Floating soft-surface panel with collapsible sections, metadata headers, inline color cards, and embedded popover color picker
 - [x] Live layout readouts - Inspector now shows X/Y/W/H from the selected shape or selection frame
+- [x] Multi-select inspector metadata - Inspector now lists selected item type, layer index, and group hierarchy for multi-selection
 - [x] Multi-select arrange controls - Align, distribute, and tidy actions in the layout section
 - [x] Shadow editor - Add, remove, recolor, and tune multiple shadows from the effects section
 
@@ -238,6 +239,10 @@ useEffect(() => {
 
 ### April 14, 2026
 - Switched the application shell to a full-viewport canvas with floating header, inspector, toolbar, and zoom controls
+
+### April 17, 2026
+- Added a selected-items metadata section to the multi-select inspector with type, layer index, and group hierarchy labels
+- Added a standalone app UI presentation spec covering the current desktop shell plus the Inspector and Agent panel inventories
 - Rebuilt the color workflow around a tactile floating popover with centered header, segmented tabs, larger gradient surface, and grouped HSLA/hex controls
 - Added UI-focused regression coverage for the new inspector shell and color picker presentation
 - Added a Playwright E2E regression test that seeds legacy persisted workspace state and verifies the inspector no longer crashes when `shapeStyle.shadows` is missing

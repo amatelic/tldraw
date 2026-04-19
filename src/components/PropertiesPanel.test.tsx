@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { PropertiesPanel } from './PropertiesPanel';
 import { DEFAULT_STYLE } from '../types';
 
@@ -11,6 +11,20 @@ describe('PropertiesPanel', () => {
   const onTidy = vi.fn();
   const onGroup = vi.fn();
   const onUngroup = vi.fn();
+  const selectedItems = [
+    {
+      id: 'shape-2',
+      typeLabel: 'Circle',
+      layerIndex: 1,
+      hierarchyLabel: 'Group > Group',
+    },
+    {
+      id: 'shape-1',
+      typeLabel: 'Rectangle',
+      layerIndex: 3,
+      hierarchyLabel: 'Ungrouped',
+    },
+  ];
 
   beforeEach(() => {
     onChange.mockClear();
@@ -311,6 +325,46 @@ describe('PropertiesPanel', () => {
     expect(onTidy).toHaveBeenCalled();
     expect(screen.getByTitle('Align Left')).toBeInTheDocument();
     expect(screen.getByTitle('Distribute Horizontally')).toBeInTheDocument();
+  });
+
+  it('shows selected item metadata for multi-select in layer order', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={2}
+        selectedItems={selectedItems}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /selected items/i })).toBeInTheDocument();
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    const selectedItemsList = screen.getByRole('list', { name: 'Selected items' });
+    const rows = within(selectedItemsList).getAllByRole('listitem');
+
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('Circle')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Group > Group')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('L1')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Rectangle')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Ungrouped')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('L3')).toBeInTheDocument();
+    expect(screen.queryByText('shape-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('shape-2')).not.toBeInTheDocument();
+  });
+
+  it('keeps the selected items section hidden for single selection', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={1}
+        selectedItems={[selectedItems[0]]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /selected items/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Selected items' })).not.toBeInTheDocument();
   });
 
   it('shows group selection action for multi-select and calls it', () => {

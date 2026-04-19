@@ -9,7 +9,7 @@ Components are organized by functionality:
 - **Agent UI**: AgentPanel
 - **Dialogs**: ImageUploadDialog, AudioUploadDialog, EmbedDialog
 - **Workspace**: WorkspaceTabs, WorkspaceTab
-- **Utilities**: Tooltip, ColorPicker
+- **Utilities**: Tooltip, ColorPicker, selectedInspectorItems
 
 ## Component Files
 
@@ -17,13 +17,14 @@ Components are organized by functionality:
 |-----------|------|---------|-------|
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
 | Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~1050 |
-| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~340 |
+| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~420 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
-| PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for shape styling | ~400 |
+| PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for selection styling and multi-select metadata | ~430 |
 | WorkspaceTabs | `WorkspaceTabs.tsx` | Tab bar for workspace switching | ~150 |
 | WorkspaceTab | `WorkspaceTab.tsx` | Individual workspace tab | ~200 |
 | ColorPicker | `ColorPicker.tsx` | Color picker with HSL gradient and sliders | ~300 |
+| SelectedInspectorItems | `selectedInspectorItems.ts` | Pure helper for multi-select inspector metadata rows | ~60 |
 | EmbedDialog | `EmbedDialog.tsx` | Dialog for embedding content | ~150 |
 | ImageUploadDialog | `ImageUploadDialog.tsx` | Dialog for uploading images | ~200 |
 | AudioUploadDialog | `AudioUploadDialog.tsx` | Dialog for uploading audio | ~200 |
@@ -457,6 +458,12 @@ interface ZoomControlsProps {
 - Container-relative overlay treatment so the canvas remains full-size even inside a resizable embed host
 
 **Features**:
+- **Selected Items Section**:
+  - Appears only for multi-select states above the layout section
+  - Lists the current top-level selected entities in back-to-front layer order
+  - Each row shows the user-facing type label, `L{layerIndex}` badge, and a read-only group hierarchy breadcrumb
+  - Uses tighter row spacing so longer multi-select lists stay scannable without overwhelming the panel
+  - Uses generic hierarchy labels such as `Ungrouped`, `Top level`, and `Group > Group` instead of raw ids
 - **Layout Section**:
   - Live position and size readouts from the selected shape or combined multi-select frame
   - Single selected frame-like shapes can edit X, Y, W, and H directly from the inspector inputs
@@ -502,6 +509,7 @@ interface PropertiesPanelProps {
   layoutBounds?: Bounds | null;
   onLayoutBoundsChange?: (bounds: Partial<Bounds>) => void;
   hasTextSelection?: boolean;
+  selectedItems?: SelectedInspectorItem[];
   onAlign?: (alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
   onDistribute?: (axis: 'horizontal' | 'vertical') => void;
   onTidy?: () => void;
@@ -550,6 +558,7 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - [ ] Add shadow button creates new shadow with defaults
 - [ ] Remove shadow button deletes individual shadows
 - [ ] Multi-select arrange actions remain available
+- [ ] Multi-select inspector shows selected items with type, layer index, and hierarchy metadata
 - [ ] Group and ungroup actions appear in the layout section when selection state allows them
 - [ ] Dark mode displays correctly with component tokens
 - [ ] Panel is scrollable when content overflows
@@ -568,6 +577,7 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 
 **Dependencies**:
 - `ColorPicker` component for color selection
+- `selectedInspectorItems.ts` for multi-select metadata shaping
 - CSS variables from `index.css`
 
 ---

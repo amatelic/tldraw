@@ -11,6 +11,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - 2026-04-15: Added a focused spec and task breakdown for a work-diagram agent with OpenCode transport and presentation-brief output.
 - 2026-04-16: Added embed resize handles, inspector-driven layout editing for single selected frame-like shapes, a dedicated interaction spec for embed/layout behavior, and Playwright coverage for canvas resize plus inspector size edits.
 - 2026-04-16: Implemented multi-selection canvas interactions with additive click selection, marquee selection, combined multi-select framing, inspector group/ungroup actions, and regression coverage.
+- 2026-04-17: Added multi-select inspector selected-item metadata plus a standalone app UI presentation spec for the current shell and panel inventory.
 
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed
@@ -972,6 +973,57 @@ const isNameTruncated = (name: string): boolean => {
 
 **Related Spec**:
 - `specs/MULTI_SELECTION_GROUPING_SPEC.md`
+
+---
+
+### Task 26: Add Selected Item Metadata to Multi-Select Inspector
+**Status**: ✅ Completed
+**Priority**: HIGH
+**Description**: Extend the multi-select inspector so it lists the selected top-level entities with read-only type, layer index, and group hierarchy metadata, and document the current app shell in a standalone UI presentation spec.
+
+**Acceptance Criteria**:
+- ✅ Multi-select inspector shows a `Selected Items` section above `Layout`
+- ✅ Section appears only when more than one top-level entity is selected
+- ✅ Each row shows type, back-to-front layer index, and group hierarchy metadata
+- ✅ Selected-item rows are sorted by layer index with `0 = backmost`
+- ✅ Raw ids are not exposed in the inspector list
+- ✅ Single-selection inspector behavior remains unchanged
+- ✅ A pure helper shapes the selected-item metadata for the panel
+- ✅ `MULTI_SELECTION_GROUPING_SPEC.md` documents the new inspector behavior
+- ✅ A standalone app UI presentation spec documents the shell plus `Inspector` and `AgentPanel`
+
+**Files Created**:
+- `src/components/selectedInspectorItems.ts`
+- `src/components/selectedInspectorItems.test.ts`
+- `specs/APP_UI_PRESENTATION_SPEC.md`
+
+**Files Modified**:
+- `src/App.tsx`
+- `src/components/PropertiesPanel.tsx`
+- `src/components/PropertiesPanel.css`
+- `src/components/PropertiesPanel.test.tsx`
+- `src/components/README.md`
+- `src/README.md`
+- `PROGRESS.md`
+- `specs/MULTI_SELECTION_GROUPING_SPEC.md`
+- `specs/SPECS.md`
+- `specs/README.md`
+
+**Verification**:
+- `npx vitest run src/components/selectedInspectorItems.test.ts src/components/PropertiesPanel.test.tsx`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added a pure selected-item view-model helper so the inspector can render stable type, layer, and hierarchy metadata without mixing that derivation into `App.tsx` or `PropertiesPanel.tsx`
+- Layer metadata follows the runtime `shapes` array order and is displayed as `L{index}` from backmost to frontmost
+- Hierarchy labels intentionally use generic group breadcrumbs such as `Group > Group`, plus `Ungrouped` and `Top level` fallbacks, instead of surfacing raw ids
+- Added a dedicated UI presentation spec so shell layout and current sidepanel contents live in one reference document instead of being spread across older implementation specs
+
+**Related Specs**:
+- `specs/MULTI_SELECTION_GROUPING_SPEC.md`
+- `specs/APP_UI_PRESENTATION_SPEC.md`
 
 ---
 

@@ -39,4 +39,14 @@ describe('theme styles', () => {
     expect(appCss).toContain('@container app-shell (max-width: 768px)');
     expect(propertiesPanelCss).toContain('@container (max-width: 720px)');
   });
+
+  it('keeps selected item rows compact enough for long multi-select lists', () => {
+    const propertiesPanelCss = readProjectFile('src/components/PropertiesPanel.css');
+
+    expect(propertiesPanelCss).toContain('.selected-items-list {');
+    expect(propertiesPanelCss).toContain('gap: 8px;');
+    expect(propertiesPanelCss).toContain('.selected-item-row {');
+    expect(propertiesPanelCss).toContain('align-items: center;');
+    expect(propertiesPanelCss).toContain('padding: 10px 12px;');
+  });
 });

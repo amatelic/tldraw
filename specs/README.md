@@ -14,11 +14,12 @@ Specs serve as:
 
 | File | Purpose | Lines | Status |
 |------|---------|-------|--------|
-| `SPECS.md` | Main task list (25 tasks) | ~900 | Active |
+| `SPECS.md` | Main task list (26 tasks) | ~950 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
+| `APP_UI_PRESENTATION_SPEC.md` | Desktop shell and sidepanel inventory reference | ~160 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
 | `EMBED_LAYOUT_INTERACTIONS_SPEC.md` | Embed movement, resize, and inspector layout editing rules | ~180 | Completed |
-| `MULTI_SELECTION_GROUPING_SPEC.md` | Multi-select, marquee, and grouping interaction contract | ~250 | Implemented |
+| `MULTI_SELECTION_GROUPING_SPEC.md` | Multi-select, marquee, grouping, and multi-select inspector metadata contract | ~280 | Implemented |
 | `toolbar-refactor-SPEC.md` | Toolbar redesign spec | ~350 | Completed |
 | `AGENT_WORKFLOWS_SPEC.md` | AI agent integration | ~400 | Planning |
 | `AGENT_DIAGRAM_PRESENTATION_SPEC.md` | Work-diagram generation and presentation brief agent | ~250 | Planning |
@@ -33,6 +34,7 @@ Specs serve as:
 - **Task 22** - Apply generated diagrams to the canvas
 - **Task 24** - Versioned workspace JSON export
 - **Task 25** - Multi-selection canvas interactions for grouping
+- **Task 26** - Multi-select inspector selected-item metadata
 
 ### In Progress 🟡
 - **Task 11** - Workspace name truncation and long-press menu
@@ -161,9 +163,21 @@ Documents:
 - marquee selection
 - combined multi-selection framing
 - inspector and context-menu group/ungroup affordances
+- multi-select inspector rows with type, layer index, and hierarchy metadata
 - top-level selection normalization for grouped children
 
 **Status**: Implemented / reference
+
+### App UI Presentation
+**File**: `APP_UI_PRESENTATION_SPEC.md`
+
+Documents:
+- desktop shell ASCII wireframe
+- floating header, toolbar, zoom controls, and right-side inspector layout
+- current `Inspector` section inventory
+- current `AgentPanel` states and contents
+
+**Status**: Reference
 
 ## Architecture Specs
 

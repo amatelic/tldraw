@@ -11,6 +11,7 @@ import { ImageUploadDialog } from './components/ImageUploadDialog';
 import { AudioUploadDialog } from './components/AudioUploadDialog';
 import { EmbedDialog } from './components/EmbedDialog';
 import { AgentPanel } from './components/AgentPanel';
+import { buildSelectedInspectorItems } from './components/selectedInspectorItems';
 import { AgentOrchestrator } from './agents/agentOrchestrator';
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
 import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvider';
@@ -98,6 +99,10 @@ function App() {
   const normalizedSelectedShapeIds = useMemo(
     () => normalizeShapeIdsForSelection(editorState.selectedShapeIds, shapes),
     [editorState.selectedShapeIds, shapes]
+  );
+  const selectedInspectorItems = useMemo(
+    () => buildSelectedInspectorItems(normalizedSelectedShapeIds, shapes),
+    [normalizedSelectedShapeIds, shapes]
   );
 
   // Check if any selected shape is text
@@ -684,6 +689,7 @@ function App() {
                 layoutBounds={selectedLayoutBounds}
                 onLayoutBoundsChange={canEditSelectedLayout ? handleLayoutBoundsChange : undefined}
                 hasTextSelection={hasTextSelection}
+                selectedItems={selectedInspectorItems}
                 onAlign={handleAlign}
                 onDistribute={handleDistribute}
                 onTidy={handleTidy}

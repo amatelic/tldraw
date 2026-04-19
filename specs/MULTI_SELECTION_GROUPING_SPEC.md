@@ -3,7 +3,7 @@
 ## Status
 
 - Status: ✅ Implemented
-- Last updated: 2026-04-16
+- Last updated: 2026-04-17
 - Primary implementation targets:
   - `src/App.tsx`
   - `src/components/Canvas.tsx`
@@ -199,7 +199,24 @@ Right-click behavior should remain predictable:
 
 ### 12. Inspector Behavior
 
-The existing `Layout` section already surfaces multi-select arrange actions. It should also become the persistent non-keyboard affordance for group actions:
+The inspector should do two jobs for multi-selection:
+
+1. keep arrangement and group actions discoverable
+2. show which top-level entities are currently in the working set
+
+The implemented behavior is:
+
+- show a `Selected Items` section above `Layout` when `selectedCount > 1`
+- show one row per selected top-level entity
+- sort rows by layer index ascending, where `0 = backmost`
+- show the user-facing type label, `L{layerIndex}` badge, and a read-only hierarchy label for each row
+- use `Ungrouped` for top-level non-group items
+- use `Top level` for selected groups without ancestor groups
+- use generic group breadcrumbs such as `Group > Group` when ancestry exists
+- never show raw ids in the inspector
+- keep the list read-only in the first release
+
+The existing `Layout` section continues to surface group actions:
 
 - show `Group selection` when `selectedCount >= 2`
 - show `Ungroup` when a single group is selected
@@ -221,7 +238,7 @@ The existing `Layout` section already surfaces multi-select arrange actions. It 
 ### Multi-Selection Active
 
 - combined selection frame visible
-- inspector remains open with combined bounds and arrange/group actions
+- inspector remains open with a selected-items metadata list plus combined bounds and arrange/group actions
 - context menu offers `Group selection`
 
 ### Marquee In Progress
@@ -289,6 +306,24 @@ Whichever approach is chosen should preserve zoom/pan correctness and avoid lag 
 
 This keeps grouping discoverable without adding permanent header chrome.
 
+### Inspector Metadata View Model
+
+The multi-select inspector list should be driven by a small pure view-model builder:
+
+- input: already-normalized top-level selected ids plus the runtime `shapes` array
+- output rows should include:
+  - `id`
+  - `typeLabel`
+  - `layerIndex`
+  - `hierarchyLabel`
+
+Derivation rules:
+
+- type label comes from the selected entity's `type`
+- layer index comes from the selected entity's order in the `shapes` array
+- hierarchy comes from walking `parentId` through ancestor groups only
+- rows are sorted back-to-front before rendering
+
 ## Implementation Plan
 
 1. Add shared selection-normalization helpers for top-level entity selection.
@@ -296,7 +331,8 @@ This keeps grouping discoverable without adding permanent header chrome.
 3. Remove the `Shift + drag` pan shortcut path from select-mode pointer handling.
 4. Render marquee and combined multi-selection feedback.
 5. Expose group/ungroup actions from the inspector in addition to keyboard and context menu entry points.
-6. Extend tests for pointer selection, marquee selection, grouping, and undo/redo regression coverage.
+6. Add a selected-items inspector section for multi-select metadata.
+7. Extend tests for pointer selection, marquee selection, grouping, selected-items metadata, and undo/redo regression coverage.
 
 ## Acceptance Criteria
 
@@ -307,6 +343,8 @@ This keeps grouping discoverable without adding permanent header chrome.
 - `Shift + drag` no longer triggers panning in select mode
 - users can group a valid multi-selection through keyboard, context menu, and inspector
 - users can ungroup a selected group through keyboard, context menu, and inspector
+- multi-select inspector shows one row per selected top-level entity with type, layer index, and hierarchy metadata
+- selected-items rows are sorted back-to-front and do not expose raw ids
 - grouping selects the newly created group
 - ungrouping selects the released children
 - dragging a selected item inside a multi-selection moves the full selection
@@ -323,6 +361,13 @@ This keeps grouping discoverable without adding permanent header chrome.
   - grouping/ungrouping regression coverage
   - history expectations after group/ungroup
 
+- `src/components/selectedInspectorItems.test.ts`
+  - layer index ordering
+  - type-label mapping
+  - `Ungrouped` and `Top level` hierarchy fallbacks
+  - generic ancestor breadcrumbs
+  - normalized top-level selection behavior
+
 ### Component
 
 - new `src/components/Canvas.selection.test.tsx`
@@ -337,6 +382,8 @@ This keeps grouping discoverable without adding permanent header chrome.
   - group/ungroup visibility against normalized multi-selection
 
 - `src/components/PropertiesPanel.test.tsx`
+  - selected-items section visibility for multi-select only
+  - selected-items row ordering and metadata rendering
   - inspector group/ungroup action row visibility and callbacks
 
 ## Constraints
@@ -346,12 +393,6 @@ This keeps grouping discoverable without adding permanent header chrome.
 - first release should not support subtractive marquee
 - selection math must remain correct under zoom and pan
 - grouping must continue to work with nested groups
-
-## Open Questions
-
-1. Should the combined multi-selection frame expose resize handles immediately, or remain a read-only framing aid for v1?
-2. Should marquee selection use intersection or full containment for tiny objects such as lines and arrows if intersection feels too eager in practice?
-3. Should the inspector expose group/ungroup as full-width buttons or compact pills alongside existing arrange actions?
 
 ## Related
 

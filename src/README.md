@@ -113,9 +113,10 @@ App.tsx
 ├── useKeyboard (shortcuts)
 ├── workspaceStore (persistence)
 ├── workspaceExport utils (versioned JSON serialization + download)
+├── selectedInspectorItems (multi-select inspector metadata)
 ├── Toolbar (tool selection)
 ├── Canvas (rendering, interactions)
-├── PropertiesPanel (conditional, animated)
+├── PropertiesPanel (conditional, animated, multi-select metadata)
 ├── ZoomControls
 ├── WorkspaceTabs (workspace management)
 └── Dialogs (Image, Audio, Embed)
