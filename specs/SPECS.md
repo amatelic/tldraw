@@ -12,6 +12,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - 2026-04-16: Added embed resize handles, inspector-driven layout editing for single selected frame-like shapes, a dedicated interaction spec for embed/layout behavior, and Playwright coverage for canvas resize plus inspector size edits.
 - 2026-04-16: Implemented multi-selection canvas interactions with additive click selection, marquee selection, combined multi-select framing, inspector group/ungroup actions, and regression coverage.
 - 2026-04-17: Added multi-select inspector selected-item metadata plus a standalone app UI presentation spec for the current shell and panel inventory.
+- 2026-04-20: Refactored the agent UI into a sidebar-first composer with progressive disclosure and an expanded diagram preview sheet.
 
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed
@@ -1024,6 +1025,45 @@ const isNameTruncated = (name: string): boolean => {
 **Related Specs**:
 - `specs/MULTI_SELECTION_GROUPING_SPEC.md`
 - `specs/APP_UI_PRESENTATION_SPEC.md`
+
+---
+
+### Task 27: Redesign Agent UI as Sidebar-First Composer
+**Status**: ✅ Completed
+**Priority**: HIGH
+**Description**: Move the agent entry out of the crowded centered modal and into a compact right-sidebar flow, while reserving a larger preview surface for rich diagram drafts.
+
+**Acceptance Criteria**:
+- ✅ Agent opens in the right-side overlay slot instead of a centered modal
+- ✅ Compose state is compact and keeps the canvas visible
+- ✅ Diagram setup uses progressive disclosure instead of always-on cards
+- ✅ Review and selection rewrite results render inline in the sidebar
+- ✅ Diagram generation opens an expanded preview sheet after draft generation
+- ✅ Applying a generated diagram still works from the preview surface
+- ✅ Existing review, rewrite, and diagram workflows remain functional
+
+**Files Modified**:
+- `src/App.tsx`
+- `src/App.css`
+- `src/components/AgentPanel.tsx`
+- `src/components/AgentPanel.test.tsx`
+- `src/components/README.md`
+- `src/README.md`
+- `PROGRESS.md`
+- `specs/SPECS.md`
+
+**Verification**:
+- `npx vitest run src/components/AgentPanel.test.tsx`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Reused the existing right-side overlay slot so the agent now behaves more like the inspector and less like a blocking dashboard modal
+- Replaced stacked preset/example cards with compact option surfaces and moved audience/presentation details behind a setup toggle
+- Kept review and rewrite previews inline so lightweight workflows do not leave the sidebar
+- Moved diagram preview into a dedicated sheet so rich draft output no longer competes with compose controls in one narrow column
+- Preserved grouped apply and error handling from earlier agent tasks while simplifying the surrounding UI chrome
 
 ---
 

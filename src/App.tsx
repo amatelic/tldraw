@@ -119,6 +119,7 @@ function App() {
     singleSelectedShape !== null && LAYOUT_EDITABLE_SHAPE_TYPES.includes(singleSelectedShape.type);
 
   const selectedLayoutBounds: Bounds | null = getSelectionBounds(normalizedSelectedShapeIds, shapes);
+  const showPropertiesPanel = normalizedSelectedShapeIds.length > 0 && !isAgentPanelOpen;
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -577,16 +578,16 @@ function App() {
               Export JSON
             </button>
             <button
-              className="action-button"
-              onClick={() => setIsAgentPanelOpen(true)}
-              title="Open Agent"
+              className={`action-button${isAgentPanelOpen ? ' active' : ''}`}
+              onClick={() => setIsAgentPanelOpen((current) => !current)}
+              title={isAgentPanelOpen ? 'Close Agent' : 'Open Agent'}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 3l7 4v5c0 4.97-3.05 8.98-7 10-3.95-1.02-7-5.03-7-10V7l7-4z" />
                 <path d="M9.5 11.5a2.5 2.5 0 015 0c0 1.4-1.1 1.94-1.9 2.47-.52.34-.85.64-.85 1.03" />
                 <circle cx="12" cy="17.5" r=".5" fill="currentColor" stroke="none" />
               </svg>
-              Agents
+              Agent
             </button>
             <button
               className="action-button"
@@ -670,8 +671,9 @@ function App() {
         </div>
 
         <AnimatePresence mode="popLayout">
-          {normalizedSelectedShapeIds.length > 0 && (
+          {showPropertiesPanel && (
             <motion.div
+              key="properties-panel"
               initial={{ x: 240, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 240, opacity: 0 }}
@@ -701,6 +703,38 @@ function App() {
               />
             </motion.div>
           )}
+
+          {isAgentPanelOpen && (
+            <motion.div
+              key="agent-panel"
+              initial={{ x: 240, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: 240, opacity: 0 }}
+              transition={{
+                type: 'spring',
+                stiffness: 300,
+                damping: 30,
+                mass: 1,
+              }}
+              className="properties-panel-wrapper agent-sidebar-wrapper"
+            >
+              <AgentPanel
+                isOpen={isAgentPanelOpen}
+                workspaceId={activeWorkspace.id}
+                workspaceName={activeWorkspace.name}
+                shapes={shapes}
+                editorState={{
+                  camera: editorState.camera,
+                  selectedShapeIds: normalizedSelectedShapeIds,
+                }}
+                viewport={agentViewport}
+                orchestrator={agentOrchestrator}
+                onApplyGenerationProposal={applyGeneratedDiagram}
+                onApplyMutationProposal={applyMutationProposal}
+                onClose={() => setIsAgentPanelOpen(false)}
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
@@ -724,24 +758,6 @@ function App() {
         onEmbedAdd={handleEmbedAdd}
         style={editorState.shapeStyle}
       />
-
-      {isAgentPanelOpen && (
-        <AgentPanel
-          isOpen={isAgentPanelOpen}
-          workspaceId={activeWorkspace.id}
-          workspaceName={activeWorkspace.name}
-          shapes={shapes}
-          editorState={{
-            camera: editorState.camera,
-            selectedShapeIds: normalizedSelectedShapeIds,
-          }}
-          viewport={agentViewport}
-          orchestrator={agentOrchestrator}
-          onApplyGenerationProposal={applyGeneratedDiagram}
-          onApplyMutationProposal={applyMutationProposal}
-          onClose={() => setIsAgentPanelOpen(false)}
-        />
-      )}
     </div>
   );
 }

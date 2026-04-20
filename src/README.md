@@ -73,6 +73,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 - [ ] Canvas renders shapes smoothly at 60fps
 - [ ] Workspaces persist across page reloads
 - [ ] Undo/redo works for all significant operations
+- [ ] Right-side overlays let the user switch cleanly between inspector and agent flows without shrinking the canvas
 - [ ] Keyboard shortcuts work globally (except when editing text)
 - [ ] All tests pass (minimum 80% coverage)
 
@@ -109,7 +110,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 ```
 App.tsx
 ├── useCanvas (shapes, camera, history, text editing)
-├── AgentPanel / agentOrchestrator / providers (agent workflows)
+├── AgentPanel / agentOrchestrator / providers (agent workflows, sidebar compose, expanded draft preview)
 ├── useKeyboard (shortcuts)
 ├── workspaceStore (persistence)
 ├── workspaceExport utils (versioned JSON serialization + download)

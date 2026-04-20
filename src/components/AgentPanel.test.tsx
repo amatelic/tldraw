@@ -144,6 +144,10 @@ function renderPanel(options?: {
   );
 }
 
+function chooseWorkflow(label: string) {
+  fireEvent.click(screen.getByRole('button', { name: label }));
+}
+
 describe('AgentPanel', () => {
   it('should not render when closed', () => {
     const orchestrator = new AgentOrchestrator([new ReviewModeProvider()]);
@@ -210,9 +214,7 @@ describe('AgentPanel', () => {
   it('should show workflow-specific guidance when switching away from review mode', () => {
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'cleanup' },
-    });
+    chooseWorkflow('Cleanup Suggestions');
 
     expect(
       screen.getByText(/Cleanup Suggestions are still scaffolded in the UI/i)
@@ -222,25 +224,22 @@ describe('AgentPanel', () => {
   it('should render structured diagram workflow controls when diagram generator is selected', () => {
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
 
-    expect(screen.getByText('Diagram draft + presentation brief')).toBeInTheDocument();
+    expect(screen.getByText('Diagram type')).toBeInTheDocument();
     expect(screen.getByLabelText('Audience')).toBeInTheDocument();
     expect(screen.getByLabelText('Presentation Goal')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate draft' })).toBeInTheDocument();
     expect(
-      screen.getByText(/OpenCode-backed provider/i)
+      screen.getByText(/opens a larger preview only after draft generation/i)
     ).toBeInTheDocument();
   });
 
   it('should lock context to full board for diagram generation', () => {
     renderPanel({ selectedShapeIds: ['shape-1'] });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
+    chooseWorkflow('Diagram Generator');
 
     expect(screen.getByLabelText('Context')).toBeDisabled();
     expect(
@@ -251,19 +250,20 @@ describe('AgentPanel', () => {
   it('should disable selection rewrite when the current selection has no text shapes', () => {
     renderPanel({ selectedShapeIds: ['shape-2'] });
 
-    expect(screen.getByRole('option', { name: 'Selection Rewrite' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Selection Rewrite' })).toBeDisabled();
   });
 
   it('should apply starter examples to the diagram workflow form', () => {
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
-
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
     fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
 
-    expect(screen.getByLabelText('Workflow')).toHaveValue('generate-diagram');
+    expect(screen.getByRole('button', { name: 'Diagram Generator' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(screen.getByLabelText('Prompt')).toHaveValue(
       'Create a backend architecture for a messaging app.'
     );
@@ -296,9 +296,7 @@ describe('AgentPanel', () => {
   it('should render a before-and-after preview for selection rewrite', async () => {
     renderPanel({ selectedShapeIds: ['shape-1'] });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'rewrite-selection' },
-    });
+    chooseWorkflow('Selection Rewrite');
 
     expect(screen.getByLabelText('Context')).toBeDisabled();
     expect(screen.getByText('Selection rewrite')).toBeInTheDocument();
@@ -322,19 +320,17 @@ describe('AgentPanel', () => {
   it('should render a diagram preview with sections, planned nodes, connectors, warnings, and presentation brief details', async () => {
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
-
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
     fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Preview ready/i)).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Draft diagram' })).toBeInTheDocument();
       expect(screen.getByText('Diagram plan')).toBeInTheDocument();
       expect(screen.getByText('Presentation brief')).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Warnings' })).toBeInTheDocument();
-      expect(screen.getByText('Messaging App Backend Architecture')).toBeInTheDocument();
+      expect(screen.getAllByText('Messaging App Backend Architecture').length).toBeGreaterThan(0);
       expect(screen.getByText('Core Services')).toBeInTheDocument();
       expect(screen.getByText('Web / Mobile Clients')).toBeInTheDocument();
       expect(screen.getByText('API Gateway')).toBeInTheDocument();
@@ -374,9 +370,7 @@ describe('AgentPanel', () => {
 
     renderPanel({ orchestrator: fakeOrchestrator });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
+    chooseWorkflow('Diagram Generator');
     fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
 
     await waitFor(() => {
@@ -394,10 +388,8 @@ describe('AgentPanel', () => {
 
     renderPanel({ onApplyGenerationProposal, onClose });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
-
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
     fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
 
@@ -422,10 +414,8 @@ describe('AgentPanel', () => {
 
     renderPanel({ onApplyGenerationProposal, onClose });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'generate-diagram' },
-    });
-
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
     fireEvent.click(screen.getByRole('button', { name: /Messaging App Backend/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
 
@@ -448,9 +438,7 @@ describe('AgentPanel', () => {
 
     renderPanel({ onApplyMutationProposal, onClose, selectedShapeIds: ['shape-1'] });
 
-    fireEvent.change(screen.getByLabelText('Workflow'), {
-      target: { value: 'rewrite-selection' },
-    });
+    chooseWorkflow('Selection Rewrite');
     fireEvent.change(screen.getByLabelText('Prompt'), {
       target: { value: 'Shorten these labels for presentation slides.' },
     });

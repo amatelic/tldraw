@@ -197,7 +197,7 @@ function getWorkflowScaffoldMessage(workflow: AgentWorkflowType): string | null 
     case 'cleanup':
       return 'Cleanup Suggestions are still scaffolded in the UI, but the first fully editable workflow after Review Mode is Selection Rewrite.';
     case 'generate-diagram':
-      return 'Diagram Generator sends structured requests through the OpenCode-backed provider and lets you preview the draft before applying it.';
+      return 'Diagram Generator sends structured requests through the OpenCode-backed provider and opens a larger preview only after draft generation.';
     case 'review':
     case 'rewrite-selection':
     default:
@@ -265,9 +265,11 @@ function renderStringList(items: string[], fallback: string) {
   }
 
   return (
-    <ul>
+    <ul className="agent-compact-list">
       {visibleItems.map((item) => (
-        <li key={item}>{item}</li>
+        <li key={item} className="agent-compact-item">
+          {item}
+        </li>
       ))}
     </ul>
   );
@@ -295,10 +297,13 @@ export function AgentPanel({
   const [diagramPreset, setDiagramPreset] = useState<DiagramPreset>('architecture');
   const [audience, setAudience] = useState('');
   const [presentationGoal, setPresentationGoal] = useState('');
+  const [showDiagramDetails, setShowDiagramDetails] = useState(false);
   const [status, setStatus] = useState<AgentLifecycleState>('idle');
   const [proposal, setProposal] = useState<AgentProposal | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isApplyingDraft, setIsApplyingDraft] = useState(false);
+  const [isDiagramPreviewOpen, setIsDiagramPreviewOpen] = useState(false);
+
   const scope = getScopeForWorkflow(workflow, editorState.selectedShapeIds, scopeOverride);
   const workflowMessage = getWorkflowScaffoldMessage(workflow);
   const isDiagramWorkflow = workflow === 'generate-diagram';
@@ -383,6 +388,12 @@ export function AgentPanel({
     };
   }, [proposal, shapeLookup]);
 
+  const isDiagramPreviewVisible =
+    status === 'preview-ready' &&
+    proposal?.kind === 'generation' &&
+    generationPreview !== null &&
+    isDiagramPreviewOpen;
+
   if (!isOpen) {
     return null;
   }
@@ -399,6 +410,10 @@ export function AgentPanel({
     setProposal(null);
     setErrorMessage(null);
     setStatus('idle');
+    if (nextWorkflow !== 'generate-diagram') {
+      setShowDiagramDetails(false);
+    }
+    setIsDiagramPreviewOpen(false);
   };
 
   const handleExampleApply = (example: (typeof DIAGRAM_EXAMPLES)[number]) => {
@@ -408,9 +423,11 @@ export function AgentPanel({
     setPrompt(example.prompt);
     setAudience(example.audience);
     setPresentationGoal(example.goal);
+    setShowDiagramDetails(true);
     setProposal(null);
     setErrorMessage(null);
     setStatus('idle');
+    setIsDiagramPreviewOpen(false);
   };
 
   const handleRun = async () => {
@@ -424,6 +441,7 @@ export function AgentPanel({
     setProposal(null);
     setErrorMessage(null);
     setStatus('collecting-context');
+    setIsDiagramPreviewOpen(false);
 
     await Promise.resolve();
     setStatus('generating');
@@ -441,6 +459,7 @@ export function AgentPanel({
 
       setProposal(result.proposal);
       setStatus('preview-ready');
+      setIsDiagramPreviewOpen(result.proposal.kind === 'generation');
     } catch (error) {
       setStatus('failed');
       setErrorMessage(error instanceof Error ? error.message : 'The agent request failed.');
@@ -473,18 +492,13 @@ export function AgentPanel({
   };
 
   return (
-    <div className="agent-backdrop" onClick={onClose}>
-      <section
-        className="agent-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="agent-panel-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="agent-panel-header">
-          <div>
+    <>
+      <section className="agent-sidebar" aria-labelledby="agent-panel-title">
+        <div className="agent-sidebar-header">
+          <div className="agent-sidebar-copy">
+            <p className="agent-panel-kicker">Workspace assistant</p>
             <h2 id="agent-panel-title">Agent</h2>
-            <p>Run a focused helper flow for {workspaceName}.</p>
+            <p>Compose a focused helper flow for {workspaceName}.</p>
           </div>
           <button className="agent-close-button" onClick={onClose} aria-label="Close agent panel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -493,139 +507,258 @@ export function AgentPanel({
           </button>
         </div>
 
-        <div className="agent-form-grid">
-          <label className="agent-field">
-            <span>Workflow</span>
-            <select
-              aria-label="Workflow"
-              value={workflow}
-              onChange={(event) => handleWorkflowChange(event.target.value as AgentWorkflowType)}
-            >
-              {WORKFLOW_OPTIONS.map((option) => (
-                <option
+        <div className="agent-sidebar-body">
+          <div className="agent-workflow-switcher" role="group" aria-label="Workflow">
+            {WORKFLOW_OPTIONS.map((option) => {
+              const isDisabled = option.value === 'rewrite-selection' && selectedTextShapes.length === 0;
+
+              return (
+                <button
                   key={option.value}
-                  value={option.value}
-                  disabled={option.value === 'rewrite-selection' && selectedTextShapes.length === 0}
+                  type="button"
+                  className={`agent-workflow-chip${workflow === option.value ? ' is-active' : ''}`}
+                  aria-pressed={workflow === option.value}
+                  disabled={isDisabled}
+                  onClick={() => handleWorkflowChange(option.value)}
                 >
                   {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="agent-field">
-            <span>Context</span>
-            <select
-              aria-label="Context"
-              value={scope}
-              disabled={isScopeLockedWorkflow}
-              onChange={(event) => setScopeOverride(event.target.value as AgentContextScope)}
-            >
-              {SCOPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="agent-context-summary">{getScopeDescription(scope, scopeShapeCount)}</div>
-
-        {isSelectionRewriteWorkflow && (
-          <div className="agent-diagram-callout">
-            <strong>Selection rewrite</strong>
-            <p>
-              This workflow only rewrites the selected text shapes. You will get a before-and-after
-              preview before anything changes on the board.
-            </p>
+                </button>
+              );
+            })}
           </div>
-        )}
 
-        {isDiagramWorkflow && (
-          <>
-            <div className="agent-diagram-callout">
-              <strong>Diagram draft + presentation brief</strong>
+          <div className="agent-context-row">
+            <div className="agent-context-copy">
+              <span className="agent-inline-label">Context</span>
+              <p>{getScopeDescription(scope, scopeShapeCount)}</p>
+            </div>
+            <label className="agent-inline-select">
+              <span>Context</span>
+              <select
+                aria-label="Context"
+                value={scope}
+                disabled={isScopeLockedWorkflow}
+                onChange={(event) => setScopeOverride(event.target.value as AgentContextScope)}
+              >
+                {SCOPE_OPTIONS.map((option) => (
+                  <option key={option.label} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {workflowMessage && (
+            <div className="agent-inline-message" data-tone="info">
+              {workflowMessage}
+            </div>
+          )}
+
+          {isSelectionRewriteWorkflow && (
+            <div className="agent-helper-copy">
+              <strong>Selection rewrite</strong>
               <p>
-                This workflow prepares a simple work diagram and the talk track you can use to
-                present it. Context is locked to the full board for the first generation pass.
+                Only the selected text changes. You will get a before-and-after preview before
+                anything is applied.
               </p>
             </div>
+          )}
 
-            <div className="agent-preset-grid" role="list" aria-label="Diagram presets">
-              {DIAGRAM_PRESETS.map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  className={`agent-preset-card${diagramPreset === preset.value ? ' is-active' : ''}`}
-                  onClick={() => setDiagramPreset(preset.value)}
-                >
-                  <strong>{preset.label}</strong>
-                  <span>{preset.summary}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="agent-form-grid">
-              <label className="agent-field">
-                <span>Audience</span>
-                <input
-                  aria-label="Audience"
-                  value={audience}
-                  onChange={(event) => setAudience(event.target.value)}
-                  placeholder="Who will you present this to?"
-                />
-              </label>
-
-              <label className="agent-field">
-                <span>Presentation Goal</span>
-                <input
-                  aria-label="Presentation Goal"
-                  value={presentationGoal}
-                  onChange={(event) => setPresentationGoal(event.target.value)}
-                  placeholder="What should the audience understand?"
-                />
-              </label>
-            </div>
-
-            <div className="agent-example-section">
-              <div className="agent-example-header">
-                <strong>Starter examples</strong>
-                <span>Use one as a fast starting point, then edit the prompt.</span>
+          {isDiagramWorkflow && (
+            <section className="agent-compose-section">
+              <div className="agent-section-heading">
+                <strong>Diagram type</strong>
+                <span>Pick a structure first, then focus the prompt on the story you need to tell.</span>
               </div>
-              <div className="agent-example-grid" role="list" aria-label="Diagram examples">
-                {DIAGRAM_EXAMPLES.map((example) => (
+
+              <div className="agent-chip-grid" role="list" aria-label="Diagram presets">
+                {DIAGRAM_PRESETS.map((preset) => (
                   <button
-                    key={example.label}
+                    key={preset.value}
                     type="button"
-                    className="agent-example-card"
-                    onClick={() => handleExampleApply(example)}
+                    className={`agent-compact-option${diagramPreset === preset.value ? ' is-active' : ''}`}
+                    onClick={() => setDiagramPreset(preset.value)}
                   >
-                    <strong>{example.label}</strong>
-                    <span>{example.prompt}</span>
+                    <strong>{preset.label}</strong>
+                    <span>{preset.summary}</span>
                   </button>
                 ))}
               </div>
+
+              <button
+                type="button"
+                className="agent-inline-toggle"
+                aria-expanded={showDiagramDetails}
+                onClick={() => setShowDiagramDetails((current) => !current)}
+              >
+                {showDiagramDetails ? 'Hide setup details' : 'Show setup details'}
+              </button>
+
+              {showDiagramDetails && (
+                <div className="agent-detail-stack">
+                  <div className="agent-form-grid">
+                    <label className="agent-field">
+                      <span>Audience</span>
+                      <input
+                        aria-label="Audience"
+                        value={audience}
+                        onChange={(event) => setAudience(event.target.value)}
+                        placeholder="Who will you present this to?"
+                      />
+                    </label>
+
+                    <label className="agent-field">
+                      <span>Presentation Goal</span>
+                      <input
+                        aria-label="Presentation Goal"
+                        value={presentationGoal}
+                        onChange={(event) => setPresentationGoal(event.target.value)}
+                        placeholder="What should the audience understand?"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="agent-section-heading">
+                    <strong>Starter examples</strong>
+                    <span>Use one as a fast starting point, then refine the prompt.</span>
+                  </div>
+                  <div className="agent-example-chip-row" role="list" aria-label="Diagram examples">
+                    {DIAGRAM_EXAMPLES.map((example) => (
+                      <button
+                        key={example.label}
+                        type="button"
+                        className="agent-example-chip"
+                        onClick={() => handleExampleApply(example)}
+                      >
+                        <strong>{example.label}</strong>
+                        <span>{example.prompt}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <label className="agent-field">
+            <span>Prompt</span>
+            <textarea
+              aria-label="Prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder={getPromptPlaceholder(workflow, diagramPreset)}
+              rows={4}
+            />
+          </label>
+
+          {errorMessage && !isDiagramPreviewVisible && (
+            <div className="agent-inline-message" data-tone="error" role="alert">
+              {errorMessage}
             </div>
-          </>
-        )}
+          )}
 
-        <label className="agent-field">
-          <span>Prompt</span>
-          <textarea
-            aria-label="Prompt"
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            placeholder={getPromptPlaceholder(workflow, diagramPreset)}
-            rows={4}
-          />
-        </label>
+          {status === 'preview-ready' && proposal?.kind === 'review' && (
+            <div className="agent-inline-results">
+              <div className="agent-results-summary">{proposal.summary}</div>
 
-        <div className="agent-panel-actions">
-          <span className={`agent-status agent-status-${status}`}>{STATUS_LABELS[status]}</span>
+              {proposal.findings.length === 0 ? (
+                <div className="agent-empty-state">No obvious issues found in this scope.</div>
+              ) : (
+                Array.from(groupedFindings.entries()).map(([category, findings]) => (
+                  <section key={category} className="agent-inline-section">
+                    <div className="agent-inline-section-header">
+                      <h3>{REVIEW_CATEGORY_LABELS[category]}</h3>
+                      <span>{findings.length}</span>
+                    </div>
+                    <ul className="agent-compact-list">
+                      {findings.map((finding) => (
+                        <li key={finding.id} className="agent-compact-item">
+                          <div className="agent-finding-header">
+                            <strong>{finding.title}</strong>
+                            <span className={`agent-severity agent-severity-${finding.severity}`}>
+                              {finding.severity}
+                            </span>
+                          </div>
+                          <p>{finding.detail}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))
+              )}
+            </div>
+          )}
+
+          {status === 'preview-ready' &&
+            proposal?.kind === 'mutation' &&
+            proposal.workflow === 'rewrite-selection' &&
+            rewritePreview && (
+              <div className="agent-inline-results">
+                <div className="agent-results-summary">{proposal.summary}</div>
+
+                <section className="agent-inline-section">
+                  <div className="agent-inline-section-header">
+                    <h3>Rewrite preview</h3>
+                    <span>{rewritePreview.textChanges.length} changes</span>
+                  </div>
+                  {rewritePreview.textChanges.length === 0 ? (
+                    <div className="agent-empty-state">No text changes were proposed for this selection.</div>
+                  ) : (
+                    <div className="agent-rewrite-list">
+                      {rewritePreview.textChanges.map((change) => (
+                        <article key={change.id} className="agent-rewrite-row">
+                          <div className="agent-rewrite-row-header">
+                            <strong>{change.description}</strong>
+                          </div>
+                          <div className="agent-rewrite-copy">
+                            <div className="agent-rewrite-column">
+                              <span className="agent-rewrite-label">Before</span>
+                              <p>{change.beforeText || 'No text found.'}</p>
+                            </div>
+                            <div className="agent-rewrite-arrow" aria-hidden="true">
+                              →
+                            </div>
+                            <div className="agent-rewrite-column">
+                              <span className="agent-rewrite-label">After</span>
+                              <p>{change.afterText}</p>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <div className="agent-inline-actions">
+                  <button
+                    className="agent-primary-button"
+                    onClick={handleApplyDraft}
+                    disabled={isApplyingDraft || rewritePreview.textChanges.length === 0}
+                  >
+                    {isApplyingDraft ? 'Applying...' : 'Apply rewrite'}
+                  </button>
+                </div>
+              </div>
+            )}
+        </div>
+
+        <div className="agent-sidebar-footer">
+          <div className="agent-sidebar-status">
+            <span className={`agent-status agent-status-${status}`}>{STATUS_LABELS[status]}</span>
+            {status === 'preview-ready' && proposal?.kind === 'generation' && !isDiagramPreviewVisible && (
+              <button
+                type="button"
+                className="agent-inline-toggle"
+                onClick={() => setIsDiagramPreviewOpen(true)}
+              >
+                Open preview
+              </button>
+            )}
+          </div>
           <div className="agent-button-row">
             <button className="agent-secondary-button" onClick={onClose}>
-              Cancel
+              Close
             </button>
             <button
               className="agent-primary-button"
@@ -636,262 +769,201 @@ export function AgentPanel({
             </button>
           </div>
         </div>
+      </section>
 
-        {workflowMessage && (
-          <div className="agent-message-card" data-tone="info">
-            {workflowMessage}
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="agent-message-card" data-tone="error" role="alert">
-            {errorMessage}
-          </div>
-        )}
-
-        {status === 'preview-ready' && proposal?.kind === 'review' && (
-          <div className="agent-results">
-            <div className="agent-results-summary">{proposal.summary}</div>
-
-            {proposal.findings.length === 0 ? (
-              <div className="agent-empty-state">No obvious issues found in this scope.</div>
-            ) : (
-              Array.from(groupedFindings.entries()).map(([category, findings]) => (
-                <section key={category} className="agent-result-group">
-                  <h3>{REVIEW_CATEGORY_LABELS[category]}</h3>
-                  <ul>
-                    {findings.map((finding) => (
-                      <li key={finding.id} className="agent-finding">
-                        <div className="agent-finding-header">
-                          <strong>{finding.title}</strong>
-                          <span className={`agent-severity agent-severity-${finding.severity}`}>
-                            {finding.severity}
-                          </span>
-                        </div>
-                        <p>{finding.detail}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))
-            )}
-          </div>
-        )}
-
-        {status === 'preview-ready' &&
-          proposal?.kind === 'mutation' &&
-          proposal.workflow === 'rewrite-selection' &&
-          rewritePreview && (
-            <div className="agent-results">
-              <div className="agent-results-summary">{proposal.summary}</div>
-
-              <div className="agent-stat-grid">
-                <div className="agent-stat-card">
-                  <strong>{rewritePreview.textChanges.length}</strong>
-                  <span>Text rewrites</span>
+      {status === 'preview-ready' &&
+        proposal?.kind === 'generation' &&
+        generationPreview &&
+        isDiagramPreviewVisible && (
+          <div className="agent-preview-overlay" onClick={() => setIsDiagramPreviewOpen(false)}>
+            <section
+              className="agent-preview-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="agent-preview-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="agent-preview-header">
+                <div>
+                  <p className="agent-panel-kicker">Diagram preview</p>
+                  <h2 id="agent-preview-title">Draft diagram</h2>
+                  <p>{proposal.summary}</p>
                 </div>
-                <div className="agent-stat-card">
-                  <strong>{selectedTextShapes.length}</strong>
-                  <span>Selected text shapes</span>
-                </div>
+                <button
+                  className="agent-close-button"
+                  onClick={() => setIsDiagramPreviewOpen(false)}
+                  aria-label="Close diagram preview"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
 
-              <section className="agent-result-group">
-                <h3>Rewrite preview</h3>
-                {rewritePreview.textChanges.length === 0 ? (
-                  <div className="agent-empty-state">No text changes were proposed for this selection.</div>
-                ) : (
-                  <div className="agent-rewrite-list">
-                    {rewritePreview.textChanges.map((change) => (
-                      <article key={change.id} className="agent-rewrite-card">
-                        <strong>{change.description}</strong>
-                        <div className="agent-rewrite-copy">
-                          <div className="agent-rewrite-column">
-                            <span className="agent-rewrite-label">Before</span>
-                            <p>{change.beforeText || 'No text found.'}</p>
-                          </div>
-                          <div className="agent-rewrite-arrow" aria-hidden="true">
-                            →
-                          </div>
-                          <div className="agent-rewrite-column">
-                            <span className="agent-rewrite-label">After</span>
-                            <p>{change.afterText}</p>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
+              {errorMessage && (
+                <div className="agent-inline-message" data-tone="error" role="alert">
+                  {errorMessage}
+                </div>
+              )}
+
+              <div className="agent-preview-metadata">
+                <span>{generationPreview.counts.shapes} planned nodes</span>
+                <span>{generationPreview.counts.connectors} planned connectors</span>
+                <span>{proposal.sections.length} diagram sections</span>
+                <span>{proposal.warnings.length} warnings</span>
+              </div>
+
+              <div className="agent-preview-body">
+                <section className="agent-preview-section">
+                  <div className="agent-inline-section-header">
+                    <h3>Diagram plan</h3>
+                    <span>{proposal.sections.length} sections</span>
                   </div>
-                )}
-              </section>
+                  {proposal.sections.length === 0 ? (
+                    <div className="agent-inline-empty-state">No explicit sections were generated for this draft.</div>
+                  ) : (
+                    <div className="agent-section-list">
+                      {proposal.sections.map((section) => (
+                        <article key={section.id} className="agent-section-card">
+                          <div className="agent-section-header">
+                            <strong>{section.title}</strong>
+                            <span>{section.shapeIds.length} node{section.shapeIds.length === 1 ? '' : 's'}</span>
+                          </div>
+                          <p>{section.summary}</p>
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </section>
 
-              <div className="agent-panel-actions agent-panel-actions-inline">
-                <div className="agent-button-row">
-                  <button
-                    className="agent-primary-button"
-                    onClick={handleApplyDraft}
-                    disabled={isApplyingDraft || rewritePreview.textChanges.length === 0}
-                  >
-                    {isApplyingDraft ? 'Applying...' : 'Apply rewrite'}
-                  </button>
+                <div className="agent-preview-grid">
+                  <section className="agent-preview-section">
+                    <div className="agent-inline-section-header">
+                      <h3>Planned nodes</h3>
+                      <span>{generationPreview.nodeActions.length}</span>
+                    </div>
+                    {generationPreview.nodeActions.length === 0 ? (
+                      <div className="agent-inline-empty-state">No nodes were generated for this draft.</div>
+                    ) : (
+                      <ul className="agent-compact-list">
+                        {generationPreview.nodeActions.map((action) => (
+                          <li key={action.shape.id} className="agent-compact-item agent-preview-item">
+                            <strong>{getDiagramNodeLabel(action)}</strong>
+                            <span>{action.shape.type}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+
+                  <section className="agent-preview-section">
+                    <div className="agent-inline-section-header">
+                      <h3>Planned connectors</h3>
+                      <span>{generationPreview.connectorActions.length}</span>
+                    </div>
+                    {generationPreview.connectorActions.length === 0 ? (
+                      <div className="agent-inline-empty-state">No connectors were generated for this draft.</div>
+                    ) : (
+                      <ul className="agent-compact-list">
+                        {generationPreview.connectorActions.map((action) => (
+                          <li key={action.connector.id} className="agent-compact-item agent-preview-item">
+                            <strong>{getConnectorLabel(action, generationPreview.nodeLabelLookup)}</strong>
+                            <span>{action.connector.type}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
                 </div>
-              </div>
-            </div>
-          )}
 
-        {status === 'preview-ready' && proposal?.kind === 'generation' && generationPreview && (
-          <div className="agent-results">
-            <div className="agent-results-summary">{proposal.summary}</div>
+                <section className="agent-preview-section">
+                  <div className="agent-inline-section-header">
+                    <h3>Presentation brief</h3>
+                    <span>{proposal.presentationBrief.title}</span>
+                  </div>
 
-            <div className="agent-stat-grid">
-              <div className="agent-stat-card">
-                <strong>{generationPreview.counts.shapes}</strong>
-                <span>Planned nodes</span>
-              </div>
-              <div className="agent-stat-card">
-                <strong>{generationPreview.counts.connectors}</strong>
-                <span>Planned connectors</span>
-              </div>
-              <div className="agent-stat-card">
-                <strong>{proposal.sections.length}</strong>
-                <span>Diagram sections</span>
-              </div>
-              <div className="agent-stat-card">
-                <strong>{proposal.warnings.length}</strong>
-                <span>Warnings</span>
-              </div>
-            </div>
-
-            <section className="agent-result-group">
-              <h3>Diagram plan</h3>
-              {proposal.sections.length === 0 ? (
-                <div className="agent-inline-empty-state">No explicit sections were generated for this draft.</div>
-              ) : (
-                <div className="agent-section-list">
-                  {proposal.sections.map((section) => (
-                    <article key={section.id} className="agent-section-card">
-                      <div className="agent-section-header">
-                        <strong>{section.title}</strong>
-                        <span>{section.shapeIds.length} node{section.shapeIds.length === 1 ? '' : 's'}</span>
-                      </div>
-                      <p>{section.summary}</p>
+                  <div className="agent-brief-overview">
+                    <article className="agent-brief-panel">
+                      <span className="agent-inline-label">Title</span>
+                      <strong>{proposal.presentationBrief.title}</strong>
                     </article>
-                  ))}
-                </div>
-              )}
-            </section>
+                    <article className="agent-brief-panel">
+                      <span className="agent-inline-label">Audience</span>
+                      <strong>{proposal.presentationBrief.audience}</strong>
+                    </article>
+                    <article className="agent-brief-panel agent-brief-panel-wide">
+                      <span className="agent-inline-label">Objective</span>
+                      <p>{proposal.presentationBrief.objective}</p>
+                    </article>
+                    <article className="agent-brief-panel agent-brief-panel-wide">
+                      <span className="agent-inline-label">Summary</span>
+                      <p>{proposal.presentationBrief.summary}</p>
+                    </article>
+                  </div>
 
-            <div className="agent-preview-grid">
-              <section className="agent-result-group">
-                <h3>Planned nodes</h3>
-                {generationPreview.nodeActions.length === 0 ? (
-                  <div className="agent-inline-empty-state">No nodes were generated for this draft.</div>
-                ) : (
-                  <ul>
-                    {generationPreview.nodeActions.map((action) => (
-                      <li key={action.shape.id} className="agent-preview-item">
-                        <strong>{getDiagramNodeLabel(action)}</strong>
-                        <span>{action.shape.type}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+                  <div className="agent-preview-grid">
+                    <section className="agent-preview-subgroup">
+                      <h4>Narrative order</h4>
+                      {renderStringList(
+                        proposal.presentationBrief.narrativeSteps,
+                        'No narrative order was provided.'
+                      )}
+                    </section>
 
-              <section className="agent-result-group">
-                <h3>Planned connectors</h3>
-                {generationPreview.connectorActions.length === 0 ? (
-                  <div className="agent-inline-empty-state">No connectors were generated for this draft.</div>
-                ) : (
-                  <ul>
-                    {generationPreview.connectorActions.map((action) => (
-                      <li key={action.connector.id} className="agent-preview-item">
-                        <strong>{getConnectorLabel(action, generationPreview.nodeLabelLookup)}</strong>
-                        <span>{action.connector.type}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
+                    <section className="agent-preview-subgroup">
+                      <h4>Speaker notes</h4>
+                      {renderStringList(
+                        proposal.presentationBrief.speakerNotes,
+                        'No speaker notes were provided.'
+                      )}
+                    </section>
 
-            <section className="agent-result-group">
-              <h3>Presentation brief</h3>
-              <div className="agent-brief-grid">
-                <div className="agent-brief-card">
-                  <span className="agent-brief-label">Title</span>
-                  <strong>{proposal.presentationBrief.title}</strong>
-                </div>
-                <div className="agent-brief-card">
-                  <span className="agent-brief-label">Audience</span>
-                  <strong>{proposal.presentationBrief.audience}</strong>
-                </div>
-                <div className="agent-brief-card agent-brief-card-wide">
-                  <span className="agent-brief-label">Objective</span>
-                  <p>{proposal.presentationBrief.objective}</p>
-                </div>
-                <div className="agent-brief-card agent-brief-card-wide">
-                  <span className="agent-brief-label">Summary</span>
-                  <p>{proposal.presentationBrief.summary}</p>
-                </div>
-              </div>
+                    <section className="agent-preview-subgroup">
+                      <h4>Assumptions</h4>
+                      {renderStringList(
+                        proposal.presentationBrief.assumptions,
+                        'No assumptions were included.'
+                      )}
+                    </section>
 
-              <div className="agent-preview-grid">
-                <section className="agent-preview-subgroup">
-                  <h4>Narrative order</h4>
-                  {renderStringList(
-                    proposal.presentationBrief.narrativeSteps,
-                    'No narrative order was provided.'
-                  )}
+                    <section className="agent-preview-subgroup">
+                      <h4>Open questions</h4>
+                      {renderStringList(
+                        proposal.presentationBrief.openQuestions,
+                        'No open questions were included.'
+                      )}
+                    </section>
+                  </div>
                 </section>
 
-                <section className="agent-preview-subgroup">
-                  <h4>Speaker notes</h4>
-                  {renderStringList(
-                    proposal.presentationBrief.speakerNotes,
-                    'No speaker notes were provided.'
-                  )}
-                </section>
-
-                <section className="agent-preview-subgroup">
-                  <h4>Assumptions</h4>
-                  {renderStringList(
-                    proposal.presentationBrief.assumptions,
-                    'No assumptions were included.'
-                  )}
-                </section>
-
-                <section className="agent-preview-subgroup">
-                  <h4>Open questions</h4>
-                  {renderStringList(
-                    proposal.presentationBrief.openQuestions,
-                    'No open questions were included.'
+                <section className="agent-preview-section">
+                  <div className="agent-inline-section-header">
+                    <h3>Warnings</h3>
+                    <span>{proposal.warnings.length}</span>
+                  </div>
+                  {proposal.warnings.length === 0 ? (
+                    <div className="agent-inline-empty-state">No warnings were returned for this draft.</div>
+                  ) : (
+                    <ul className="agent-compact-list">
+                      {proposal.warnings.map((warning) => (
+                        <li key={warning.id} className="agent-compact-item">
+                          <div className="agent-finding-header">
+                            <strong>{warning.message}</strong>
+                            <span className={`agent-severity agent-severity-${warning.severity}`}>
+                              {warning.severity}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </section>
               </div>
-            </section>
 
-            <section className="agent-result-group">
-              <h3>Warnings</h3>
-              {proposal.warnings.length === 0 ? (
-                <div className="agent-inline-empty-state">No warnings were returned for this draft.</div>
-              ) : (
-                <ul>
-                  {proposal.warnings.map((warning) => (
-                    <li key={warning.id} className="agent-finding">
-                      <div className="agent-finding-header">
-                        <strong>{warning.message}</strong>
-                        <span className={`agent-severity agent-severity-${warning.severity}`}>
-                          {warning.severity}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <div className="agent-panel-actions agent-panel-actions-inline">
-              <div className="agent-button-row">
+              <div className="agent-preview-footer">
+                <button className="agent-secondary-button" onClick={() => setIsDiagramPreviewOpen(false)}>
+                  Back to setup
+                </button>
                 <button
                   className="agent-primary-button"
                   onClick={handleApplyDraft}
@@ -900,10 +972,9 @@ export function AgentPanel({
                   {isApplyingDraft ? 'Applying...' : 'Apply to board'}
                 </button>
               </div>
-            </div>
+            </section>
           </div>
         )}
-      </section>
-    </div>
+    </>
   );
 }

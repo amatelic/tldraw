@@ -88,6 +88,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Diagram generator workflow UI with presets, starter examples, and presentation-oriented prompt scaffolding
 - [x] OpenCode-backed diagram provider wired into the app orchestrator with warning surfacing for low-confidence or incomplete drafts
 - [x] Diagram preview UI for sections, planned nodes/connectors, warnings, and presentation brief content
+- [x] Sidebar-first agent workflow UI with compact compose state and expanded diagram preview sheet
 
 ## 🚧 Partially Implemented / Known Issues
 

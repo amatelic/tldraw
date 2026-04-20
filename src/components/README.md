@@ -17,7 +17,7 @@ Components are organized by functionality:
 |-----------|------|---------|-------|
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
 | Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~1050 |
-| AgentPanel | `AgentPanel.tsx` | Agent workflow modal for review, cleanup, rewrite, and diagram generation | ~420 |
+| AgentPanel | `AgentPanel.tsx` | Sidebar-first agent composer with inline results and expanded diagram preview | ~560 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
 | PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for selection styling and multi-select metadata | ~430 |
@@ -33,7 +33,7 @@ Components are organized by functionality:
 
 ### AgentPanel
 
-**Purpose**: Modal workflow surface for canvas-aware agent features.
+**Purpose**: Right-sidebar workflow surface for canvas-aware agent features with an expanded preview sheet for rich diagram drafts.
 
 **Current Workflows**:
 - Review Mode
@@ -41,40 +41,47 @@ Components are organized by functionality:
 - Selection Rewrite
 - Diagram Generator
 
+**Sidebar-First Interaction Model**:
+- Agent now mounts in the same right-side shell family as the inspector instead of opening as a centered modal
+- Compose state stays compact: workflow chips, scope summary, prompt, and only the most relevant setup controls stay visible
+- Diagram-specific extras are progressively disclosed behind a `Show setup details` toggle
+- Review and selection-rewrite results render inline inside the sidebar so the canvas stays visible while the user iterates
+- Diagram generation opens a larger preview sheet only after a draft is ready, so rich output no longer competes with setup controls in one column
+
 **Selection Rewrite UI**:
-- Workflow option enables only when the current selection includes at least one text shape
+- Workflow chip enables only when the current selection includes at least one text shape
 - Context locks to `Selection` because this pass only rewrites the current text selection
 - Prompt accepts a short rewrite intent such as clarifying or shortening labels
-- Preview shows before/after text for each proposed rewrite action
+- Preview shows before/after text changes inline in the sidebar
 - Apply action updates the targeted text shapes in one undoable batch
 - Helpful validation message appears if the workflow is requested without text-capable shapes selected
 
 **Diagram Generator UI**:
-- Preset cards for common work-diagram formats
-- Audience and presentation-goal fields
-- Starter examples for:
-  - backend architecture for a messaging app
-  - storyboard for learning storytelling
+- Compact preset options for common work-diagram formats
+- Audience and presentation-goal fields tucked into setup details instead of always-on cards
+- Starter examples for backend architecture and storyboard prompts inside the setup details section
 - Full-board context lock for first-pass generation
-- Messaging that explains the workflow produces both a draft diagram and presentation guidance
-- Preview sections for:
+- Preview opens in an expanded sheet for:
   - diagram sections
   - planned nodes
   - planned connectors
   - warnings
   - presentation brief details and list-based talk-track content
-- Apply action that sends the approved draft onto the canvas and closes back to the board on success
-- Inline error messaging when a generated draft fails validation during apply
+- Apply action sends the approved draft onto the canvas and closes back to the board on success
+- Apply errors surface inside the preview sheet without discarding the generated draft
 
 **Success Criteria**:
+- [ ] Agent opens as a compact right-sidebar composer instead of a centered modal
+- [ ] Diagram setup uses progressive disclosure instead of showing every option at once
 - [ ] Selection Rewrite only becomes available when selected text exists
 - [ ] Selection Rewrite stays scoped to the current selection
 - [ ] Selection Rewrite previews before/after text before apply
 - [ ] Selection Rewrite applies successfully and closes back to the board
+- [ ] Review and rewrite results stay inline in the sidebar
 - [ ] Diagram Generator appears as a distinct workflow, not generic chat UI
 - [ ] Context locks to full board for diagram generation
 - [ ] Presets and starter examples populate the prompt scaffolding
-- [ ] Generated diagrams render a readable preview before apply
+- [ ] Generated diagrams open in a larger preview surface before apply
 - [ ] Approved drafts can be applied from preview without leaving the panel in a broken state
 - [ ] Review Mode behavior remains unchanged
 
