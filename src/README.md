@@ -94,7 +94,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
    - Canvas-based rendering (not SVG) for performance
    - Zustand over Redux for simplicity
    - No external icon library (inline SVGs)
-   - No backend (purely client-side)
+   - Canvas editing state stays client-side, while diagram generation can call a local OpenCode server
    - Versioned JSON export is kept separate from the raw persisted workspace store
 
 ## Known Issues
@@ -129,7 +129,8 @@ useCanvas
 
 agents
 ├── agentOrchestrator (context packaging + validation)
-├── openCodeClient (server transport normalization + fallback)
+├── openCodeClient (transport normalization + fallback warnings)
+├── openCodeHttpTransport (OpenCode session/message HTTP bridge)
 └── providers (workflow-specific behavior)
 
 Canvas
@@ -183,6 +184,7 @@ npm run dev
 ```
 
 Development server runs on port 5175 (configured in `vite.config.ts`).
+In development, `/api/opencode` is proxied to `http://127.0.0.1:4096` so the agent can talk to `opencode serve` without extra browser CORS setup.
 
 ## Browser Support
 

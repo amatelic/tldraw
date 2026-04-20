@@ -1,4 +1,6 @@
 import { MockOpenCodeTransport, OpenCodeClient } from '../openCodeClient';
+import { OpenCodeHttpTransport } from '../openCodeHttpTransport';
+import { createOpenCodeRuntimeConfig } from '../openCodeRuntime';
 import type {
   AgentGenerationProposal,
   AgentProvider,
@@ -61,11 +63,18 @@ export class OpenCodeDiagramProvider implements AgentProvider {
   private readonly client: OpenCodeClient;
 
   public constructor(options?: OpenCodeDiagramProviderOptions) {
-    this.client =
-      options?.client ??
-      new OpenCodeClient({
-        transport: new MockOpenCodeTransport(),
-      });
+    if (options?.client) {
+      this.client = options.client;
+      return;
+    }
+
+    const runtimeConfig = createOpenCodeRuntimeConfig();
+    const liveTransport = new OpenCodeHttpTransport(runtimeConfig);
+
+    this.client = new OpenCodeClient({
+      transport: runtimeConfig.useMockTransport ? new MockOpenCodeTransport() : liveTransport,
+      fallbackTransport: runtimeConfig.useMockTransport ? null : new MockOpenCodeTransport(),
+    });
   }
 
   public async generate(request: AgentRequest): Promise<AgentGenerationProposal> {

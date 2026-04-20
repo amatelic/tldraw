@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OpenCodeClient, MockOpenCodeTransport, normalizeOpenCodeDiagramResponse } from './openCodeClient';
+import {
+  OpenCodeClient,
+  MockOpenCodeTransport,
+  OpenCodeTransportUnavailableError,
+  normalizeOpenCodeDiagramResponse,
+} from './openCodeClient';
 import { buildAgentRequest } from './agentOrchestrator';
 import type { OpenCodeTransport } from './openCodeClient';
 import type { Shape } from '../types';
@@ -106,7 +111,7 @@ describe('normalizeOpenCodeDiagramResponse', () => {
 describe('OpenCodeClient', () => {
   it('should fall back to the mock transport when the primary transport fails', async () => {
     const primaryTransport: OpenCodeTransport = {
-      send: vi.fn().mockRejectedValue(new Error('Primary transport unavailable')),
+      send: vi.fn().mockRejectedValue(new OpenCodeTransportUnavailableError('Primary transport unavailable')),
     };
 
     const client = new OpenCodeClient({
@@ -120,6 +125,7 @@ describe('OpenCodeClient', () => {
     expect(proposal.workflow).toBe('generate-diagram');
     expect(proposal.actions.length).toBeGreaterThan(0);
     expect(proposal.presentationBrief.title).toContain('Messaging App');
+    expect(proposal.warnings[0]?.id).toBe('warning-opencode-fallback');
   });
 
   it('should reject unsupported workflows before calling OpenCode', async () => {
@@ -147,5 +153,20 @@ describe('OpenCodeClient', () => {
 
     await expect(client.request(request)).rejects.toThrow('only supports "generate-diagram"');
     expect(transport.send).not.toHaveBeenCalled();
+  });
+
+  it('should surface live transport errors when they are not availability failures', async () => {
+    const transport: OpenCodeTransport = {
+      send: vi.fn().mockRejectedValue(new Error('OpenCode returned an invalid response')),
+    };
+
+    const client = new OpenCodeClient({
+      transport,
+      fallbackTransport: new MockOpenCodeTransport(),
+    });
+
+    await expect(
+      client.request(buildGenerateDiagramRequest('Create a backend architecture for a messaging app.'))
+    ).rejects.toThrow('invalid response');
   });
 });

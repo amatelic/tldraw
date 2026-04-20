@@ -71,6 +71,20 @@ export interface OpenCodeTransport {
   send(request: OpenCodeRequest): Promise<OpenCodeDiagramResponse>;
 }
 
+const OPEN_CODE_FALLBACK_WARNING_ID = 'warning-opencode-fallback';
+const DEFAULT_OPEN_CODE_FALLBACK_WARNING_MESSAGE =
+  'OpenCode was unavailable, so this draft comes from the local mock fallback instead of the live server.';
+
+export class OpenCodeTransportUnavailableError extends Error {
+  public readonly cause?: unknown;
+
+  public constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = 'OpenCodeTransportUnavailableError';
+    this.cause = options?.cause;
+  }
+}
+
 function normalizeList(values: string[] | undefined, fallback: string): string[] {
   if (!values || values.length === 0) {
     return [fallback];
@@ -451,15 +465,43 @@ export class MockOpenCodeTransport implements OpenCodeTransport {
 export interface OpenCodeClientOptions {
   transport: OpenCodeTransport;
   fallbackTransport?: OpenCodeTransport | null;
+  fallbackWarningMessage?: string;
+}
+
+function withFallbackWarning(
+  proposal: AgentGenerationProposal,
+  message: string
+): AgentGenerationProposal {
+  if (proposal.warnings.some((warning) => warning.id === OPEN_CODE_FALLBACK_WARNING_ID)) {
+    return proposal;
+  }
+
+  return {
+    ...proposal,
+    warnings: [
+      {
+        id: OPEN_CODE_FALLBACK_WARNING_ID,
+        severity: 'low',
+        message,
+      },
+      ...proposal.warnings,
+    ],
+  };
 }
 
 export class OpenCodeClient {
   private readonly transport: OpenCodeTransport;
   private readonly fallbackTransport: OpenCodeTransport | null;
+  private readonly fallbackWarningMessage: string;
 
-  public constructor({ transport, fallbackTransport = new MockOpenCodeTransport() }: OpenCodeClientOptions) {
+  public constructor({
+    transport,
+    fallbackTransport = new MockOpenCodeTransport(),
+    fallbackWarningMessage = DEFAULT_OPEN_CODE_FALLBACK_WARNING_MESSAGE,
+  }: OpenCodeClientOptions) {
     this.transport = transport;
     this.fallbackTransport = fallbackTransport;
+    this.fallbackWarningMessage = fallbackWarningMessage;
   }
 
   public async request(request: AgentRequest): Promise<AgentGenerationProposal> {
@@ -476,11 +518,14 @@ export class OpenCodeClient {
     try {
       return normalizeOpenCodeDiagramResponse(await this.transport.send(payload));
     } catch (error) {
-      if (!this.fallbackTransport) {
+      if (!this.fallbackTransport || !(error instanceof OpenCodeTransportUnavailableError)) {
         throw error;
       }
 
-      return normalizeOpenCodeDiagramResponse(await this.fallbackTransport.send(payload));
+      return withFallbackWarning(
+        normalizeOpenCodeDiagramResponse(await this.fallbackTransport.send(payload)),
+        this.fallbackWarningMessage
+      );
     }
   }
 }

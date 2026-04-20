@@ -14,7 +14,7 @@ Specs serve as:
 
 | File | Purpose | Lines | Status |
 |------|---------|-------|--------|
-| `SPECS.md` | Main task list (26 tasks) | ~950 | Active |
+| `SPECS.md` | Main task list (28 tasks) | ~1020 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
 | `APP_UI_PRESENTATION_SPEC.md` | Desktop shell and sidepanel inventory reference | ~160 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
@@ -32,6 +32,8 @@ Specs serve as:
 - **Task 20** - OpenCode-backed diagram provider
 - **Task 21** - Diagram preview and presentation brief UI
 - **Task 22** - Apply generated diagrams to the canvas
+- **Task 27** - Sidebar-first agent composer
+- **Task 28** - Real OpenCode HTTP transport wiring
 - **Task 24** - Versioned workspace JSON export
 - **Task 25** - Multi-selection canvas interactions for grouping
 - **Task 26** - Multi-select inspector selected-item metadata
