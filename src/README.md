@@ -7,6 +7,7 @@ This directory contains all the source code for the TLDraw Clone application.
 ```
 src/
 ├── agents/         # Agent orchestration, providers, and transport adapters
+├── features/       # Feature-level documentation for cross-cutting capabilities
 ├── components/     # React UI components
 ├── hooks/          # Custom React hooks
 ├── stores/         # Zustand state stores
@@ -56,7 +57,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 3. **Selection**: Click detection via `isPointInShape()` hit testing
 4. **Transformation**: Drag updates via `onShapeUpdate()`
 5. **Persistence**: Auto-saved to workspace store every 100ms
-6. **Export**: Active workspace can be serialized into a versioned JSON document for backup or downstream processing
+6. **Export**: The header export menu can download the live viewport as PNG and serialize all or selected shapes as PNG/SVG, while JSON export remains available for structured backup or downstream processing
 
 ### History System
 
@@ -198,6 +199,7 @@ In development, `/api/opencode` is proxied to `http://127.0.0.1:4096` so the age
 ## Related Documentation
 
 - [Components](./components/README.md) - UI components
+- [Export Feature](./features/export/README.md) - Header export menu flows and scope rules
 - [Agents](./agents/README.md) - Agent orchestration and transport
 - [Hooks](./hooks/README.md) - Custom React hooks
 - [Stores](./stores/README.md) - State management

@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Workspace } from '../stores/workspaceStore';
 import type { ShapeStyle } from '../types';
 import {
+  createCanvasExportFilename,
   createWorkspaceExportFilename,
+  downloadDataUrlExport,
+  downloadStringExport,
   downloadWorkspaceExport,
   serializeWorkspaceForExport,
 } from './workspaceExport';
@@ -173,6 +176,17 @@ describe('workspaceExport', () => {
     expect(fileName).toBe('api-review-v2-final-2026-04-16T09-15-30Z.json');
   });
 
+  it('should generate scoped filenames for canvas asset exports', () => {
+    const fileName = createCanvasExportFilename(
+      '  API Review: v2 / Final  ',
+      'svg',
+      'selection',
+      new Date('2026-04-16T09:15:30.000Z')
+    );
+
+    expect(fileName).toBe('api-review-v2-final-selection-2026-04-16T09-15-30Z.svg');
+  });
+
   it('should download the serialized export document as JSON', async () => {
     const exportDocument = serializeWorkspaceForExport(createWorkspaceFixture());
     const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workspace');
@@ -201,5 +215,52 @@ describe('workspaceExport', () => {
     expect(blob).toBeInstanceOf(Blob);
     await expect(blob?.text()).resolves.toContain('"format": "tldraw-workspace-export"');
     await expect(blob?.text()).resolves.toContain('"rootNodeIds": [');
+  });
+
+  it('should download data-url based canvas exports without creating a blob', () => {
+    const clickSpy = vi.fn();
+
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName !== 'a') {
+        return document.createElement(tagName);
+      }
+
+      return {
+        href: '',
+        download: '',
+        click: clickSpy,
+      } as unknown as HTMLAnchorElement;
+    }) as typeof document.createElement);
+
+    downloadDataUrlExport('data:image/png;base64,AAA', 'diagram-viewport.png');
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('should download string-based canvas exports as blobs', async () => {
+    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:svg');
+    const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clickSpy = vi.fn();
+
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName !== 'a') {
+        return document.createElement(tagName);
+      }
+
+      return {
+        href: '',
+        download: '',
+        click: clickSpy,
+      } as unknown as HTMLAnchorElement;
+    }) as typeof document.createElement);
+
+    downloadStringExport('<svg />', 'diagram-selection.svg', 'image/svg+xml');
+
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:svg');
+
+    const blob = createObjectURLSpy.mock.calls[0]?.[0];
+    expect(blob).toBeInstanceOf(Blob);
+    await expect(blob?.text()).resolves.toBe('<svg />');
   });
 });

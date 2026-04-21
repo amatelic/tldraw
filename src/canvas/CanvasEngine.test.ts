@@ -23,6 +23,8 @@ const createMockContext = () => ({
   quadraticCurveTo: vi.fn(),
   setLineDash: vi.fn(),
   drawImage: vi.fn(),
+  fillRect: vi.fn(),
+  strokeRect: vi.fn(),
   fillText: vi.fn(),
   strokeText: vi.fn(),
   createLinearGradient: vi.fn().mockImplementation(() => createMockGradient()),
@@ -237,5 +239,131 @@ describe('CanvasEngine arrows', () => {
     expect(headPoints[0][1]).toBeCloseTo(81.77, 1);
     expect(headPoints[1][0]).toBeCloseTo(188.67, 1);
     expect(headPoints[1][1]).toBeCloseTo(98.23, 1);
+  });
+});
+
+describe('CanvasEngine exports', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('renders a shape collection onto an offscreen canvas for PNG export', () => {
+    const context = createMockContext();
+    const exportCanvas = {
+      ...createMockCanvas(context, 0, 0),
+      toDataURL: vi.fn(() => 'data:image/png;base64,exported'),
+    };
+    const originalCreateElement = document.createElement.bind(document);
+
+    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName === 'canvas') {
+        return exportCanvas as unknown as HTMLCanvasElement;
+      }
+
+      return originalCreateElement(tagName);
+    }) as typeof document.createElement);
+
+    const dataUrl = CanvasEngine.exportShapesToPng(
+      [
+        {
+          id: 'rect-1',
+          type: 'rectangle',
+          bounds: { x: 10, y: 20, width: 100, height: 60 },
+          style: {
+            color: '#111111',
+            fillColor: '#2563eb',
+            fillGradient: null,
+            strokeWidth: 2,
+            strokeStyle: 'solid',
+            fillStyle: 'solid',
+            opacity: 1,
+            blendMode: 'source-over',
+            shadows: [],
+            fontSize: 16,
+            fontFamily: 'sans-serif',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            textAlign: 'left',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ],
+      { padding: 12, scale: 1 }
+    );
+
+    expect(dataUrl).toBe('data:image/png;base64,exported');
+    expect(context.fillRect).toHaveBeenCalledWith(0, 0, 124, 84);
+    expect(context.translate).toHaveBeenCalledWith(2, -8);
+    expect(context.rect).toHaveBeenCalledWith(10, 20, 100, 60);
+    expect(exportCanvas.toDataURL).toHaveBeenCalledWith('image/png');
+  });
+
+  it('serializes the provided shapes into SVG markup', () => {
+    const svg = CanvasEngine.exportShapesToSvg(
+      [
+        {
+          id: 'rect-1',
+          type: 'rectangle',
+          bounds: { x: 20, y: 20, width: 120, height: 80 },
+          style: {
+            color: '#111111',
+            fillColor: '#fde68a',
+            fillGradient: null,
+            strokeWidth: 2,
+            strokeStyle: 'solid',
+            fillStyle: 'solid',
+            opacity: 1,
+            blendMode: 'source-over',
+            shadows: [],
+            fontSize: 16,
+            fontFamily: 'sans-serif',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            textAlign: 'left',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+        {
+          id: 'text-1',
+          type: 'text',
+          bounds: { x: 40, y: 40, width: 100, height: 30 },
+          text: 'Quarterly Plan',
+          fontSize: 18,
+          fontFamily: 'Georgia',
+          fontWeight: 'bold',
+          fontStyle: 'italic',
+          textAlign: 'center',
+          style: {
+            color: '#1f2937',
+            fillColor: '#ffffff',
+            fillGradient: null,
+            strokeWidth: 2,
+            strokeStyle: 'solid',
+            fillStyle: 'none',
+            opacity: 1,
+            blendMode: 'source-over',
+            shadows: [],
+            fontSize: 18,
+            fontFamily: 'Georgia',
+            fontWeight: 'bold',
+            fontStyle: 'italic',
+            textAlign: 'center',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ],
+      { padding: 10 }
+    );
+
+    expect(svg).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(svg).toContain('<svg');
+    expect(svg).toContain('viewBox="0 0 140 100"');
+    expect(svg).toContain('<rect width="140" height="100" fill="#ffffff" />');
+    expect(svg).toContain('Quarterly Plan');
+    expect(svg).toContain('font-family="Georgia"');
   });
 });

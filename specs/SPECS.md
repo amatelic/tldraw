@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Added a header export menu with viewport PNG plus all-shapes/selected-shapes PNG and SVG downloads backed by new canvas export helpers and regression coverage.
 - 2026-04-21: Added App-level regression coverage confirming the text tool stays active across repeated text placement until the user switches tools manually.
 - 2026-04-13: Extended the inspector redesign language into the app header/workspace rail and added Playwright coverage for the new chrome styling.
 - 2026-04-14: Converted the shell to a full-viewport canvas with floating header and inspector overlays, plus Playwright checks for viewport coverage.
@@ -86,23 +87,6 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - Undo/Redo integration
 - Focus management
 - Default text behavior
-
-### Task 4: Add Export to PNG/SVG Feature
-**Status**: 🔴 Not Started
-**Priority**: MEDIUM
-**Description**: Allow users to export their canvas as image files
-**Acceptance Criteria**:
-- Add "Export" button to header
-- Export current viewport as PNG
-- Export as SVG (vector format)
-- Export all shapes or just selected shapes
-- Include proper filename with timestamp
-
-**Files to Modify**:
-- `src/App.tsx` - add export buttons
-- `src/canvas/CanvasEngine.ts` - add export methods
-
----
 
 ### Task 5: Add Shape Grouping/Ungrouping
 **Status**: ✅ Completed

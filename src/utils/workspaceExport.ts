@@ -9,6 +9,9 @@ import {
   WORKSPACE_EXPORT_VERSION,
 } from '../types';
 
+export type CanvasExportFormat = 'png' | 'svg';
+export type CanvasExportScope = 'viewport' | 'all' | 'selection';
+
 function createBaseShape(shape: Shape, zIndex: number) {
   return {
     id: shape.id,
@@ -149,6 +152,18 @@ export function createWorkspaceExportFilename(
   return `${safeName}-${timestamp}.json`;
 }
 
+export function createCanvasExportFilename(
+  workspaceName: string,
+  format: CanvasExportFormat,
+  scope: CanvasExportScope,
+  date: Date = new Date()
+): string {
+  const safeName = sanitizeWorkspaceName(workspaceName) || 'workspace';
+  const timestamp = date.toISOString().replace(/[:]/g, '-').replace(/\.\d{3}Z$/, 'Z');
+  const scopeLabel = scope === 'all' ? 'all-shapes' : scope;
+  return `${safeName}-${scopeLabel}-${timestamp}.${format}`;
+}
+
 export function downloadWorkspaceExport(
   exportDocument: WorkspaceExportDocumentV1,
   filename: string
@@ -156,6 +171,27 @@ export function downloadWorkspaceExport(
   const blob = new Blob([JSON.stringify(exportDocument, null, 2)], {
     type: 'application/json',
   });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadDataUrlExport(dataUrl: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = dataUrl;
+  link.download = filename;
+  link.click();
+}
+
+export function downloadStringExport(
+  contents: string,
+  filename: string,
+  mimeType: string
+): void {
+  const blob = new Blob([contents], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

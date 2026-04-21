@@ -11,12 +11,14 @@ The CanvasEngine provides low-level canvas rendering capabilities:
 - Grid rendering
 - Selection indicators
 - Shape creation from drag points
+- Raster/vector export helpers for viewport, all-shapes, and selection downloads
 
 ## Files
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `CanvasEngine.ts` | Canvas rendering engine class | 852 |
+| `CanvasEngine.ts` | Canvas rendering engine class plus export helpers | ~1100 |
+| `CanvasEngine.test.ts` | Resize, gradient, arrow, and export coverage | ~340 |
 | `CanvasEngine.shadow.test.ts` | Shadow rendering tests | 370 |
 
 ## Detailed Documentation
@@ -56,6 +58,11 @@ private imageCache: Map<string, HTMLImageElement>;
 | `drawGrid(camera, gridSize?)` | Render background grid |
 | `drawPreviewShape(start, end, type, style)` | Draw preview during drag |
 | `createShapeFromPoints(start, end, type, style)` | Create shape object from drag |
+| `CanvasEngine.getBoundsForShape(shape)` | Static bounds helper for export/layout work |
+| `CanvasEngine.getBoundsForShapes(shapes)` | Static aggregate bounds for content export |
+| `CanvasEngine.exportViewportToPng(canvas)` | Serialize the current live canvas viewport to PNG |
+| `CanvasEngine.exportShapesToPng(shapes, options?)` | Render a shape collection to an offscreen PNG |
+| `CanvasEngine.exportShapesToSvg(shapes, options?)` | Serialize a shape collection to SVG markup |
 
 **Private Methods**:
 
@@ -138,6 +145,12 @@ This ensures crisp rendering on Retina/4K displays.
 - CanvasEngine still renders per-shape selection outlines on the bitmap canvas
 - Resize handles are now only drawn for single selection; multi-selection can request outlines without handles
 - The combined multi-selection frame and marquee rectangle are rendered in the React `Canvas` layer as DOM overlays so they stay easy to evolve without complicating the engine
+
+**Export Support**:
+- `exportViewportToPng()` preserves the exact current viewport from the live canvas element
+- `exportShapesToPng()` renders an arbitrary shape list onto an offscreen canvas with padding and a solid background
+- `exportShapesToSvg()` serializes shapes into vector markup for rectangle/circle/line/arrow/pencil/image/audio/text/embed/group content
+- Selection exports can include grouped descendants as long as the caller expands the selection before passing shapes in
 
 **Rendering Shapes**:
 
@@ -411,6 +424,8 @@ Supported types:
 - [x] **Shadow reset after drawing**
 - [x] **Blend mode support**
 - [x] **Shapes without shadows render normally**
+- [x] **Viewport PNG export works from the live canvas**
+- [x] **Shape collections can be exported to PNG and SVG**
 
 **Constraints**:
 - Canvas 2D Context required
@@ -430,6 +445,8 @@ Supported types:
 4. **Text Performance**: `measureText` called for every text shape on every render. Could cache measurements.
 
 5. **Embed Placeholder**: Embed shapes just show placeholder, not actual embedded content. Actual embeds rendered as DOM overlays by Canvas component.
+
+6. **SVG Fidelity**: SVG export focuses on shape geometry and common styling. Some canvas-only presentation details such as live image loading state and multi-shadow fidelity remain approximate.
 
 **Performance Considerations**:
 

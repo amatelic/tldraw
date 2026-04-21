@@ -17,12 +17,21 @@ import { CleanupSuggestionsProvider } from './agents/providers/cleanupSuggestion
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
 import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvider';
 import { SelectionRewriteProvider } from './agents/providers/selectionRewriteProvider';
+import { CanvasEngine } from './canvas/CanvasEngine';
 import { useElementSize } from './hooks/useElementSize';
 import { useWorkspaceStore } from './stores/workspaceStore';
 import type { Bounds, ToolType, Shape, ShapeStyle } from './types';
-import { createShapeId, getSelectionBounds, normalizeShapeIdsForSelection } from './types';
 import {
+  createShapeId,
+  getGroupDescendants,
+  getSelectionBounds,
+  normalizeShapeIdsForSelection,
+} from './types';
+import {
+  createCanvasExportFilename,
   createWorkspaceExportFilename,
+  downloadDataUrlExport,
+  downloadStringExport,
   downloadWorkspaceExport,
   serializeWorkspaceForExport,
 } from './utils/workspaceExport';
@@ -36,6 +45,7 @@ function App() {
   const [showAudioDialog, setShowAudioDialog] = useState(false);
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const [isAgentPanelOpen, setIsAgentPanelOpen] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [agentOrchestrator] = useState(
     () =>
       new AgentOrchestrator([
@@ -47,6 +57,7 @@ function App() {
   );
   const workspaceStore = useWorkspaceStore();
   const hasInitializedWorkspaceRef = useRef(false);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Initialize with default workspace if none exists
   useEffect(() => {
@@ -113,15 +124,61 @@ function App() {
   );
 
   const selectedShapes = shapes.filter((shape) => normalizedSelectedShapeIds.includes(shape.id));
+  const exportSelectedShapes = useMemo(() => {
+    if (normalizedSelectedShapeIds.length === 0) {
+      return [] as Shape[];
+    }
+
+    const selectedIds = new Set<string>();
+
+    normalizedSelectedShapeIds.forEach((shapeId) => {
+      selectedIds.add(shapeId);
+      const selectedShape = shapes.find((shape) => shape.id === shapeId);
+      if (selectedShape?.type === 'group') {
+        getGroupDescendants(shapeId, shapes).forEach((descendant) => selectedIds.add(descendant.id));
+      }
+    });
+
+    return shapes.filter((shape) => selectedIds.has(shape.id));
+  }, [normalizedSelectedShapeIds, shapes]);
   const singleSelectedShape = selectedShapes.length === 1 ? selectedShapes[0] : null;
   const canGroupSelected = normalizedSelectedShapeIds.length >= 2;
   const canUngroupSelected =
     normalizedSelectedShapeIds.length === 1 && selectedShapes[0]?.type === 'group';
   const canEditSelectedLayout =
     singleSelectedShape !== null && LAYOUT_EDITABLE_SHAPE_TYPES.includes(singleSelectedShape.type);
+  const hasAnyShapes = shapes.length > 0;
+  const hasExportSelection = exportSelectedShapes.length > 0;
 
   const selectedLayoutBounds: Bounds | null = getSelectionBounds(normalizedSelectedShapeIds, shapes);
   const showPropertiesPanel = normalizedSelectedShapeIds.length > 0 && !isAgentPanelOpen;
+
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && exportMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setIsExportMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsExportMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExportMenuOpen]);
 
   const handleToolChange = useCallback(
     (tool: ToolType) => {
@@ -160,11 +217,46 @@ function App() {
     [setEditorState]
   );
 
-  const handleExportWorkspace = useCallback(() => {
+  const handleExportWorkspaceJson = useCallback(() => {
     const exportDocument = serializeWorkspaceForExport(activeWorkspace);
     const filename = createWorkspaceExportFilename(activeWorkspace.name);
     downloadWorkspaceExport(exportDocument, filename);
+    setIsExportMenuOpen(false);
   }, [activeWorkspace]);
+
+  const handleExportViewportPng = useCallback(() => {
+    const canvasElement = canvasRef.current;
+    if (!canvasElement) {
+      return;
+    }
+
+    const dataUrl = CanvasEngine.exportViewportToPng(canvasElement);
+    const filename = createCanvasExportFilename(activeWorkspace.name, 'png', 'viewport');
+    downloadDataUrlExport(dataUrl, filename);
+    setIsExportMenuOpen(false);
+  }, [activeWorkspace.name, canvasRef]);
+
+  const handleExportShapeSubset = useCallback(
+    (format: 'png' | 'svg', scope: 'all' | 'selection') => {
+      const shapesToExport = scope === 'selection' ? exportSelectedShapes : shapes;
+      if (shapesToExport.length === 0) {
+        return;
+      }
+
+      const filename = createCanvasExportFilename(activeWorkspace.name, format, scope);
+
+      if (format === 'png') {
+        const dataUrl = CanvasEngine.exportShapesToPng(shapesToExport);
+        downloadDataUrlExport(dataUrl, filename);
+      } else {
+        const svgMarkup = CanvasEngine.exportShapesToSvg(shapesToExport);
+        downloadStringExport(svgMarkup, filename, 'image/svg+xml');
+      }
+
+      setIsExportMenuOpen(false);
+    },
+    [activeWorkspace.name, exportSelectedShapes, shapes]
+  );
 
   const getViewportCenter = useCallback((): { x: number; y: number } => {
     const canvas = canvasRef.current;
@@ -567,18 +659,72 @@ function App() {
           />
 
           <div className="header-actions">
-            <button
-              className="action-button"
-              onClick={handleExportWorkspace}
-              title="Export active workspace as versioned JSON"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 3v12" />
-                <path d="M7 10l5 5 5-5" />
-                <path d="M5 21h14" />
-              </svg>
-              Export JSON
-            </button>
+            <div className="export-menu-wrapper" ref={exportMenuRef}>
+              <button
+                className={`action-button${isExportMenuOpen ? ' active' : ''}`}
+                onClick={() => setIsExportMenuOpen((current) => !current)}
+                title="Open export options"
+                aria-haspopup="menu"
+                aria-expanded={isExportMenuOpen}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 3v12" />
+                  <path d="M7 10l5 5 5-5" />
+                  <path d="M5 21h14" />
+                </svg>
+                Export
+              </button>
+
+              {isExportMenuOpen && (
+                <div className="export-menu" role="menu" aria-label="Export options">
+                  <div className="export-menu-section">
+                    <span className="export-menu-label">Workspace</span>
+                    <button className="export-menu-item" onClick={handleExportWorkspaceJson} role="menuitem">
+                      Export JSON
+                    </button>
+                    <button className="export-menu-item" onClick={handleExportViewportPng} role="menuitem">
+                      Export PNG Viewport
+                    </button>
+                  </div>
+
+                  <div className="export-menu-section">
+                    <span className="export-menu-label">Canvas Content</span>
+                    <button
+                      className="export-menu-item"
+                      onClick={() => handleExportShapeSubset('png', 'all')}
+                      disabled={!hasAnyShapes}
+                      role="menuitem"
+                    >
+                      Export PNG All Shapes
+                    </button>
+                    <button
+                      className="export-menu-item"
+                      onClick={() => handleExportShapeSubset('png', 'selection')}
+                      disabled={!hasExportSelection}
+                      role="menuitem"
+                    >
+                      Export PNG Selected Shapes
+                    </button>
+                    <button
+                      className="export-menu-item"
+                      onClick={() => handleExportShapeSubset('svg', 'all')}
+                      disabled={!hasAnyShapes}
+                      role="menuitem"
+                    >
+                      Export SVG All Shapes
+                    </button>
+                    <button
+                      className="export-menu-item"
+                      onClick={() => handleExportShapeSubset('svg', 'selection')}
+                      disabled={!hasExportSelection}
+                      role="menuitem"
+                    >
+                      Export SVG Selected Shapes
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               className={`action-button${isAgentPanelOpen ? ' active' : ''}`}
               onClick={() => setIsAgentPanelOpen((current) => !current)}

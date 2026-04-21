@@ -11,9 +11,9 @@ Utilities are pure functions that don't depend on React or browser state. They c
 | File | Purpose | Lines | Tests |
 |------|---------|-------|-------|
 | `audioProcessor.ts` | Audio waveform extraction and formatting | 73 | 11 tests |
-| `workspaceExport.ts` | Versioned workspace export serialization and JSON download helpers | ~130 | 4 tests |
+| `workspaceExport.ts` | Versioned workspace export serialization plus JSON/PNG/SVG download helpers | ~180 | 7 tests |
 | `audioProcessor.test.ts` | Unit tests for audioProcessor | 149 | - |
-| `workspaceExport.test.ts` | Unit tests for workspace export helpers | ~190 | - |
+| `workspaceExport.test.ts` | Unit tests for workspace export helpers | ~260 | - |
 
 ## Detailed Documentation
 
@@ -201,7 +201,7 @@ return `${minutes}:${secs.toString().padStart(2, '0')}`;
 
 ### workspaceExport.ts
 
-**Purpose**: Serialize the active workspace into a versioned JSON export format that stays stable even if the internal Zustand store evolves.
+**Purpose**: Serialize the active workspace into a versioned JSON export format and provide browser download helpers for JSON, PNG, and SVG export flows.
 
 **Export Contract**:
 - Format id: `tldraw-workspace-export`
@@ -236,6 +236,18 @@ return `${minutes}:${secs.toString().padStart(2, '0')}`;
 - Appends an ISO timestamp with colon-safe characters
 - Falls back to `workspace-...json` when the workspace name is blank after sanitization
 
+#### createCanvasExportFilename(workspaceName, format, scope, date)
+
+**Purpose**: Generate timestamped filenames for PNG/SVG downloads from the export menu.
+
+**Behavior**:
+- Reuses the same safe workspace slug as JSON export
+- Includes the export scope:
+  - `viewport`
+  - `all-shapes`
+  - `selection`
+- Preserves the requested file extension (`.png` or `.svg`)
+
 #### downloadWorkspaceExport(exportDocument, filename)
 
 **Purpose**: Download the serialized document as a pretty-printed JSON file in the browser.
@@ -245,11 +257,32 @@ return `${minutes}:${secs.toString().padStart(2, '0')}`;
 - Uses `URL.createObjectURL()` / `URL.revokeObjectURL()`
 - Creates a temporary anchor element and triggers `click()`
 
+#### downloadDataUrlExport(dataUrl, filename)
+
+**Purpose**: Download a raster export that already exists as a data URL.
+
+**Implementation Notes**:
+- Creates a temporary anchor element
+- Assigns the data URL directly to `href`
+- Triggers `click()` without creating a blob
+
+#### downloadStringExport(contents, filename, mimeType)
+
+**Purpose**: Download string-based exports such as SVG markup.
+
+**Implementation Notes**:
+- Wraps the string in a `Blob`
+- Uses `URL.createObjectURL()` / `URL.revokeObjectURL()`
+- Creates a temporary anchor element and triggers `click()`
+
 **Success Criteria**:
 - [ ] Exported JSON includes format/version metadata
 - [ ] Grouped shapes retain hierarchy and child ordering
 - [ ] Layer order is preserved in the exported node list
 - [ ] Downloaded file uses a deterministic, safe filename shape
+- [ ] PNG/SVG filenames include both scope and timestamp
+- [ ] Raster exports can download directly from data URLs
+- [ ] SVG exports download as `image/svg+xml` blobs
 
 ---
 

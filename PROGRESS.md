@@ -60,6 +60,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Rename workspace - Custom workspace names
 - [x] Persistence - All workspaces saved to localStorage
 - [x] Versioned workspace export - Active workspace downloads as stable JSON with hierarchy-preserving group structure
+- [x] Canvas asset export - Header export menu now supports viewport PNG plus all-shapes or selected-shapes PNG/SVG downloads with timestamped filenames
 
 ### Keyboard Shortcuts
 - [x] Tool shortcuts - V (select), H (pan), R (rectangle), C (circle), etc.
@@ -125,7 +126,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 ## ❌ Not Yet Implemented
 
 ### Export/Import
-- [ ] Export to PNG/SVG
+- [x] Export to PNG/SVG
 - [x] Export to JSON
 - [ ] Import from JSON
 - [ ] Copy/paste shapes between workspaces
@@ -225,6 +226,7 @@ useEffect(() => {
 
 ### April 21, 2026
 - Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
+- Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
 
 ### April 13, 2026
 - Completed a full right-side inspector redesign to match the latest UI reference more closely
@@ -243,12 +245,11 @@ useEffect(() => {
 
 ## 🎯 Next Priority Items
 
-1. Add export functionality (PNG/SVG)
-2. Write more unit tests for remaining utilities and shape operations
-3. Fix the auto-save race condition in workspace persistence
-4. Remove the stale exhaustive-deps disable in `useCanvas`
-5. Implement proper error boundaries
-6. Add validation for workspace names
+1. Write more unit tests for remaining utilities and shape operations
+2. Fix the auto-save race condition in workspace persistence
+3. Remove the stale exhaustive-deps disable in `useCanvas`
+4. Implement proper error boundaries
+5. Add validation for workspace names
 
 ## 📝 Notes
 
