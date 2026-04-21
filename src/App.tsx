@@ -378,7 +378,7 @@ function App() {
 
   const handleRenameWorkspace = useCallback(
     (id: string, name: string) => {
-      workspaceStore.renameWorkspace(id, name);
+      return workspaceStore.renameWorkspace(id, name);
     },
     [workspaceStore]
   );

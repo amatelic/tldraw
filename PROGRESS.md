@@ -58,6 +58,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Add workspace - Create new workspace with auto-generated name
 - [x] Delete workspace - Remove workspaces (minimum 1 required)
 - [x] Rename workspace - Custom workspace names
+- [x] Workspace name validation - Rename flows trim whitespace, reject empty names, and cap names at 50 characters with inline feedback
 - [x] Workspace tab truncation - Names longer than 15 characters collapse to an ellipsis label with a delayed full-name tooltip
 - [x] Workspace tab long-press menu - A 3-second progress ring reveals rename/close actions as a touch-friendly alternative to right-click
 - [x] Persistence - All workspaces saved to localStorage
@@ -179,11 +180,6 @@ useEffect(() => {
 ```
 **Impact**: Shapes and state could get out of sync during rapid changes.
 
-### Issue 2: No Input Validation on Workspace Names
-**Problem**: Workspace names can be empty strings or excessively long.
-**Location**: `src/stores/workspaceStore.ts:117-126`
-**Impact**: UI issues with empty or overly long tab names.
-
 ## 📊 Test Coverage Status
 
 - **Unit Tests**: In progress - utility, canvas, and provider coverage exists but is not complete
@@ -196,6 +192,7 @@ useEffect(() => {
 ### April 21, 2026
 - Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
 - Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
+- Added workspace-name validation in the store and tab UI so rename flows trim whitespace, reject invalid names, and keep the current editor open with inline feedback
 - Closed out the workspace-tab truncation and long-press workflow with dedicated feature documentation and task cleanup
 - Simplified the workspace deletion guard API by removing the unused `id` parameter from `canDeleteWorkspace()` and adding store-level regression coverage
 - Removed the `useCanvas` exhaustive-deps suppression and added initialization coverage for workspace-backed state plus workspace switching
@@ -220,7 +217,6 @@ useEffect(() => {
 
 1. Write more unit tests for remaining utilities and shape operations
 2. Fix the auto-save race condition in workspace persistence
-3. Add validation for workspace names
 
 ## 📝 Notes
 

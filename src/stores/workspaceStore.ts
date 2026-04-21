@@ -22,6 +22,12 @@ export interface Workspace {
   updatedAt: number;
 }
 
+export interface WorkspaceRenameResult {
+  success: boolean;
+  error: string | null;
+  trimmedName: string | null;
+}
+
 interface WorkspaceStore {
   workspaces: Workspace[];
   activeWorkspaceId: string;
@@ -29,7 +35,7 @@ interface WorkspaceStore {
   // Actions
   addWorkspace: () => string;
   deleteWorkspace: (id: string) => boolean;
-  renameWorkspace: (id: string, name: string) => void;
+  renameWorkspace: (id: string, name: string) => WorkspaceRenameResult;
   switchWorkspace: (id: string) => void;
   canDeleteWorkspace: () => boolean;
   getWorkspace: (id: string) => Workspace | undefined;
@@ -42,6 +48,35 @@ interface WorkspaceStore {
 }
 
 const MAX_WORKSPACES = 10;
+export const MAX_WORKSPACE_NAME_LENGTH = 50;
+
+function createRenameFailure(error: string): WorkspaceRenameResult {
+  return {
+    success: false,
+    error,
+    trimmedName: null,
+  };
+}
+
+export function validateWorkspaceName(name: string): WorkspaceRenameResult {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    return createRenameFailure('Workspace names must contain at least 1 non-space character.');
+  }
+
+  if (trimmedName.length > MAX_WORKSPACE_NAME_LENGTH) {
+    return createRenameFailure(
+      `Workspace names must be ${MAX_WORKSPACE_NAME_LENGTH} characters or fewer.`
+    );
+  }
+
+  return {
+    success: true,
+    error: null,
+    trimmedName,
+  };
+}
 
 const createInitialState = (): WorkspaceState => ({
   tool: 'select',
@@ -117,14 +152,39 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
       },
 
       renameWorkspace: (id: string, name: string) => {
-        const trimmedName = name.trim();
-        if (!trimmedName) return;
+        const validation = validateWorkspaceName(name);
+        if (!validation.success || !validation.trimmedName) {
+          return validation;
+        }
+
+        const trimmedName = validation.trimmedName;
+        let didRename = false;
 
         set((state) => ({
           workspaces: state.workspaces.map((w) =>
-            w.id === id ? { ...w, name: trimmedName, updatedAt: Date.now() } : w
+            w.id === id
+              ? (() => {
+                  didRename = true;
+
+                  if (w.name === trimmedName) {
+                    return w;
+                  }
+
+                  return {
+                    ...w,
+                    name: trimmedName,
+                    updatedAt: Date.now(),
+                  };
+                })()
+              : w
           ),
         }));
+
+        if (!didRename) {
+          return createRenameFailure('Workspace not found.');
+        }
+
+        return validation;
       },
 
       switchWorkspace: (workspaceId: string) => {

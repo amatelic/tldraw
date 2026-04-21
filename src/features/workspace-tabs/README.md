@@ -24,6 +24,13 @@ Document the workspace-tab interactions that make workspace management readable 
 - `Close` removes the workspace when deletion is allowed.
 - The close action is disabled when only one workspace remains.
 
+### Name Validation
+
+- Rename submissions are trimmed before they are committed.
+- Names must contain at least 1 non-space character.
+- Names must be 50 characters or fewer after trimming.
+- Invalid submissions keep the current editor open and show inline feedback in the rail or overflow menu.
+
 ## Timing Rules
 
 - Truncation threshold: `15` visible characters.
@@ -44,6 +51,7 @@ Document the workspace-tab interactions that make workspace management readable 
 - Full names remain available through the delayed tooltip.
 - Pointer and touch-style users can reach workspace actions without relying on right-click alone.
 - Rename and close flows remain inline with the existing workspace model.
+- Invalid workspace names fail safely without silently dismissing the rename editor.
 
 ## Known Issues
 

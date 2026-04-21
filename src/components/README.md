@@ -651,6 +651,7 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - Active tab highlighted with the same soft-surface visual language used by the redesigned inspector
 - Add new workspace button (max 10)
 - Scrollable if too many tabs
+- Inline validation feedback for rename failures in the visible rail and hidden-workspace overflow menu
 - Switches to a compact overflow UI once the count exceeds 6 workspaces so the add button remains visible
 - Keeps the first 5 workspaces pinned in the rail and moves the remaining ones into an overflow menu
 - Hidden workspaces can still be switched, renamed, and closed from the overflow menu
@@ -669,7 +670,7 @@ interface WorkspaceTabsProps {
   onSwitch: (id: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
-  onRename: (id: string, name: string) => void;
+  onRename: (id: string, name: string) => WorkspaceRenameResult;
   maxWorkspaces: number;
 }
 ```
@@ -682,6 +683,7 @@ interface WorkspaceTabsProps {
 - [ ] Respects max workspaces limit
 - [ ] Overflow trigger appears after the 6th workspace without pushing the add button out of view
 - [ ] Hidden workspaces remain manageable from the overflow menu
+- [ ] Rename validation errors remain visible without collapsing the current editor
 - [ ] Header chrome and workspace rail feel visually aligned with the right-side inspector shell
 
 **Constraints**:
@@ -694,6 +696,7 @@ interface WorkspaceTabsProps {
 - On desktop, the rail is expected to align horizontally with the header action group
 - Motion should respect `prefers-reduced-motion` and spacing should preserve clear separation between the active tab and the add button
 - Mobile-style header stacking is driven by the app shell container width, not only the browser viewport, so narrow embeds still collapse cleanly
+- Validation feedback currently covers empty/all-whitespace names and names longer than 50 characters; duplicate-name rejection is still not enforced
 
 ---
 
@@ -705,6 +708,7 @@ interface WorkspaceTabsProps {
 - Click to switch workspace
 - Long-press (3s) or right-click for context menu
 - Inline rename on double-click or menu option
+- Inline rename keeps the editor open when validation fails
 - Delete option (if not last workspace)
 - 15-character truncation with ellipsis
 - Hover tooltip showing full name (after 3s)
@@ -720,7 +724,7 @@ interface WorkspaceTabProps {
   canDelete: boolean;
   onClick: () => void;
   onClose: () => void;
-  onRename: (name: string) => void;
+  onRename: (name: string) => boolean | void;
 }
 ```
 
@@ -729,6 +733,7 @@ interface WorkspaceTabProps {
 - [ ] Long-press shows context menu
 - [ ] Right-click shows context menu
 - [ ] Rename works inline
+- [ ] Invalid rename attempts keep the user in the editor and surface feedback
 - [ ] Delete removes workspace
 - [ ] Cannot delete last workspace
 - [ ] Tooltip shows full name
@@ -736,6 +741,7 @@ interface WorkspaceTabProps {
 
 **Constraints**:
 - Name truncated at 15 characters
+- Name validation is delegated to the store-backed parent rename handler
 - Long-press requires 3 seconds
 - Context menu must close on outside click
 - Cannot delete if only one workspace

@@ -53,7 +53,7 @@ interface WorkspaceStore {
   // Actions
   addWorkspace: () => string;                    // Returns new workspace ID
   deleteWorkspace: (id: string) => boolean;      // Returns success
-  renameWorkspace: (id: string, name: string) => void;
+  renameWorkspace: (id: string, name: string) => WorkspaceRenameResult;
   switchWorkspace: (id: string) => void;
   canDeleteWorkspace: () => boolean;             // True when more than one workspace exists
   getWorkspace: (id: string) => Workspace | undefined;
@@ -63,12 +63,19 @@ interface WorkspaceStore {
   updateWorkspaceState: (id: string, state: Partial<WorkspaceState>) => void;
 }
 
+interface WorkspaceRenameResult {
+  success: boolean;
+  error: string | null;
+  trimmedName: string | null;
+}
+
 function useWorkspaceStore(): WorkspaceStore
 ```
 
 **Hardcoded Values**:
 ```typescript
 const MAX_WORKSPACES = 10;
+const MAX_WORKSPACE_NAME_LENGTH = 50;
 const STORAGE_KEY = 'tldraw-workspaces';
 ```
 
@@ -114,9 +121,11 @@ const id = `workspace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
    - Preserves workspace numbering for reuse
 
 3. **Renaming Workspaces**:
-   - No length validation (see known issues)
-   - Updates immediately
-   - No uniqueness check
+   - Trims leading and trailing whitespace before validation
+   - Rejects empty or all-whitespace names
+   - Rejects names longer than 50 characters
+   - Returns a structured success/error result so the UI can keep the editor open and show feedback
+   - Still allows duplicate names for now
 
 4. **Switching Workspaces**:
    - Changes `activeWorkspaceId`
@@ -144,20 +153,18 @@ const id = `workspace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 **Constraints**:
 - Maximum 10 workspaces
-- Workspace names not validated for length
+- Workspace names must be between 1 and 50 trimmed characters
 - No backend sync (local only)
 - localStorage quota limits apply (~5-10MB)
 - All data lost if user clears browser storage
 
 **Known Issues**:
 
-1. **No Name Validation**: Workspace names can be any length. Very long names break UI.
+1. **No Uniqueness Check**: Duplicate names allowed ("Workspace 1", "Workspace 1")
 
-2. **No Uniqueness Check**: Duplicate names allowed ("Workspace 1", "Workspace 1")
+2. **Storage Limits**: localStorage has ~5-10MB limit. Large drawings with many shapes or images may hit limit.
 
-3. **Storage Limits**: localStorage has ~5-10MB limit. Large drawings with many shapes or images may hit limit.
-
-4. **No Migration**: If shape types change, old data may break. No versioning/migration system.
+3. **No Migration**: If shape types change, old data may break. No versioning/migration system.
 
 **Performance Considerations**:
 
@@ -217,7 +224,7 @@ Unit tests should cover:
 - Renaming workspaces
 - Switching workspaces
 - Persistence (mock localStorage)
-- Edge cases (empty name, duplicate name)
+- Edge cases (empty name, overlong name, duplicate name)
 
 **DevTools Integration**:
 

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useWorkspaceStore } from './workspaceStore';
+import {
+  MAX_WORKSPACE_NAME_LENGTH,
+  useWorkspaceStore,
+  validateWorkspaceName,
+} from './workspaceStore';
 
-function createWorkspace(id: string) {
+function createWorkspace(id: string, name = `Workspace ${id}`) {
   return {
     id,
-    name: `Workspace ${id}`,
+    name,
     state: {
       tool: 'select' as const,
       selectedShapeIds: [],
@@ -35,12 +39,38 @@ function createWorkspace(id: string) {
   };
 }
 
-describe('workspaceStore canDeleteWorkspace', () => {
+describe('workspaceStore', () => {
   beforeEach(() => {
     localStorage.clear();
     useWorkspaceStore.setState({
       workspaces: [],
       activeWorkspaceId: '',
+    });
+  });
+
+  it('validates trimmed workspace names', () => {
+    expect(validateWorkspaceName('  Client Review  ')).toEqual({
+      success: true,
+      error: null,
+      trimmedName: 'Client Review',
+    });
+  });
+
+  it('rejects empty workspace names after trimming', () => {
+    expect(validateWorkspaceName('   ')).toEqual({
+      success: false,
+      error: 'Workspace names must contain at least 1 non-space character.',
+      trimmedName: null,
+    });
+  });
+
+  it('rejects workspace names longer than fifty characters', () => {
+    const longName = 'A'.repeat(MAX_WORKSPACE_NAME_LENGTH + 1);
+
+    expect(validateWorkspaceName(longName)).toEqual({
+      success: false,
+      error: `Workspace names must be ${MAX_WORKSPACE_NAME_LENGTH} characters or fewer.`,
+      trimmedName: null,
     });
   });
 
@@ -60,5 +90,37 @@ describe('workspaceStore canDeleteWorkspace', () => {
     });
 
     expect(useWorkspaceStore.getState().canDeleteWorkspace()).toBe(true);
+  });
+
+  it('renames workspaces with trimmed valid names', () => {
+    useWorkspaceStore.setState({
+      workspaces: [createWorkspace('1')],
+      activeWorkspaceId: '1',
+    });
+
+    const result = useWorkspaceStore.getState().renameWorkspace('1', '  Client Review  ');
+
+    expect(result).toEqual({
+      success: true,
+      error: null,
+      trimmedName: 'Client Review',
+    });
+    expect(useWorkspaceStore.getState().workspaces[0]?.name).toBe('Client Review');
+  });
+
+  it('keeps the existing name when rename validation fails', () => {
+    useWorkspaceStore.setState({
+      workspaces: [createWorkspace('1', 'Existing Name')],
+      activeWorkspaceId: '1',
+    });
+
+    const result = useWorkspaceStore.getState().renameWorkspace('1', '   ');
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Workspace names must contain at least 1 non-space character.',
+      trimmedName: null,
+    });
+    expect(useWorkspaceStore.getState().workspaces[0]?.name).toBe('Existing Name');
   });
 });

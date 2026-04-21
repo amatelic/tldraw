@@ -39,14 +39,19 @@ function createWorkspace(index: number): Workspace {
 function renderWorkspaceTabs({
   workspaces,
   activeId = workspaces[0]?.id ?? '',
+  onRename = vi.fn(() => ({
+    success: true,
+    error: null,
+    trimmedName: 'Renamed Workspace',
+  })),
 }: {
   workspaces: Workspace[];
   activeId?: string;
+  onRename?: ReturnType<typeof vi.fn>;
 }) {
   const onSwitch = vi.fn();
   const onAdd = vi.fn();
   const onDelete = vi.fn();
-  const onRename = vi.fn();
 
   render(
     <WorkspaceTabs
@@ -133,5 +138,52 @@ describe('WorkspaceTabs', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close Workspace 7' }));
 
     expect(onDelete).toHaveBeenCalledWith('workspace-7');
+  });
+
+  it('keeps visible-tab rename open and shows a validation error when the name is invalid', () => {
+    const workspaces = [createWorkspace(1)];
+    const onRename = vi.fn(() => ({
+      success: false,
+      error: 'Workspace names must contain at least 1 non-space character.',
+      trimmedName: null,
+    }));
+
+    renderWorkspaceTabs({ workspaces, onRename });
+
+    fireEvent.doubleClick(screen.getByRole('tab', { name: 'Workspace 1' }));
+
+    const renameInput = screen.getByDisplayValue('Workspace 1');
+    fireEvent.change(renameInput, { target: { value: '   ' } });
+    fireEvent.keyDown(renameInput, { key: 'Enter' });
+
+    expect(onRename).toHaveBeenCalledWith('workspace-1', '   ');
+    expect(screen.getByRole('textbox')).toHaveValue('   ');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace names must contain at least 1 non-space character.'
+    );
+  });
+
+  it('shows overflow rename validation feedback without closing the editor', () => {
+    const workspaces = Array.from({ length: 7 }, (_, index) => createWorkspace(index + 1));
+    const onRename = vi.fn(() => ({
+      success: false,
+      error: 'Workspace names must be 50 characters or fewer.',
+      trimmedName: null,
+    }));
+
+    renderWorkspaceTabs({ workspaces, onRename });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more workspaces' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Rename Workspace 6' }));
+
+    const renameInput = screen.getByLabelText('Rename Workspace 6');
+    fireEvent.change(renameInput, { target: { value: 'A'.repeat(51) } });
+    fireEvent.keyDown(renameInput, { key: 'Enter' });
+
+    expect(onRename).toHaveBeenCalledWith('workspace-6', 'A'.repeat(51));
+    expect(screen.getByLabelText('Rename Workspace 6')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace names must be 50 characters or fewer.'
+    );
   });
 });

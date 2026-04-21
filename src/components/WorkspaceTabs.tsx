@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import type { Workspace } from '../stores/workspaceStore';
+import type { Workspace, WorkspaceRenameResult } from '../stores/workspaceStore';
 import { WorkspaceTab } from './WorkspaceTab';
 
 interface WorkspaceTabsProps {
@@ -9,7 +9,7 @@ interface WorkspaceTabsProps {
   onSwitch: (id: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
-  onRename: (id: string, name: string) => void;
+  onRename: (id: string, name: string) => WorkspaceRenameResult;
   maxWorkspaces: number;
 }
 
@@ -85,6 +85,8 @@ export function WorkspaceTabs({
   const [isOverflowMenuOpen, setIsOverflowMenuOpen] = useState(false);
   const [overflowEditingId, setOverflowEditingId] = useState<string | null>(null);
   const [overflowEditValue, setOverflowEditValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameErrorWorkspaceId, setRenameErrorWorkspaceId] = useState<string | null>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
   const overflowInputRef = useRef<HTMLInputElement>(null);
   const showOverflowMenu = hasOverflow && isOverflowMenuOpen;
@@ -94,11 +96,36 @@ export function WorkspaceTabs({
     ? overflowEditingId
     : null;
   const activeOverflowWorkspaceName = activeHiddenWorkspace?.name ?? 'Hidden workspace';
+  const isOverflowRenameError =
+    renameErrorWorkspaceId !== null &&
+    hiddenWorkspaces.some((workspace) => workspace.id === renameErrorWorkspaceId);
 
   function closeOverflowMenu() {
     setIsOverflowMenuOpen(false);
     setOverflowEditingId(null);
     setOverflowEditValue('');
+  }
+
+  function clearRenameError(workspaceId?: string) {
+    if (workspaceId !== undefined && renameErrorWorkspaceId !== workspaceId) {
+      return;
+    }
+
+    setRenameError(null);
+    setRenameErrorWorkspaceId(null);
+  }
+
+  function submitWorkspaceRename(workspaceId: string, name: string): boolean {
+    const result = onRename(workspaceId, name);
+
+    if (result.success) {
+      clearRenameError(workspaceId);
+      return true;
+    }
+
+    setRenameError(result.error);
+    setRenameErrorWorkspaceId(workspaceId);
+    return false;
   }
 
   function focusWorkspaceControl(workspaceId: string) {
@@ -140,12 +167,17 @@ export function WorkspaceTabs({
   }, [activeOverflowEditingId]);
 
   function submitOverflowRename(workspaceId: string) {
-    const trimmedName = overflowEditValue.trim();
-    if (trimmedName) {
-      onRename(workspaceId, trimmedName);
+    const didRename = submitWorkspaceRename(workspaceId, overflowEditValue);
+    if (didRename) {
+      setOverflowEditingId(null);
+      setOverflowEditValue('');
+      return;
     }
-    setOverflowEditingId(null);
-    setOverflowEditValue('');
+
+    requestAnimationFrame(() => {
+      overflowInputRef.current?.focus();
+      overflowInputRef.current?.select();
+    });
   }
 
   function handleOverflowRenameKeyDown(
@@ -158,18 +190,21 @@ export function WorkspaceTabs({
     }
 
     if (event.key === 'Escape') {
+      clearRenameError(workspaceId);
       setOverflowEditingId(null);
       setOverflowEditValue('');
     }
   }
 
   function handleOverflowWorkspaceSelect(workspaceId: string) {
+    clearRenameError();
     onSwitch(workspaceId);
     closeOverflowMenu();
     focusWorkspaceControl(workspaceId);
   }
 
   function handleOverflowWorkspaceDelete(workspaceId: string) {
+    clearRenameError(workspaceId);
     onDelete(workspaceId);
     setOverflowEditingId(null);
     setOverflowEditValue('');
@@ -234,158 +269,161 @@ export function WorkspaceTabs({
             }
       }
     >
-      <div className="workspace-tabs-rail">
-        <div
-          className={`workspace-tabs-list ${hasOverflow ? 'workspace-tabs-list-condensed' : ''}`}
-          role="tablist"
-          aria-label="Workspaces"
-          onKeyDown={handleKeyDown}
-        >
-          <AnimatePresence mode="popLayout">
-            {visibleWorkspaces.map((workspace) => (
-              <WorkspaceTab
-                key={workspace.id}
-                tabButtonId={`workspace-tab-${workspace.id}`}
-                workspace={workspace}
-                isActive={workspace.id === activeId}
-                canDelete={canDeleteAny}
-                onClick={() => {
-                  onSwitch(workspace.id);
-                  setIsOverflowMenuOpen(false);
-                }}
-                onClose={() => onDelete(workspace.id)}
-                onRename={(name) => onRename(workspace.id, name)}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {hasOverflow && (
-          <div className="workspace-overflow">
-            <button
-              id={OVERFLOW_TRIGGER_ID}
-              type="button"
-              className={`workspace-overflow-trigger ${isOverflowActive ? 'active' : ''}`}
-              aria-haspopup="menu"
-              aria-expanded={isOverflowMenuOpen}
-              aria-label={
-                isOverflowActive
-                  ? `Active workspace ${activeOverflowWorkspaceName}. Show hidden workspaces`
-                  : `Show ${hiddenWorkspaces.length} more workspaces`
-              }
-              onClick={() => setIsOverflowMenuOpen((current) => !current)}
-            >
-              {isOverflowActive && (
-                <motion.span
-                  className="workspace-tab-active-pill"
-                  layoutId={shouldReduceMotion ? undefined : 'workspace-active-pill'}
-                  transition={
-                    shouldReduceMotion
-                      ? { duration: 0 }
-                      : {
-                          type: 'spring',
-                          stiffness: 380,
-                          damping: 30,
-                          mass: 0.86,
-                        }
-                  }
+      <div className="workspace-tabs-row">
+        <div className="workspace-tabs-rail">
+          <div
+            className={`workspace-tabs-list ${hasOverflow ? 'workspace-tabs-list-condensed' : ''}`}
+            role="tablist"
+            aria-label="Workspaces"
+            onKeyDown={handleKeyDown}
+          >
+            <AnimatePresence mode="popLayout">
+              {visibleWorkspaces.map((workspace) => (
+                <WorkspaceTab
+                  key={workspace.id}
+                  tabButtonId={`workspace-tab-${workspace.id}`}
+                  workspace={workspace}
+                  isActive={workspace.id === activeId}
+                  canDelete={canDeleteAny}
+                  renameError={renameErrorWorkspaceId === workspace.id ? renameError : null}
+                  onClick={() => {
+                    clearRenameError();
+                    onSwitch(workspace.id);
+                    setIsOverflowMenuOpen(false);
+                  }}
+                  onClose={() => {
+                    clearRenameError(workspace.id);
+                    onDelete(workspace.id);
+                  }}
+                  onRename={(name) => submitWorkspaceRename(workspace.id, name)}
+                  onRenameInteraction={() => clearRenameError(workspace.id)}
                 />
-              )}
-              <span className="workspace-overflow-label">{overflowLabel}</span>
-              <svg
-                className={`workspace-overflow-icon ${isOverflowMenuOpen ? 'open' : ''}`}
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+              ))}
+            </AnimatePresence>
+          </div>
+
+          {hasOverflow && (
+            <div className="workspace-overflow">
+              <button
+                id={OVERFLOW_TRIGGER_ID}
+                type="button"
+                className={`workspace-overflow-trigger ${isOverflowActive ? 'active' : ''}`}
+                aria-haspopup="menu"
+                aria-expanded={isOverflowMenuOpen}
+                aria-label={
+                  isOverflowActive
+                    ? `Active workspace ${activeOverflowWorkspaceName}. Show hidden workspaces`
+                    : `Show ${hiddenWorkspaces.length} more workspaces`
+                }
+                onClick={() => {
+                  clearRenameError();
+                  setIsOverflowMenuOpen((current) => !current);
+                }}
               >
-                <path d="M6 9l6 6 6-6" />
-              </svg>
-            </button>
-
-            <AnimatePresence>
-              {showOverflowMenu && (
-                <motion.div
-                  ref={overflowMenuRef}
-                  className="workspace-overflow-menu"
-                  role="menu"
-                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                  transition={{ duration: shouldReduceMotion ? 0 : 0.16 }}
+                {isOverflowActive && (
+                  <motion.span
+                    className="workspace-tab-active-pill"
+                    layoutId={shouldReduceMotion ? undefined : 'workspace-active-pill'}
+                    transition={
+                      shouldReduceMotion
+                        ? { duration: 0 }
+                        : {
+                            type: 'spring',
+                            stiffness: 380,
+                            damping: 30,
+                            mass: 0.86,
+                          }
+                    }
+                  />
+                )}
+                <span className="workspace-overflow-label">{overflowLabel}</span>
+                <svg
+                  className={`workspace-overflow-icon ${isOverflowMenuOpen ? 'open' : ''}`}
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
                 >
-                  <div className="workspace-overflow-menu-header">More workspaces</div>
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
 
-                  {hiddenWorkspaces.map((workspace) => {
-                    const isEditingOverflowItem = activeOverflowEditingId === workspace.id;
-                    const isActiveOverflowItem = workspace.id === activeId;
+              <AnimatePresence>
+                {showOverflowMenu && (
+                  <motion.div
+                    ref={overflowMenuRef}
+                    className="workspace-overflow-menu"
+                    role="menu"
+                    initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.16 }}
+                  >
+                    <div className="workspace-overflow-menu-header">More workspaces</div>
 
-                    return (
-                      <div
-                        key={workspace.id}
-                        className={`workspace-overflow-item ${isActiveOverflowItem ? 'active' : ''}`}
-                      >
-                        {isEditingOverflowItem ? (
-                          <input
-                            ref={overflowInputRef}
-                            type="text"
-                            value={overflowEditValue}
-                            className="workspace-overflow-rename-input"
-                            aria-label={`Rename ${workspace.name}`}
-                            onChange={(event) => setOverflowEditValue(event.target.value)}
-                            onKeyDown={(event) => handleOverflowRenameKeyDown(event, workspace.id)}
-                            onBlur={() => submitOverflowRename(workspace.id)}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="workspace-overflow-item-button"
-                            role="menuitemradio"
-                            aria-checked={isActiveOverflowItem}
-                            onClick={() => handleOverflowWorkspaceSelect(workspace.id)}
-                          >
-                            <span className="workspace-overflow-item-label">{workspace.name}</span>
-                            {isActiveOverflowItem && (
-                              <span className="workspace-overflow-item-status">Active</span>
-                            )}
-                          </button>
-                        )}
+                    {hiddenWorkspaces.map((workspace) => {
+                      const isEditingOverflowItem = activeOverflowEditingId === workspace.id;
+                      const isActiveOverflowItem = workspace.id === activeId;
+                      const overflowRenameError =
+                        renameErrorWorkspaceId === workspace.id ? renameError : null;
 
-                        {!isEditingOverflowItem && (
-                          <div className="workspace-overflow-item-actions">
+                      return (
+                        <div
+                          key={workspace.id}
+                          className={`workspace-overflow-item ${isActiveOverflowItem ? 'active' : ''}`}
+                        >
+                          {isEditingOverflowItem ? (
+                            <div className="workspace-overflow-rename-shell">
+                              <input
+                                ref={overflowInputRef}
+                                type="text"
+                                value={overflowEditValue}
+                                className="workspace-overflow-rename-input"
+                                aria-label={`Rename ${workspace.name}`}
+                                aria-invalid={overflowRenameError ? 'true' : undefined}
+                                onChange={(event) => {
+                                  clearRenameError(workspace.id);
+                                  setOverflowEditValue(event.target.value);
+                                }}
+                                onKeyDown={(event) =>
+                                  handleOverflowRenameKeyDown(event, workspace.id)
+                                }
+                                onBlur={() => submitOverflowRename(workspace.id)}
+                              />
+                              {overflowRenameError && (
+                                <div className="workspace-overflow-rename-error" role="alert">
+                                  {overflowRenameError}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              className="workspace-overflow-icon-button"
-                              aria-label={`Rename ${workspace.name}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setOverflowEditingId(workspace.id);
-                                setOverflowEditValue(workspace.name);
-                              }}
+                              className="workspace-overflow-item-button"
+                              role="menuitemradio"
+                              aria-checked={isActiveOverflowItem}
+                              onClick={() => handleOverflowWorkspaceSelect(workspace.id)}
                             >
-                              <svg
-                                viewBox="0 0 24 24"
-                                width="14"
-                                height="14"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <path d="M12 20h9" />
-                                <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
-                              </svg>
+                              <span className="workspace-overflow-item-label">{workspace.name}</span>
+                              {isActiveOverflowItem && (
+                                <span className="workspace-overflow-item-status">Active</span>
+                              )}
                             </button>
+                          )}
 
-                            {canDeleteAny && (
+                          {!isEditingOverflowItem && (
+                            <div className="workspace-overflow-item-actions">
                               <button
                                 type="button"
                                 className="workspace-overflow-icon-button"
-                                aria-label={`Close ${workspace.name}`}
+                                aria-label={`Rename ${workspace.name}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  handleOverflowWorkspaceDelete(workspace.id);
+                                  clearRenameError(workspace.id);
+                                  setOverflowEditingId(workspace.id);
+                                  setOverflowEditValue(workspace.name);
                                 }}
                               >
                                 <svg
@@ -396,55 +434,85 @@ export function WorkspaceTabs({
                                   stroke="currentColor"
                                   strokeWidth="2"
                                 >
-                                  <path d="M18 6L6 18M6 6l12 12" />
+                                  <path d="M12 20h9" />
+                                  <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
                                 </svg>
                               </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+
+                              {canDeleteAny && (
+                                <button
+                                  type="button"
+                                  className="workspace-overflow-icon-button"
+                                  aria-label={`Close ${workspace.name}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOverflowWorkspaceDelete(workspace.id);
+                                  }}
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    width="14"
+                                    height="14"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+
+        <motion.button
+          className="workspace-add-btn"
+          onClick={onAdd}
+          disabled={isMaxReached}
+          title={isMaxReached ? `Maximum ${maxWorkspaces} workspaces reached` : 'Add new workspace'}
+          variants={shouldReduceMotion ? undefined : addButtonVariants}
+          initial={shouldReduceMotion ? false : 'initial'}
+          animate={shouldReduceMotion ? undefined : 'animate'}
+          whileHover={!isMaxReached && !shouldReduceMotion ? 'hover' : undefined}
+          whileTap={!isMaxReached && !shouldReduceMotion ? 'tap' : undefined}
+          layout
+          transition={
+            shouldReduceMotion
+              ? { duration: 0 }
+              : {
+                  layout: {
+                    duration: 0.24,
+                    ease: [0.16, 1, 0.3, 1],
+                  },
+                }
+          }
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </motion.button>
       </div>
 
-      <motion.button
-        className="workspace-add-btn"
-        onClick={onAdd}
-        disabled={isMaxReached}
-        title={isMaxReached ? `Maximum ${maxWorkspaces} workspaces reached` : 'Add new workspace'}
-        variants={shouldReduceMotion ? undefined : addButtonVariants}
-        initial={shouldReduceMotion ? false : 'initial'}
-        animate={shouldReduceMotion ? undefined : 'animate'}
-        whileHover={!isMaxReached && !shouldReduceMotion ? 'hover' : undefined}
-        whileTap={!isMaxReached && !shouldReduceMotion ? 'tap' : undefined}
-        layout
-        transition={
-          shouldReduceMotion
-            ? { duration: 0 }
-            : {
-                layout: {
-                  duration: 0.24,
-                  ease: [0.16, 1, 0.3, 1],
-                },
-              }
-        }
-      >
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </motion.button>
+      {renameError && !isOverflowRenameError && (
+        <div className="workspace-tabs-error" role="alert">
+          {renameError}
+        </div>
+      )}
     </motion.div>
   );
 }

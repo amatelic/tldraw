@@ -9,7 +9,9 @@ interface WorkspaceTabProps {
   canDelete: boolean;
   onClick: () => void;
   onClose: () => void;
-  onRename: (name: string) => void;
+  onRename: (name: string) => boolean | void;
+  onRenameInteraction?: () => void;
+  renameError?: string | null;
 }
 
 const TRUNCATE_LENGTH = 15;
@@ -63,6 +65,8 @@ export function WorkspaceTab({
   onClick,
   onClose,
   onRename,
+  onRenameInteraction,
+  renameError = null,
 }: WorkspaceTabProps) {
   const shouldReduceMotion = useReducedMotion();
   const [isEditing, setIsEditing] = useState(false);
@@ -106,22 +110,30 @@ export function WorkspaceTab({
   }, []);
 
   const handleDoubleClick = () => {
+    onRenameInteraction?.();
     setIsEditing(true);
     setEditValue(workspace.name);
   };
 
   const handleSubmit = () => {
-    const trimmed = editValue.trim();
-    if (trimmed) {
-      onRename(trimmed);
+    const didRename = onRename(editValue);
+    if (didRename !== false) {
+      setIsEditing(false);
+      return;
     }
-    setIsEditing(false);
+
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleSubmit();
     } else if (e.key === 'Escape') {
+      onRenameInteraction?.();
       setIsEditing(false);
       setEditValue(workspace.name);
     }
@@ -253,10 +265,14 @@ export function WorkspaceTab({
           ref={inputRef}
           type="text"
           value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
+          onChange={(e) => {
+            onRenameInteraction?.();
+            setEditValue(e.target.value);
+          }}
           onKeyDown={handleKeyDown}
           onBlur={handleSubmit}
           className="workspace-rename-input"
+          aria-invalid={renameError ? 'true' : undefined}
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -334,6 +350,7 @@ export function WorkspaceTab({
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                onRenameInteraction?.();
                 setIsEditing(true);
                 setShowMenu(false);
               }}

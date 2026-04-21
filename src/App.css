@@ -1355,8 +1355,9 @@ body {
 /* Workspace Tabs */
 .workspace-tabs-container {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   padding: 8px 10px;
   background: transparent;
   border-radius: 22px;
@@ -1367,6 +1368,13 @@ body {
   min-width: 0;
   overflow: visible;
   position: relative;
+}
+
+.workspace-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .workspace-tabs-rail {
@@ -1637,7 +1645,7 @@ body {
 .workspace-overflow-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 10px;
   padding: 4px;
   border-radius: 14px;
@@ -1730,6 +1738,29 @@ body {
 .workspace-overflow-rename-input:focus {
   outline: 2px solid rgba(91, 101, 245, 0.18);
   border-color: rgba(92, 102, 245, 0.38);
+}
+
+.workspace-overflow-rename-shell {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workspace-overflow-rename-error,
+.workspace-tabs-error {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #b42318;
+}
+
+.workspace-overflow-rename-error {
+  padding-left: 2px;
+}
+
+.workspace-tabs-error {
+  padding: 0 6px;
 }
 
 .workspace-add-btn {
