@@ -94,7 +94,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
    - Canvas-based rendering (not SVG) for performance
    - Zustand over Redux for simplicity
    - No external icon library (inline SVGs)
-   - Canvas editing state stays client-side, while diagram generation can call a local OpenCode server
+   - Cleanup and rewrite agent workflows stay deterministic/local, while diagram generation can call a local OpenCode server
    - Versioned JSON export is kept separate from the raw persisted workspace store
 
 ## Known Issues
@@ -110,7 +110,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 ```
 App.tsx
 ├── useCanvas (shapes, camera, history, text editing)
-├── AgentPanel / agentOrchestrator / providers (agent workflows, sidebar compose, expanded draft preview)
+├── AgentPanel / agentOrchestrator / providers (review, cleanup, rewrite, and diagram workflows)
 ├── useKeyboard (shortcuts)
 ├── workspaceStore (persistence)
 ├── workspaceExport utils (versioned JSON serialization + download)

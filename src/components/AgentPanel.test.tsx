@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentOrchestrator } from '../agents/agentOrchestrator';
+import { CleanupSuggestionsProvider } from '../agents/providers/cleanupSuggestionsProvider';
 import { OpenCodeDiagramProvider } from '../agents/providers/openCodeDiagramProvider';
 import { ReviewModeProvider } from '../agents/providers/reviewModeProvider';
 import { SelectionRewriteProvider } from '../agents/providers/selectionRewriteProvider';
@@ -117,6 +118,7 @@ function renderPanel(options?: {
     options?.orchestrator ??
     new AgentOrchestrator([
       new ReviewModeProvider(),
+      new CleanupSuggestionsProvider(),
       new SelectionRewriteProvider(),
       new OpenCodeDiagramProvider(),
     ]);
@@ -216,9 +218,7 @@ describe('AgentPanel', () => {
 
     chooseWorkflow('Cleanup Suggestions');
 
-    expect(
-      screen.getByText(/Cleanup Suggestions are still scaffolded in the UI/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Cleanup Suggestions proposes low-risk/i)).toBeInTheDocument();
   });
 
   it('should render structured diagram workflow controls when diagram generator is selected', () => {
@@ -314,6 +314,167 @@ describe('AgentPanel', () => {
       expect(screen.getByText('After')).toBeInTheDocument();
       expect(screen.getByText('Review this flow')).toBeInTheDocument();
       expect(screen.getByText('Review Flow')).toBeInTheDocument();
+    });
+  });
+
+  it('should render cleanup suggestions and require confirmation before applying deletions', async () => {
+    const cleanupProposal: AgentMutationProposal = {
+      kind: 'mutation',
+      workflow: 'cleanup',
+      summary: 'Prepared 2 cleanup suggestions for the visible board, including 1 deletion to confirm.',
+      actions: [
+        {
+          type: 'update-shape',
+          targetId: 'shape-2',
+          description: 'Align row position and standardize stroke width for "rectangle shape-2".',
+          changes: {
+            bounds: { x: 40, y: 24 },
+            style: {
+              strokeWidth: 2,
+            },
+          },
+        },
+        {
+          type: 'delete-shape',
+          targetId: 'shape-empty',
+          description: 'Delete the empty text block "Untitled text block".',
+        },
+      ],
+    };
+
+    const fakeOrchestrator = {
+      run: vi.fn().mockResolvedValue({
+        providerId: 'fake-cleanup-provider',
+        request: {} as never,
+        proposal: cleanupProposal,
+      }),
+    } as unknown as AgentOrchestrator;
+
+    renderPanel({
+      orchestrator: fakeOrchestrator,
+      shapes: [
+        ...baseShapes,
+        {
+          id: 'shape-empty',
+          type: 'text',
+          bounds: { x: 40, y: 220, width: 160, height: 24 },
+          text: '   ',
+          fontSize: 16,
+          fontFamily: 'sans-serif',
+          fontWeight: 'normal',
+          fontStyle: 'normal',
+          textAlign: 'left',
+          style: shapeStyle,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    chooseWorkflow('Cleanup Suggestions');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft cleanup' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Cleanup suggestions' })).toBeInTheDocument();
+      expect(screen.getByText('2 suggestions')).toBeInTheDocument();
+      expect(screen.getByText('position')).toBeInTheDocument();
+      expect(screen.getByText('stroke width')).toBeInTheDocument();
+    });
+
+    const applySelectedButton = screen.getByRole('button', { name: 'Apply selected' });
+    const applyAllButton = screen.getByRole('button', { name: 'Apply all' });
+
+    expect(applySelectedButton).toBeDisabled();
+    expect(applyAllButton).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByLabelText(
+        'I understand that applying cleanup suggestions can delete empty text blocks.'
+      )
+    );
+
+    expect(applySelectedButton).toBeEnabled();
+    expect(applyAllButton).toBeEnabled();
+  });
+
+  it('should apply only the selected cleanup suggestions and close on success', async () => {
+    const cleanupProposal: AgentMutationProposal = {
+      kind: 'mutation',
+      workflow: 'cleanup',
+      summary: 'Prepared 2 cleanup suggestions for the visible board, including 1 deletion to confirm.',
+      actions: [
+        {
+          type: 'update-shape',
+          targetId: 'shape-2',
+          description: 'Align row position and standardize stroke width for "rectangle shape-2".',
+          changes: {
+            bounds: { x: 40, y: 24 },
+            style: {
+              strokeWidth: 2,
+            },
+          },
+        },
+        {
+          type: 'delete-shape',
+          targetId: 'shape-empty',
+          description: 'Delete the empty text block "Untitled text block".',
+        },
+      ],
+    };
+
+    const fakeOrchestrator = {
+      run: vi.fn().mockResolvedValue({
+        providerId: 'fake-cleanup-provider',
+        request: {} as never,
+        proposal: cleanupProposal,
+      }),
+    } as unknown as AgentOrchestrator;
+
+    const onClose = vi.fn();
+    const onApplyMutationProposal = vi.fn(() => ({ success: true, error: null }));
+
+    renderPanel({
+      orchestrator: fakeOrchestrator,
+      onApplyMutationProposal,
+      onClose,
+      shapes: [
+        ...baseShapes,
+        {
+          id: 'shape-empty',
+          type: 'text',
+          bounds: { x: 40, y: 220, width: 160, height: 24 },
+          text: '   ',
+          fontSize: 16,
+          fontFamily: 'sans-serif',
+          fontWeight: 'normal',
+          fontStyle: 'normal',
+          textAlign: 'left',
+          style: shapeStyle,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    chooseWorkflow('Cleanup Suggestions');
+    fireEvent.click(screen.getByRole('button', { name: 'Draft cleanup' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Apply selected' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('Select cleanup suggestion for Untitled text block'));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply selected' }));
+
+    await waitFor(() => {
+      expect(onApplyMutationProposal).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    expect(onApplyMutationProposal).toHaveBeenCalledWith({
+      ...cleanupProposal,
+      summary: 'Prepared 1 selected cleanup suggestion.',
+      actions: [cleanupProposal.actions[0]],
     });
   });
 

@@ -29,6 +29,7 @@ Specs serve as:
 `SPECS.md` is the source of truth for task status. Current highlights:
 
 ### Recently Completed ✅
+- **Task 15** - Cleanup suggestions with preview/apply
 - **Task 23** - Example-driven coverage and documentation for diagram generation
 - **Task 20** - OpenCode-backed diagram provider
 - **Task 21** - Diagram preview and presentation brief UI
@@ -43,7 +44,6 @@ Specs serve as:
 - **Task 11** - Workspace name truncation and long-press menu
 
 ### Next Planning / Not Started 🔴
-- **Task 15** - Cleanup suggestions with preview/apply
 - **Task 3** - Text tool auto-switch behavior
 
 ## Task Status Legend

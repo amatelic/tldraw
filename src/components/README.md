@@ -56,6 +56,18 @@ Components are organized by functionality:
 - Apply action updates the targeted text shapes in one undoable batch
 - Helpful validation message appears if the workflow is requested without text-capable shapes selected
 
+**Cleanup Suggestions UI**:
+- Workflow runs locally through deterministic cleanup rules so it is always available
+- Prompt is optional and acts as focus guidance rather than free-form chat
+- Preview renders inline inside the sidebar with one row per proposed cleanup action
+- Each row shows:
+  - the affected shape label
+  - whether the action is an update or delete
+  - the fields being changed
+- Users can select or deselect individual cleanup actions before apply
+- Delete actions require explicit confirmation before `Apply selected` or `Apply all` becomes available
+- Both apply paths reuse the grouped mutation flow, so cleanup lands on the canvas as one undoable change
+
 **Diagram Generator UI**:
 - Compact preset options for common work-diagram formats
 - Audience and presentation-goal fields tucked into setup details instead of always-on cards
@@ -87,10 +99,13 @@ Components are organized by functionality:
 - [ ] Presets and starter examples populate the prompt scaffolding
 - [ ] Generated diagrams open in a larger preview surface before apply
 - [ ] Approved drafts can be applied from preview without leaving the panel in a broken state
+- [ ] Cleanup Suggestions previews proposed actions inline before apply
+- [ ] Cleanup Suggestions supports selected-only apply as well as apply-all
+- [ ] Cleanup delete actions require explicit confirmation
+- [ ] Cleanup Suggestions applies in one undoable mutation batch
 - [ ] Review Mode behavior remains unchanged
 
 **Known Issues**:
-- Cleanup Suggestions remains scaffolded and is still not wired to a provider/apply flow
 - Diagram generation is still full-board only in the first release
 - Live diagram generation depends on a reachable OpenCode server; if it is unavailable, the UI falls back to the deterministic mock transport and shows a warning in the draft preview
 - Rectangle and circle node labels are applied as separate text shapes because the canvas primitives do not yet support inline text

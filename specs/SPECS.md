@@ -13,6 +13,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - 2026-04-16: Implemented multi-selection canvas interactions with additive click selection, marquee selection, combined multi-select framing, inspector group/ungroup actions, and regression coverage.
 - 2026-04-17: Added multi-select inspector selected-item metadata plus a standalone app UI presentation spec for the current shell and panel inventory.
 - 2026-04-20: Refactored the agent UI into a sidebar-first composer with progressive disclosure and an expanded diagram preview sheet.
+- 2026-04-21: Implemented cleanup suggestions with deterministic proposal generation, inline preview/apply controls, and grouped undo coverage.
 
 ### Task 1: Add Vitest Testing Framework
 **Status**: ✅ Completed
@@ -533,25 +534,25 @@ const isNameTruncated = (name: string): boolean => {
 
 **Notes**:
 - Review Mode is deterministic/mock-backed for now and returns structured findings only
-- Cleanup Suggestions and Selection Rewrite remain visible in the UI but are not wired yet
+- Cleanup Suggestions and Selection Rewrite stay on the deterministic/local path for the first release and do not depend on OpenCode
 
 ---
 
 ### Task 15: Implement Cleanup Suggestions With Preview/Apply
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Implement a workflow that suggests low-risk board cleanup operations and lets the user preview and apply them.
 
 **Acceptance Criteria**:
-- User can request cleanup suggestions from the agent panel
-- Suggestions may include:
+- ✅ User can request cleanup suggestions from the agent panel
+- ✅ Suggestions may include:
   - alignment fixes
   - spacing normalization
   - empty text cleanup
   - inconsistent style warnings
-- Suggestions are presented as explicit proposed actions
-- User can apply all suggestions or selected suggestions only
-- Applying suggestions creates a single undoable change set
+- ✅ Suggestions are presented as explicit proposed actions
+- ✅ User can apply all suggestions or selected suggestions only
+- ✅ Applying suggestions creates a single undoable change set
 
 **Implementation Details**:
 1. Start with deterministic or mock-backed cleanup rules if needed
@@ -567,13 +568,25 @@ const isNameTruncated = (name: string): boolean => {
 
 **Files to Modify**:
 - `src/components/AgentPanel.tsx`
-- `src/hooks/useCanvas.ts` - support grouped apply if needed
+- `src/App.tsx`
+- `src/hooks/useCanvas.mutation.test.ts`
 - `src/agents/agentOrchestrator.ts`
 
 **Testing Requirements**:
 - Unit tests for cleanup suggestion generation
 - Component tests for preview/apply UI
 - Integration test confirming grouped undo behavior
+
+**Verification**:
+- `npx vitest run src/agents/providers/cleanupSuggestionsProvider.test.ts src/components/AgentPanel.test.tsx src/hooks/useCanvas.mutation.test.ts`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added a deterministic `CleanupSuggestionsProvider` that proposes alignment, spacing, style normalization, and empty-text deletion actions without relying on OpenCode
+- Cleanup preview now shows affected shapes, changed fields, selection toggles, and explicit deletion confirmation before apply
+- Users can apply all suggestions or just the selected subset, while both paths reuse the grouped mutation-apply infrastructure so undo stays atomic
 
 ---
 

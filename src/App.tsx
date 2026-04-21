@@ -13,6 +13,7 @@ import { EmbedDialog } from './components/EmbedDialog';
 import { AgentPanel } from './components/AgentPanel';
 import { buildSelectedInspectorItems } from './components/selectedInspectorItems';
 import { AgentOrchestrator } from './agents/agentOrchestrator';
+import { CleanupSuggestionsProvider } from './agents/providers/cleanupSuggestionsProvider';
 import { ReviewModeProvider } from './agents/providers/reviewModeProvider';
 import { OpenCodeDiagramProvider } from './agents/providers/openCodeDiagramProvider';
 import { SelectionRewriteProvider } from './agents/providers/selectionRewriteProvider';
@@ -39,6 +40,7 @@ function App() {
     () =>
       new AgentOrchestrator([
         new ReviewModeProvider(),
+        new CleanupSuggestionsProvider(),
         new SelectionRewriteProvider(),
         new OpenCodeDiagramProvider(),
       ])

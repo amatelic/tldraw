@@ -76,6 +76,31 @@ function createTextShape(id: string, text: string): Shape {
   };
 }
 
+function createRectangleShape(id: string, x: number, y: number, strokeWidth: number): Shape {
+  return {
+    id,
+    type: 'rectangle',
+    bounds: { x, y, width: 120, height: 80 },
+    style: {
+      color: '#000000',
+      fillColor: '#ffffff',
+      strokeWidth,
+      strokeStyle: 'solid',
+      fillStyle: 'none',
+      opacity: 1,
+      blendMode: 'source-over',
+      shadows: [],
+      fontSize: 16,
+      fontFamily: 'sans-serif',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAlign: 'left',
+    },
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
 const mutationProposal: AgentMutationProposal = {
   kind: 'mutation',
   workflow: 'rewrite-selection',
@@ -88,6 +113,30 @@ const mutationProposal: AgentMutationProposal = {
       changes: {
         text: 'Review Flow',
       },
+    },
+  ],
+};
+
+const cleanupProposal: AgentMutationProposal = {
+  kind: 'mutation',
+  workflow: 'cleanup',
+  summary: 'Prepared 2 cleanup suggestions for the visible board, including 1 deletion to confirm.',
+  actions: [
+    {
+      type: 'update-shape',
+      targetId: 'shape-1',
+      description: 'Align row position and standardize stroke width for "rectangle shape-1".',
+      changes: {
+        bounds: { x: 40, y: 24 },
+        style: {
+          strokeWidth: 2,
+        },
+      },
+    },
+    {
+      type: 'delete-shape',
+      targetId: 'shape-2',
+      description: 'Delete the empty text block "Untitled text block".',
     },
   ],
 };
@@ -184,6 +233,38 @@ describe('useCanvas - mutation proposals', () => {
     });
     expect(result.current.shapes.find((shape) => shape.id === 'shape-1' && shape.type === 'text')).toMatchObject({
       text: 'Review this flow',
+    });
+  });
+
+  it('should apply cleanup suggestions in one step and restore them with a single undo', () => {
+    const { result } = renderHook(() => useCanvas(workspaceId));
+
+    act(() => {
+      result.current.addShape(createRectangleShape('shape-1', 0, 32, 4));
+      result.current.addShape(createTextShape('shape-2', ''));
+    });
+
+    act(() => {
+      result.current.applyMutationProposal(cleanupProposal);
+    });
+
+    expect(result.current.shapes.find((shape) => shape.id === 'shape-1' && shape.type === 'rectangle')).toMatchObject({
+      bounds: { x: 40, y: 24, width: 120, height: 80 },
+      style: expect.objectContaining({ strokeWidth: 2 }),
+    });
+    expect(result.current.shapes.some((shape) => shape.id === 'shape-2')).toBe(false);
+    expect(result.current.editorState.selectedShapeIds).toEqual(['shape-1']);
+
+    act(() => {
+      result.current.undo();
+    });
+
+    expect(result.current.shapes.find((shape) => shape.id === 'shape-1' && shape.type === 'rectangle')).toMatchObject({
+      bounds: { x: 0, y: 32, width: 120, height: 80 },
+      style: expect.objectContaining({ strokeWidth: 4 }),
+    });
+    expect(result.current.shapes.find((shape) => shape.id === 'shape-2' && shape.type === 'text')).toMatchObject({
+      text: '',
     });
   });
 });

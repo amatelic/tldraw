@@ -990,6 +990,96 @@ body {
   justify-content: flex-end;
 }
 
+.agent-inline-actions-dual {
+  gap: 10px;
+}
+
+.agent-cleanup-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.agent-cleanup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agent-cleanup-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(248, 245, 252, 0.82);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.agent-cleanup-row input {
+  margin-top: 3px;
+}
+
+.agent-cleanup-row.is-selected {
+  border-color: rgba(91, 101, 245, 0.18);
+  background: rgba(241, 239, 255, 0.92);
+  box-shadow: 0 10px 22px rgba(91, 101, 245, 0.08);
+}
+
+.agent-cleanup-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agent-cleanup-copy p {
+  margin: 0;
+  color: #5d566d;
+  line-height: 1.5;
+}
+
+.agent-cleanup-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-cleanup-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--agent-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-confirmation-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 248, 246, 0.9);
+  border: 1px solid rgba(217, 83, 112, 0.14);
+  color: #7c4554;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.agent-confirmation-row input {
+  margin-top: 3px;
+}
+
 .agent-rewrite-list {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { AgentOrchestrator } from '../agents/agentOrchestrator';
 import type { EditorState, Shape } from '../types';
 import type {
@@ -156,6 +156,10 @@ function getPromptPlaceholder(workflow: AgentWorkflowType, diagramPreset: Diagra
     return 'Describe how to rewrite the selected text. Example: Shorten these labels for presentation slides.';
   }
 
+  if (workflow === 'cleanup') {
+    return 'Optional: focus cleanup on spacing, alignment, empty labels, or inconsistent styling.';
+  }
+
   if (workflow !== 'generate-diagram') {
     return 'Optional: focus the review on clarity, structure, or another goal.';
   }
@@ -195,7 +199,7 @@ function buildPromptForWorkflow(
 function getWorkflowScaffoldMessage(workflow: AgentWorkflowType): string | null {
   switch (workflow) {
     case 'cleanup':
-      return 'Cleanup Suggestions are still scaffolded in the UI, but the first fully editable workflow after Review Mode is Selection Rewrite.';
+      return 'Cleanup Suggestions proposes low-risk alignment, spacing, blank-text, and style fixes that you can preview before applying.';
     case 'generate-diagram':
       return 'Diagram Generator sends structured requests through the OpenCode-backed provider and opens a larger preview only after draft generation.';
     case 'review':
@@ -279,6 +283,86 @@ function isTextShape(shape: Shape): shape is Extract<Shape, { type: 'text' }> {
   return shape.type === 'text';
 }
 
+function getShapePreviewLabel(shape: Shape | undefined, targetId: string): string {
+  if (shape?.type === 'text') {
+    const text = shape.text.trim();
+    return text || 'Untitled text block';
+  }
+
+  if (shape) {
+    return `${shape.type} ${shape.id}`;
+  }
+
+  return targetId;
+}
+
+function getCleanupFieldLabels(
+  action: Extract<AgentMutationProposal['actions'][number], { type: 'update-shape' }>
+): string[] {
+  const labels: string[] = [];
+
+  if (action.changes.bounds?.x !== undefined || action.changes.bounds?.y !== undefined) {
+    labels.push('position');
+  }
+
+  if (action.changes.bounds?.width !== undefined || action.changes.bounds?.height !== undefined) {
+    labels.push('size');
+  }
+
+  if (typeof action.changes.text === 'string') {
+    labels.push('text');
+  }
+
+  if (action.changes.style) {
+    const styleLabels: Array<[keyof Shape['style'], string]> = [
+      ['color', 'stroke color'],
+      ['fillColor', 'fill color'],
+      ['strokeWidth', 'stroke width'],
+      ['strokeStyle', 'stroke style'],
+      ['fillStyle', 'fill style'],
+      ['opacity', 'opacity'],
+      ['fontSize', 'font size'],
+      ['fontFamily', 'font family'],
+      ['fontWeight', 'font weight'],
+      ['fontStyle', 'font style'],
+      ['textAlign', 'text align'],
+      ['blendMode', 'blend mode'],
+      ['shadows', 'shadows'],
+    ];
+
+    styleLabels.forEach(([key, label]) => {
+      if (action.changes.style?.[key] !== undefined) {
+        labels.push(label);
+      }
+    });
+  }
+
+  return [...new Set(labels)];
+}
+
+function buildCleanupActionId(action: AgentMutationProposal['actions'][number], index: number): string {
+  return `${action.type}:${action.targetId}:${index}`;
+}
+
+function buildMutationProposalSelection(
+  proposal: AgentMutationProposal,
+  selectedActionIds: Set<string>
+): AgentMutationProposal {
+  const actions = proposal.actions.filter((action, index) =>
+    selectedActionIds.has(buildCleanupActionId(action, index))
+  );
+
+  if (actions.length === proposal.actions.length) {
+    return proposal;
+  }
+
+  return {
+    ...proposal,
+    summary: `Prepared ${actions.length} selected cleanup suggestion${actions.length === 1 ? '' : 's'}.`,
+    actions,
+  };
+}
+
 export function AgentPanel({
   isOpen,
   workspaceId,
@@ -303,6 +387,8 @@ export function AgentPanel({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isApplyingDraft, setIsApplyingDraft] = useState(false);
   const [isDiagramPreviewOpen, setIsDiagramPreviewOpen] = useState(false);
+  const [selectedCleanupActionIds, setSelectedCleanupActionIds] = useState<string[]>([]);
+  const [confirmCleanupDeletion, setConfirmCleanupDeletion] = useState(false);
 
   const scope = getScopeForWorkflow(workflow, editorState.selectedShapeIds, scopeOverride);
   const workflowMessage = getWorkflowScaffoldMessage(workflow);
@@ -388,11 +474,75 @@ export function AgentPanel({
     };
   }, [proposal, shapeLookup]);
 
+  const cleanupPreview = useMemo(() => {
+    if (proposal?.kind !== 'mutation' || proposal.workflow !== 'cleanup') {
+      return null;
+    }
+
+    const items = proposal.actions.map((action, index) => {
+      const targetShape = shapeLookup.get(action.targetId);
+      const id = buildCleanupActionId(action, index);
+
+      if (action.type === 'delete-shape') {
+        return {
+          id,
+          action,
+          targetLabel: getShapePreviewLabel(targetShape, action.targetId),
+          targetType: targetShape?.type ?? 'shape',
+          fieldLabels: ['delete'],
+          isDeletion: true,
+        };
+      }
+
+      return {
+        id,
+        action,
+        targetLabel: getShapePreviewLabel(targetShape, action.targetId),
+        targetType: targetShape?.type ?? 'shape',
+        fieldLabels: getCleanupFieldLabels(action),
+        isDeletion: false,
+      };
+    });
+
+    return {
+      items,
+      hasDeletion: items.some((item) => item.isDeletion),
+    };
+  }, [proposal, shapeLookup]);
+
+  useEffect(() => {
+    if (!cleanupPreview) {
+      setSelectedCleanupActionIds([]);
+      setConfirmCleanupDeletion(false);
+      return;
+    }
+
+    setSelectedCleanupActionIds(cleanupPreview.items.map((item) => item.id));
+    setConfirmCleanupDeletion(false);
+  }, [cleanupPreview]);
+
+  const selectedCleanupItems = useMemo(() => {
+    if (!cleanupPreview) {
+      return [];
+    }
+
+    const selectedIds = new Set(selectedCleanupActionIds);
+    return cleanupPreview.items.filter((item) => selectedIds.has(item.id));
+  }, [cleanupPreview, selectedCleanupActionIds]);
+
   const isDiagramPreviewVisible =
     status === 'preview-ready' &&
     proposal?.kind === 'generation' &&
     generationPreview !== null &&
     isDiagramPreviewOpen;
+
+  const selectedCleanupProposal = useMemo(() => {
+    if (proposal?.kind !== 'mutation' || proposal.workflow !== 'cleanup') {
+      return null;
+    }
+
+    return buildMutationProposalSelection(proposal, new Set(selectedCleanupActionIds));
+  }, [proposal, selectedCleanupActionIds]);
 
   if (!isOpen) {
     return null;
@@ -410,6 +560,8 @@ export function AgentPanel({
     setProposal(null);
     setErrorMessage(null);
     setStatus('idle');
+    setSelectedCleanupActionIds([]);
+    setConfirmCleanupDeletion(false);
     if (nextWorkflow !== 'generate-diagram') {
       setShowDiagramDetails(false);
     }
@@ -466,8 +618,8 @@ export function AgentPanel({
     }
   };
 
-  const handleApplyDraft = async () => {
-    if (!proposal || (proposal.kind !== 'generation' && proposal.kind !== 'mutation')) {
+  const applyProposal = async (proposalToApply: AgentGenerationProposal | AgentMutationProposal) => {
+    if (proposalToApply.kind !== 'generation' && proposalToApply.kind !== 'mutation') {
       return;
     }
 
@@ -476,9 +628,9 @@ export function AgentPanel({
 
     try {
       const result =
-        proposal.kind === 'generation'
-          ? await onApplyGenerationProposal(proposal)
-          : await onApplyMutationProposal(proposal);
+        proposalToApply.kind === 'generation'
+          ? await onApplyGenerationProposal(proposalToApply)
+          : await onApplyMutationProposal(proposalToApply);
 
       if (!result.success) {
         setErrorMessage(result.error ?? 'The proposed changes could not be applied.');
@@ -490,6 +642,30 @@ export function AgentPanel({
       setIsApplyingDraft(false);
     }
   };
+
+  const handleApplyDraft = async () => {
+    if (!proposal || (proposal.kind !== 'generation' && proposal.kind !== 'mutation')) {
+      return;
+    }
+
+    await applyProposal(proposal);
+  };
+
+  const handleApplySelectedCleanup = async () => {
+    if (!selectedCleanupProposal || selectedCleanupProposal.actions.length === 0) {
+      return;
+    }
+
+    await applyProposal(selectedCleanupProposal);
+  };
+
+  const toggleCleanupAction = (actionId: string) => {
+    setSelectedCleanupActionIds((current) =>
+      current.includes(actionId) ? current.filter((id) => id !== actionId) : [...current, actionId]
+    );
+  };
+
+  const cleanupSelectionIncludesDeletion = selectedCleanupItems.some((item) => item.isDeletion);
 
   return (
     <>
@@ -561,6 +737,16 @@ export function AgentPanel({
               <p>
                 Only the selected text changes. You will get a before-and-after preview before
                 anything is applied.
+              </p>
+            </div>
+          )}
+
+          {workflow === 'cleanup' && (
+            <div className="agent-helper-copy">
+              <strong>Cleanup suggestions</strong>
+              <p>
+                Review low-risk alignment, spacing, blank-text, and style fixes before applying
+                them in one undoable cleanup pass.
               </p>
             </div>
           )}
@@ -692,6 +878,124 @@ export function AgentPanel({
 
           {status === 'preview-ready' &&
             proposal?.kind === 'mutation' &&
+            proposal.workflow === 'cleanup' &&
+            cleanupPreview && (
+              <div className="agent-inline-results">
+                <div className="agent-results-summary">{proposal.summary}</div>
+
+                <section className="agent-inline-section">
+                  <div className="agent-inline-section-header">
+                    <h3>Cleanup suggestions</h3>
+                    <span>{cleanupPreview.items.length} suggestions</span>
+                  </div>
+
+                  {cleanupPreview.items.length === 0 ? (
+                    <div className="agent-empty-state">
+                      No low-risk cleanup suggestions were returned for this scope.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="agent-cleanup-toolbar">
+                        <button
+                          type="button"
+                          className="agent-inline-toggle"
+                          onClick={() => setSelectedCleanupActionIds(cleanupPreview.items.map((item) => item.id))}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          className="agent-inline-toggle"
+                          onClick={() => setSelectedCleanupActionIds([])}
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      <div className="agent-cleanup-list">
+                        {cleanupPreview.items.map((item) => {
+                          const isSelected = selectedCleanupActionIds.includes(item.id);
+
+                          return (
+                            <label
+                              key={item.id}
+                              className={`agent-cleanup-row${isSelected ? ' is-selected' : ''}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                aria-label={`Select cleanup suggestion for ${item.targetLabel}`}
+                                onChange={() => toggleCleanupAction(item.id)}
+                              />
+                              <div className="agent-cleanup-copy">
+                                <div className="agent-finding-header">
+                                  <strong>{item.targetLabel}</strong>
+                                  <span
+                                    className={`agent-severity agent-severity-${item.isDeletion ? 'high' : 'low'}`}
+                                  >
+                                    {item.isDeletion ? 'delete' : 'update'}
+                                  </span>
+                                </div>
+                                <p>{item.action.description}</p>
+                                <div className="agent-cleanup-meta">
+                                  <span>{item.targetType}</span>
+                                  {item.fieldLabels.map((field) => (
+                                    <span key={`${item.id}-${field}`}>{field}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </section>
+
+                {cleanupPreview.hasDeletion && (
+                  <label className="agent-confirmation-row">
+                    <input
+                      type="checkbox"
+                      aria-label="I understand that applying cleanup suggestions can delete empty text blocks."
+                      checked={confirmCleanupDeletion}
+                      onChange={(event) => setConfirmCleanupDeletion(event.target.checked)}
+                    />
+                    <span>
+                      I understand that applying cleanup suggestions can delete empty text blocks.
+                    </span>
+                  </label>
+                )}
+
+                <div className="agent-inline-actions agent-inline-actions-dual">
+                  <button
+                    className="agent-secondary-button"
+                    onClick={handleApplySelectedCleanup}
+                    disabled={
+                      isApplyingDraft ||
+                      !selectedCleanupProposal ||
+                      selectedCleanupProposal.actions.length === 0 ||
+                      (cleanupSelectionIncludesDeletion && !confirmCleanupDeletion)
+                    }
+                  >
+                    {isApplyingDraft ? 'Applying...' : 'Apply selected'}
+                  </button>
+                  <button
+                    className="agent-primary-button"
+                    onClick={handleApplyDraft}
+                    disabled={
+                      isApplyingDraft ||
+                      proposal.actions.length === 0 ||
+                      (cleanupPreview.hasDeletion && !confirmCleanupDeletion)
+                    }
+                  >
+                    {isApplyingDraft ? 'Applying...' : 'Apply all'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          {status === 'preview-ready' &&
+            proposal?.kind === 'mutation' &&
             proposal.workflow === 'rewrite-selection' &&
             rewritePreview && (
               <div className="agent-inline-results">
@@ -765,7 +1069,13 @@ export function AgentPanel({
               onClick={handleRun}
               disabled={isSelectionRewriteWorkflow && selectedTextShapes.length === 0}
             >
-              {isDiagramWorkflow ? 'Generate draft' : isSelectionRewriteWorkflow ? 'Draft rewrite' : 'Run'}
+              {isDiagramWorkflow
+                ? 'Generate draft'
+                : isSelectionRewriteWorkflow
+                  ? 'Draft rewrite'
+                  : workflow === 'cleanup'
+                    ? 'Draft cleanup'
+                    : 'Run'}
             </button>
           </div>
         </div>
