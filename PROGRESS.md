@@ -58,6 +58,8 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Add workspace - Create new workspace with auto-generated name
 - [x] Delete workspace - Remove workspaces (minimum 1 required)
 - [x] Rename workspace - Custom workspace names
+- [x] Workspace tab truncation - Names longer than 15 characters collapse to an ellipsis label with a delayed full-name tooltip
+- [x] Workspace tab long-press menu - A 3-second progress ring reveals rename/close actions as a touch-friendly alternative to right-click
 - [x] Persistence - All workspaces saved to localStorage
 - [x] Versioned workspace export - Active workspace downloads as stable JSON with hierarchy-preserving group structure
 - [x] Canvas asset export - Header export menu now supports viewport PNG plus all-shapes or selected-shapes PNG/SVG downloads with timestamped filenames
@@ -194,6 +196,7 @@ useEffect(() => {
 ### April 21, 2026
 - Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
 - Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
+- Closed out the workspace-tab truncation and long-press workflow with dedicated feature documentation and task cleanup
 - Simplified the workspace deletion guard API by removing the unused `id` parameter from `canDeleteWorkspace()` and adding store-level regression coverage
 - Removed the `useCanvas` exhaustive-deps suppression and added initialization coverage for workspace-backed state plus workspace switching
 - Added an application error boundary with retry/refresh recovery actions and component-level crash coverage
