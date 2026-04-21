@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Replaced split workspace auto-save timers with one debounced atomic snapshot write, added `updateWorkspaceSnapshot`, and locked the new persistence behavior in with hook/store regression tests.
 - 2026-04-21: Added store-backed workspace-name validation with trimming, 50-character limits, inline tab feedback, and regression coverage for both store and overflow rename flows.
 - 2026-04-21: Closed out the workspace-tab truncation and long-press menu workflow, added feature docs, and documented the architecture rule that treats broad `useEffect` orchestration as an anti-pattern.
 - 2026-04-21: Added an app-level `ErrorBoundary`, wrapped bootstrap in `main.tsx`, and added retry/refresh coverage for crash recovery.
@@ -116,34 +117,6 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 **Files Created**:
 - `src/hooks/useCanvas.grouping.test.ts` - grouping, ungrouping, delete, and layer-order coverage
 - `src/components/Canvas.context-menu.test.tsx` - right-click menu interaction coverage
-
----
-
-### Task 6: Fix Auto-save Race Condition
-**Status**: 🔴 Not Started
-**Priority**: LOW
-**Description**: Multiple useEffect hooks with separate timeouts can cause shapes and state to get out of sync
-**Acceptance Criteria**:
-- Combine shapes and state auto-save into single effect
-- Use debounced save instead of multiple timeouts
-- Ensure atomic updates to workspace store
-
-**Bad Code to Fix** (from `src/hooks/useCanvas.ts:112-124`):
-```tsx
-useEffect(() => {
-  const timeoutId = setTimeout(() => {
-    workspaceStore.updateWorkspaceShapes(workspaceId, shapes);
-  }, 100);
-  return () => clearTimeout(timeoutId);
-}, [shapes, workspaceId, workspaceStore]);
-
-useEffect(() => {
-  const timeoutId = setTimeout(() => {
-    workspaceStore.updateWorkspaceState(workspaceId, editorState);
-  }, 100);
-  return () => clearTimeout(timeoutId);
-}, [editorState, workspaceId, workspaceStore]);
-```
 
 ---
 

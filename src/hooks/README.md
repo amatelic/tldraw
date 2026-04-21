@@ -156,7 +156,7 @@ const [future, setFuture] = useState<HistoryState[]>([]);
 
 - Loads initial state from workspace store
 - Derives the initial history snapshot from the current workspace object without suppressing hook dependency checks
-- Auto-saves changes back to workspace store (100ms debounce)
+- Auto-saves changes back to workspace store through one debounced atomic snapshot write (100ms debounce)
 - Clears history when switching workspaces
 - Uses refs to detect workspace changes
 
@@ -210,9 +210,7 @@ const defaultEditorState: EditorState = {
 
 2. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
 
-3. **Cleanup Apply Is Still Pending**: The generic mutation apply path exists now, but Cleanup Suggestions still needs its own provider and preview UX.
-
-4. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
+3. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
 
 **Testing Requirements**:
 

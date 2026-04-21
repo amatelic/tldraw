@@ -43,6 +43,10 @@ interface WorkspaceStore {
   getNextWorkspaceNumber: () => number;
 
   // Update current workspace data
+  updateWorkspaceSnapshot: (
+    id: string,
+    snapshot: { shapes: Shape[]; state: WorkspaceState }
+  ) => void;
   updateWorkspaceShapes: (id: string, shapes: Shape[]) => void;
   updateWorkspaceState: (id: string, state: Partial<WorkspaceState>) => void;
 }
@@ -228,6 +232,21 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
           nextNumber++;
         }
         return nextNumber;
+      },
+
+      updateWorkspaceSnapshot: (id: string, snapshot: { shapes: Shape[]; state: WorkspaceState }) => {
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === id
+              ? {
+                  ...w,
+                  shapes: snapshot.shapes,
+                  state: snapshot.state,
+                  updatedAt: Date.now(),
+                }
+              : w
+          ),
+        }));
       },
 
       updateWorkspaceShapes: (id: string, shapes: Shape[]) => {

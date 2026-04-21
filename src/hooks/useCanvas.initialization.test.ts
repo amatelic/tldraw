@@ -8,6 +8,7 @@ const storeStub = {
   workspaces: [] as Workspace[],
   activeWorkspaceId: 'workspace-1',
   getWorkspace: vi.fn((workspaceId: string) => workspaceMap[workspaceId]),
+  updateWorkspaceSnapshot: vi.fn(),
   updateWorkspaceShapes: vi.fn(),
   updateWorkspaceState: vi.fn(),
 };

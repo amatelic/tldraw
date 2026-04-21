@@ -126,6 +126,7 @@ vi.mock('./stores/workspaceStore', () => ({
     getWorkspace: vi.fn(() => mockWorkspace),
     getActiveWorkspace: vi.fn(() => mockWorkspace),
     getNextWorkspaceNumber: vi.fn(() => 2),
+    updateWorkspaceSnapshot: vi.fn(),
     updateWorkspaceShapes: vi.fn(),
     updateWorkspaceState: vi.fn(),
   }),

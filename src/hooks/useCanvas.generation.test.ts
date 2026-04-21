@@ -37,6 +37,7 @@ vi.mock('../stores/workspaceStore', () => ({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })),
+    updateWorkspaceSnapshot: vi.fn(),
     updateWorkspaceShapes: vi.fn(),
     updateWorkspaceState: vi.fn(),
   }),

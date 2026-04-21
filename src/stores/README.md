@@ -59,6 +59,10 @@ interface WorkspaceStore {
   getWorkspace: (id: string) => Workspace | undefined;
   getActiveWorkspace: () => Workspace;
   getNextWorkspaceNumber: () => number;
+  updateWorkspaceSnapshot: (id: string, snapshot: {
+    shapes: Shape[];
+    state: WorkspaceState;
+  }) => void;
   updateWorkspaceShapes: (id: string, shapes: Shape[]) => void;
   updateWorkspaceState: (id: string, state: Partial<WorkspaceState>) => void;
 }
@@ -133,14 +137,19 @@ const id = `workspace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
    - **Clears undo history** (in useCanvas)
 
 5. **Updating Shapes**:
-   - Called by `useCanvas` hook (debounced 100ms)
+   - Low-level helper for shape-only workspace writes
    - Updates `shapes` array
    - Updates `updatedAt` timestamp
 
 6. **Updating State**:
-   - Called by `useCanvas` hook
+   - Low-level helper for state-only workspace writes
    - Merges partial state updates
    - Updates `updatedAt` timestamp
+
+7. **Updating Snapshot**:
+   - Called by `useCanvas` hook (debounced 100ms)
+   - Writes shapes and editor state together in one store update
+   - Prevents persisted workspace snapshots from mixing old state with new shapes or vice versa
 
 **Success Criteria**:
 - [ ] Workspaces persist across page reloads
@@ -186,16 +195,19 @@ workspaceStore.switchWorkspace(newId);
 // Get active workspace
 const active = workspaceStore.getActiveWorkspace();
 
-// Update shapes (usually done by useCanvas)
-workspaceStore.updateWorkspaceShapes(workspaceId, newShapes);
+// Update the persisted workspace snapshot (usually done by useCanvas)
+workspaceStore.updateWorkspaceSnapshot(workspaceId, {
+  shapes: newShapes,
+  state: nextEditorState,
+});
 ```
 
 **Data Flow**:
 ```
 User Action → useCanvas Hook → workspaceStore → localStorage
      ↓              ↓                ↓              ↓
-  Draw Shape   Debounced      Update State   Persist JSON
-  Switch Tab   100ms          Update Timestamp
+  Draw Shape   Debounced      Atomic Snapshot  Persist JSON
+  Switch Tab   100ms          Update
 ```
 
 **Migration Considerations**:

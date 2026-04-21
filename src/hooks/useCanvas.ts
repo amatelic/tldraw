@@ -70,6 +70,7 @@ interface UseCanvasReturn {
 }
 
 const MAX_HISTORY_SIZE = 50;
+const SAVE_DEBOUNCE_MS = 100;
 
 function normalizeShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): string[] {
   return normalizeShapeIdsForSelection(shapeIds, shapes);
@@ -337,20 +338,17 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     }
   }, [workspaceId, workspaceStore]);
 
-  // Auto-save to workspace store
+  // Persist shapes and editor state together so workspace snapshots cannot drift out of sync.
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      workspaceStore.updateWorkspaceShapes(workspaceId, shapes);
-    }, 100);
-    return () => clearTimeout(timeoutId);
-  }, [shapes, workspaceId, workspaceStore]);
+      workspaceStore.updateWorkspaceSnapshot(workspaceId, {
+        shapes,
+        state: editorState,
+      });
+    }, SAVE_DEBOUNCE_MS);
 
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      workspaceStore.updateWorkspaceState(workspaceId, editorState);
-    }, 100);
     return () => clearTimeout(timeoutId);
-  }, [editorState, workspaceId, workspaceStore]);
+  }, [editorState, shapes, workspaceId, workspaceStore]);
 
   // Helper to save current state to history
   const saveToHistory = useCallback(

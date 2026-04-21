@@ -123,4 +123,49 @@ describe('workspaceStore', () => {
     });
     expect(useWorkspaceStore.getState().workspaces[0]?.name).toBe('Existing Name');
   });
+
+  it('updates shapes and editor state together with updateWorkspaceSnapshot', () => {
+    useWorkspaceStore.setState({
+      workspaces: [createWorkspace('1')],
+      activeWorkspaceId: '1',
+    });
+
+    useWorkspaceStore.getState().updateWorkspaceSnapshot('1', {
+      shapes: [
+        {
+          id: 'shape-1',
+          type: 'rectangle',
+          bounds: { x: 20, y: 30, width: 120, height: 80 },
+          style: {
+            color: '#111111',
+            fillColor: '#ffffff',
+            fillGradient: null,
+            strokeWidth: 2,
+            strokeStyle: 'solid',
+            fillStyle: 'none',
+            opacity: 1,
+            blendMode: 'source-over',
+            shadows: [],
+            fontSize: 16,
+            fontFamily: 'sans-serif',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            textAlign: 'left',
+          },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      state: {
+        ...createWorkspace('1').state,
+        tool: 'rectangle',
+        selectedShapeIds: ['shape-1'],
+      },
+    });
+
+    const workspace = useWorkspaceStore.getState().workspaces[0];
+    expect(workspace?.shapes.map((shape) => shape.id)).toEqual(['shape-1']);
+    expect(workspace?.state.tool).toBe('rectangle');
+    expect(workspace?.state.selectedShapeIds).toEqual(['shape-1']);
+  });
 });
