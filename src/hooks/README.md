@@ -155,6 +155,7 @@ const [future, setFuture] = useState<HistoryState[]>([]);
 **Workspace Integration**:
 
 - Loads initial state from workspace store
+- Derives the initial history snapshot from the current workspace object without suppressing hook dependency checks
 - Auto-saves changes back to workspace store (100ms debounce)
 - Clears history when switching workspaces
 - Uses refs to detect workspace changes
@@ -205,20 +206,13 @@ const defaultEditorState: EditorState = {
 - Selection Rewrite validation is intentionally strict in Phase 1: only text updates are allowed, with no layout or style mutations
 
 **Known Issues**:
-1. **ESLint Warning**: `react-hooks/exhaustive-deps` disabled for initialData useMemo
-   ```typescript
-   // eslint-disable-next-line react-hooks/exhaustive-deps
-   [workspaceId]
-   ```
-   This is intentional - we only want to recalculate when workspaceId changes, not when workspace data changes.
+1. **History Loss**: When switching workspaces, all undo history is lost. This is by design but could be improved to preserve history per-workspace.
 
-2. **History Loss**: When switching workspaces, all undo history is lost. This is by design but could be improved to preserve history per-workspace.
+2. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
 
-3. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
+3. **Cleanup Apply Is Still Pending**: The generic mutation apply path exists now, but Cleanup Suggestions still needs its own provider and preview UX.
 
-4. **Cleanup Apply Is Still Pending**: The generic mutation apply path exists now, but Cleanup Suggestions still needs its own provider and preview UX.
-
-5. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
+4. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
 
 **Testing Requirements**:
 

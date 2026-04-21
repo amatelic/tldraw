@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Removed the `useCanvas` exhaustive-deps suppression, keyed initialization memoization to the live workspace object, and added regression coverage for workspace-backed initialization and switching.
 - 2026-04-21: Removed the unused `canDeleteWorkspace(id)` parameter, added store-level regression coverage, and documented the simplified workspace deletion guard API.
 - 2026-04-21: Added a header export menu with viewport PNG plus all-shapes/selected-shapes PNG and SVG downloads backed by new canvas export helpers and regression coverage.
 - 2026-04-21: Added App-level regression coverage confirming the text tool stays active across repeated text placement until the user switches tools manually.
@@ -139,29 +140,6 @@ useEffect(() => {
   }, 100);
   return () => clearTimeout(timeoutId);
 }, [editorState, workspaceId, workspaceStore]);
-```
-
----
-
-### Task 8: Fix ESLint Disable in useCanvas Hook
-**Status**: 🔴 Not Started
-**Priority**: LOW
-**Description**: The hook disables exhaustive-deps rule which hides real dependency issues
-**Acceptance Criteria**:
-- Remove eslint-disable comment
-- Add proper dependencies to useMemo
-- Ensure no stale closures
-
-**Bad Code to Fix** (from `src/hooks/useCanvas.ts:74`):
-```tsx
-const initialData = useMemo(
-  () => ({
-    shapes: workspace?.shapes || [],
-    editorState: workspace?.state || defaultEditorState,
-  }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [workspaceId]
-);
 ```
 
 ---

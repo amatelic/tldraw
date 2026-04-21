@@ -155,23 +155,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 
 ## 🐛 Known Bugs & Issues
 
-### Issue 1: ESLint Disable Comment in Hook
-**Problem**: The `useCanvas` hook disables the exhaustive-deps rule which can hide real dependency issues.
-**Location**: `src/hooks/useCanvas.ts:74`
-**Bad Code**:
-```tsx
-const initialData = useMemo(
-  () => ({
-    shapes: workspace?.shapes || [],
-    editorState: workspace?.state || defaultEditorState,
-  }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [workspaceId]
-);
-```
-**Impact**: Missing dependencies could cause stale closures or missed updates.
-
-### Issue 2: Auto-save Race Condition
+### Issue 1: Auto-save Race Condition
 **Problem**: Multiple useEffect hooks auto-save shapes and state with separate timeouts, which could cause race conditions.
 **Location**: `src/hooks/useCanvas.ts:112-124`
 **Bad Code**:
@@ -192,11 +176,11 @@ useEffect(() => {
 ```
 **Impact**: Shapes and state could get out of sync during rapid changes.
 
-### Issue 3: Missing Error Boundaries
+### Issue 2: Missing Error Boundaries
 **Problem**: No React error boundaries are implemented to catch rendering errors.
 **Impact**: A single component crash could crash the entire application.
 
-### Issue 4: No Input Validation on Workspace Names
+### Issue 3: No Input Validation on Workspace Names
 **Problem**: Workspace names can be empty strings or excessively long.
 **Location**: `src/stores/workspaceStore.ts:117-126`
 **Impact**: UI issues with empty or overly long tab names.
@@ -214,6 +198,7 @@ useEffect(() => {
 - Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
 - Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
 - Simplified the workspace deletion guard API by removing the unused `id` parameter from `canDeleteWorkspace()` and adding store-level regression coverage
+- Removed the `useCanvas` exhaustive-deps suppression and added initialization coverage for workspace-backed state plus workspace switching
 
 ### April 13, 2026
 - Completed a full right-side inspector redesign to match the latest UI reference more closely

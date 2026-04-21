@@ -301,8 +301,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
       shapes: workspace?.shapes || [],
       editorState: workspace?.state || defaultEditorState,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workspaceId]
+    [workspace]
   );
 
   // History management
