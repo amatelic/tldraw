@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Added App-level regression coverage confirming the text tool stays active across repeated text placement until the user switches tools manually.
 - 2026-04-13: Extended the inspector redesign language into the app header/workspace rail and added Playwright coverage for the new chrome styling.
 - 2026-04-14: Converted the shell to a full-viewport canvas with floating header and inspector overlays, plus Playwright checks for viewport coverage.
 - 2026-04-15: Added a focused spec and task breakdown for a work-diagram agent with OpenCode transport and presentation-brief output.
@@ -85,30 +86,6 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 - Undo/Redo integration
 - Focus management
 - Default text behavior
-
----
-
-### Task 3: Fix Text Tool Auto-Switch Behavior
-**Status**: 🔴 Not Started
-**Priority**: MEDIUM
-**Description**: The text tool switches back to select immediately after adding text, preventing multiple text additions
-**Acceptance Criteria**:
-- Text tool stays active after adding text
-- User can click multiple times to add multiple text shapes
-- User must manually switch to another tool
-- Remove the problematic useEffect that auto-switches
-
-**Bad Code to Fix** (from `App.tsx:64-70`):
-```tsx
-useEffect(() => {
-  if (editorState.tool === 'text' && shapes.length > prevShapesLengthRef.current) {
-    setEditorState((prev) => ({ ...prev, tool: 'select' }));
-  }
-  prevShapesLengthRef.current = shapes.length;
-}, [shapes.length, editorState.tool, setEditorState]);
-```
-
----
 
 ### Task 4: Add Export to PNG/SVG Feature
 **Status**: 🔴 Not Started

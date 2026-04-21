@@ -13,6 +13,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Freehand tool - Draw free-form paths
 - [x] Eraser tool - Remove shapes by clicking on them
 - [x] Text tool - Add text annotations
+- [x] Sequential text placement - Text tool stays active after each new text shape until the user switches tools
 - [x] Image tool - Upload and place images (max 300px width with aspect ratio maintained)
 - [x] Audio tool - Upload audio files with waveform visualization
 - [x] Pan tool - Navigate the canvas
@@ -106,7 +107,6 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [ ] Pause/stop functionality
 
 ### Text Feature
-- [ ] Text tool still auto-switches back to select after placing a text shape
 - [ ] Text selection and cursor positioning
 - [ ] Rich text formatting (bold/italic per character)
 
@@ -154,21 +154,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 
 ## 🐛 Known Bugs & Issues
 
-### Issue 1: Text Tool Auto-switches Too Quickly
-**Problem**: When using the text tool, it auto-switches back to select tool after adding text, but this can happen before the user is done editing.
-**Location**: `App.tsx:64-70`
-**Bad Code**:
-```tsx
-useEffect(() => {
-  if (editorState.tool === 'text' && shapes.length > prevShapesLengthRef.current) {
-    setEditorState((prev) => ({ ...prev, tool: 'select' }));
-  }
-  prevShapesLengthRef.current = shapes.length;
-}, [shapes.length, editorState.tool, setEditorState]);
-```
-**Impact**: Users cannot add multiple text shapes in sequence without re-selecting the text tool.
-
-### Issue 2: ESLint Disable Comment in Hook
+### Issue 1: ESLint Disable Comment in Hook
 **Problem**: The `useCanvas` hook disables the exhaustive-deps rule which can hide real dependency issues.
 **Location**: `src/hooks/useCanvas.ts:74`
 **Bad Code**:
@@ -184,7 +170,7 @@ const initialData = useMemo(
 ```
 **Impact**: Missing dependencies could cause stale closures or missed updates.
 
-### Issue 3: Unused Parameter Warning Suppression
+### Issue 2: Unused Parameter Warning Suppression
 **Problem**: The `canDeleteWorkspace` function takes an `id` parameter but only uses it with `void id` to suppress warnings.
 **Location**: `src/stores/workspaceStore.ts:136-140`
 **Bad Code**:
@@ -198,7 +184,7 @@ canDeleteWorkspace: (id: string) => {
 ```
 **Impact**: Confusing API - parameter is required but ignored.
 
-### Issue 4: Auto-save Race Condition
+### Issue 3: Auto-save Race Condition
 **Problem**: Multiple useEffect hooks auto-save shapes and state with separate timeouts, which could cause race conditions.
 **Location**: `src/hooks/useCanvas.ts:112-124`
 **Bad Code**:
@@ -219,11 +205,11 @@ useEffect(() => {
 ```
 **Impact**: Shapes and state could get out of sync during rapid changes.
 
-### Issue 5: Missing Error Boundaries
+### Issue 4: Missing Error Boundaries
 **Problem**: No React error boundaries are implemented to catch rendering errors.
 **Impact**: A single component crash could crash the entire application.
 
-### Issue 6: No Input Validation on Workspace Names
+### Issue 5: No Input Validation on Workspace Names
 **Problem**: Workspace names can be empty strings or excessively long.
 **Location**: `src/stores/workspaceStore.ts:117-126`
 **Impact**: UI issues with empty or overly long tab names.
@@ -236,6 +222,9 @@ useEffect(() => {
 - **E2E Tests**: In progress - legacy-state inspector regression and header chrome checks now run in Playwright
 
 ## 📌 Recent Milestones
+
+### April 21, 2026
+- Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
 
 ### April 13, 2026
 - Completed a full right-side inspector redesign to match the latest UI reference more closely
@@ -254,13 +243,12 @@ useEffect(() => {
 
 ## 🎯 Next Priority Items
 
-1. Add Vitest test framework and basic test setup
-2. Write unit tests for type utilities and shape operations
-3. Implement text editing in-place
-4. Add export functionality (PNG/SVG)
-5. Add shape grouping feature
-6. Implement proper error boundaries
-7. Fix the text tool auto-switch behavior
+1. Add export functionality (PNG/SVG)
+2. Write more unit tests for remaining utilities and shape operations
+3. Fix the auto-save race condition in workspace persistence
+4. Remove the stale exhaustive-deps disable in `useCanvas`
+5. Implement proper error boundaries
+6. Add validation for workspace names
 
 ## 📝 Notes
 

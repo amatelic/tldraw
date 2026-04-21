@@ -238,7 +238,7 @@ interface CanvasProps {
    - Select tool: single-click selects, `Shift + Click` toggles top-level entities, dragging a selected entity moves the full current selection, and dragging from empty canvas starts marquee selection
    - Drawing tools (rectangle, circle, line, arrow, pencil): Start drawing
    - Eraser: Delete clicked shape
-   - Text: Create text shape and start editing
+   - Text: Create a text shape, select it, and immediately enter edit mode while keeping the text tool active for repeated placement
 
 2. **Pointer Move**:
    - Panning: Update camera position

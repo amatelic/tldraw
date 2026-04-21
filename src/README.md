@@ -51,6 +51,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 ### Shape Lifecycle
 
 1. **Creation**: User drags on canvas → `createShapeFromPoints()` creates shape object
+   Text creation is click-driven and keeps the active tool on `text`, so users can place multiple labels without reselecting the tool.
 2. **Rendering**: `CanvasEngine.drawShape()` renders to canvas
 3. **Selection**: Click detection via `isPointInShape()` hit testing
 4. **Transformation**: Drag updates via `onShapeUpdate()`
