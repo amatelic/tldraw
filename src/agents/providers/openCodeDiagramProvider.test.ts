@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OpenCodeClient } from '../openCodeClient';
+import { MockOpenCodeTransport, OpenCodeClient } from '../openCodeClient';
 import { buildAgentRequest, AgentOrchestrator } from '../agentOrchestrator';
 import { OpenCodeDiagramProvider } from './openCodeDiagramProvider';
 import type { OpenCodeTransport } from '../openCodeClient';
@@ -44,6 +44,15 @@ function buildGenerateDiagramRequest(prompt: string) {
       selectedShapeIds: [],
     },
     viewport: { width: 1200, height: 800 },
+  });
+}
+
+function createProviderWithMockTransport() {
+  return new OpenCodeDiagramProvider({
+    client: new OpenCodeClient({
+      transport: new MockOpenCodeTransport(),
+      fallbackTransport: null,
+    }),
   });
 }
 
@@ -106,6 +115,48 @@ describe('OpenCodeDiagramProvider', () => {
     );
     expect(proposal.workflow).toBe('generate-diagram');
     expect(proposal.actions).toHaveLength(1);
+  });
+
+  it('should keep the messaging-app backend example stable for provider-level regression coverage', async () => {
+    const provider = createProviderWithMockTransport();
+
+    const proposal = await provider.generate(
+      buildGenerateDiagramRequest('Create a backend architecture for a messaging app.')
+    );
+
+    expect(proposal.summary).toContain('backend architecture for a messaging app');
+    expect(proposal.sections.map((section) => section.title)).toEqual([
+      'Clients',
+      'Core Services',
+      'Data & Delivery',
+    ]);
+    expect(proposal.actions.filter((action) => action.type === 'create-shape')).toHaveLength(7);
+    expect(proposal.actions.filter((action) => action.type === 'create-connector')).toHaveLength(6);
+    expect(proposal.presentationBrief.title).toBe('Messaging App Backend Architecture');
+    expect(proposal.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'warning-realtime' })])
+    );
+  });
+
+  it('should keep the storytelling storyboard example stable for provider-level regression coverage', async () => {
+    const provider = createProviderWithMockTransport();
+
+    const proposal = await provider.generate(
+      buildGenerateDiagramRequest('Create a storyboard for how to learn storytelling.')
+    );
+
+    expect(proposal.summary).toContain('storyboard');
+    expect(proposal.sections.map((section) => section.title)).toEqual([
+      'Foundations',
+      'Practice',
+      'Delivery',
+    ]);
+    expect(proposal.actions.filter((action) => action.type === 'create-shape')).toHaveLength(6);
+    expect(proposal.actions.filter((action) => action.type === 'create-connector')).toHaveLength(5);
+    expect(proposal.presentationBrief.title).toBe('Storyboard for Learning Storytelling');
+    expect(proposal.warnings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'warning-depth' })])
+    );
   });
 
   it('should surface low-confidence responses as warnings instead of silent success', async () => {

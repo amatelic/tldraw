@@ -244,6 +244,56 @@ These are better first releases than full prompt-to-diagram because they:
 - fit the current editing model
 - can reuse existing shape update flows
 
+## Implemented Slice (April 2026)
+
+The current app implementation now ships a narrower but real subset of the workflow vision:
+
+- `Review Mode` is implemented as a preview-only analysis workflow.
+- `Selection Rewrite` is implemented as a selection-scoped text rewrite with before/after preview and one-step apply.
+- `Diagram Generator` is implemented as a work-diagram workflow for simple architecture and storyboard-style drafts.
+- `Cleanup Suggestions` is still scaffolded in the UI and remains the main missing workflow in the original first-release set.
+
+The current starter examples that are locked by regression coverage are:
+
+- `Create a backend architecture for a messaging app.`
+- `Create a storyboard for how to learn storytelling.`
+
+The diagram-generator release currently uses:
+
+- a right-sidebar composer with an expanded preview sheet
+- a structured output contract with nodes, connectors, sections, warnings, confidence, and presentation brief data
+- a temporary OpenCode transport boundary for live generation
+- a deterministic mock fallback when the live OpenCode server is unavailable
+
+## Current Diagram Output Contract
+
+The implemented diagram workflow now returns a generation proposal with:
+
+- `summary`
+- `confidence`
+- `sections`
+- `actions`
+- `presentationBrief`
+- `warnings`
+
+The current `actions` set is intentionally narrow:
+
+- `create-shape` for `rectangle`, `circle`, and `text`
+- `create-connector` for `arrow` and `line`
+
+The current `presentationBrief` contract includes:
+
+- `title`
+- `objective`
+- `audience`
+- `summary`
+- `narrativeSteps`
+- `speakerNotes`
+- `assumptions`
+- `openQuestions`
+
+This contract is previewed in the UI before apply and revalidated before the canvas mutates.
+
 ## Functional Requirements
 
 ### FR1: Agent Context Packaging
@@ -269,6 +319,14 @@ The app should define a structured result contract for agent responses:
 - `reviewFindings`
 
 This avoids brittle free-form parsing.
+
+For the implemented diagram-generation workflow, this now concretely means:
+
+- a structured generation proposal instead of raw markdown
+- explicit create actions for shapes and connectors
+- section metadata for preview grouping
+- presentation-brief fields for presentation guidance
+- warnings and confidence metadata for incomplete or low-trust drafts
 
 ### FR3: Safe Apply Flow
 
@@ -367,6 +425,21 @@ The following constraints should define agent behavior and implementation bounda
 - The first release should optimize for trust and clarity over maximum autonomy.
 - Agent workflows should improve existing user goals, not introduce a second disconnected product inside the app.
 - The app should remain fully usable without agent features enabled.
+
+### 10. Transport Constraints
+
+- Diagram generation currently uses OpenCode as a temporary transport boundary, not a permanent product-level backend commitment.
+- Live browser requests should go through the OpenCode session/message API rather than baking provider-specific prompting into the UI.
+- Development and tests must keep a deterministic fallback path so the feature remains debuggable when the live server is unavailable.
+- If the fallback path is used, the UI should disclose that the draft came from the mock path instead of the live server.
+
+## Current First-Release Limitations
+
+- Diagram generation is full-board only in the current release.
+- Cleanup Suggestions is still not implemented behind the UI scaffold.
+- Presentation briefs remain preview/session data and are not persisted in workspace state.
+- Generated connectors do not stay live-bound to moved nodes after apply.
+- Diagram generation is intentionally limited to simple primitives and does not yet create richer containers or custom shapes.
 
 ## Technical Approach
 

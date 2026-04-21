@@ -856,27 +856,40 @@ const isNameTruncated = (name: string): boolean => {
 ---
 
 ### Task 23: Add Example-Driven Coverage & Documentation for Diagram Generation
-**Status**: 🔴 Not Started
+**Status**: ✅ Completed
 **Priority**: MEDIUM
 **Description**: Document the diagram-generation workflow and add example-driven tests that lock in the expected experience for common work prompts.
 
 **Acceptance Criteria**:
-- Add documentation for the new workflow and output contract
-- Add regression coverage for the two starter examples:
+- ✅ Add documentation for the new workflow and output contract
+- ✅ Add regression coverage for the two starter examples:
   - backend architecture for a messaging app
   - storyboard for learning storytelling
-- Document the temporary OpenCode transport assumption
-- Document known limitations of the first release
+- ✅ Document the temporary OpenCode transport assumption
+- ✅ Document known limitations of the first release
 
 **Files to Modify**:
 - `specs/AGENT_WORKFLOWS_SPEC.md`
 - `specs/README.md`
 - `src/components/README.md`
+- `src/agents/providers/openCodeDiagramProvider.test.ts`
+- `src/components/AgentPanel.test.tsx`
 
 **Testing Requirements**:
 - Provider-level regression tests for example prompts
 - UI-level tests for example preview summaries
 - Documentation review to ensure setup and limitations are clear
+
+**Verification**:
+- `npx vitest run src/agents/providers/openCodeDiagramProvider.test.ts src/components/AgentPanel.test.tsx`
+- `npx vitest run`
+- `npm run lint`
+- `npm run build`
+
+**Notes**:
+- Added provider-level regression coverage for the two built-in diagram starter prompts so the mock-backed example outputs stay stable while the live transport evolves
+- Added UI-level preview assertions for the messaging-backend and storytelling-storyboard examples, including summary text and planned node/connector counts
+- Documented the current generation contract, the temporary OpenCode transport boundary, and first-release limitations directly in the agent workflow spec and component docs
 
 ---
 

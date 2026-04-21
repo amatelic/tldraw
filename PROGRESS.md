@@ -90,6 +90,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Diagram preview UI for sections, planned nodes/connectors, warnings, and presentation brief content
 - [x] Sidebar-first agent workflow UI with compact compose state and expanded diagram preview sheet
 - [x] Real OpenCode HTTP transport via session/message APIs with explicit mock-fallback warnings
+- [x] Example-driven regression coverage and docs for the messaging-backend and storytelling-storyboard diagram starters
 
 ## 🚧 Partially Implemented / Known Issues
 

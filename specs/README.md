@@ -29,6 +29,7 @@ Specs serve as:
 `SPECS.md` is the source of truth for task status. Current highlights:
 
 ### Recently Completed ✅
+- **Task 23** - Example-driven coverage and documentation for diagram generation
 - **Task 20** - OpenCode-backed diagram provider
 - **Task 21** - Diagram preview and presentation brief UI
 - **Task 22** - Apply generated diagrams to the canvas
@@ -42,7 +43,8 @@ Specs serve as:
 - **Task 11** - Workspace name truncation and long-press menu
 
 ### Next Planning / Not Started 🔴
-- **Task 23** - Example-driven coverage and documentation for diagram generation
+- **Task 15** - Cleanup suggestions with preview/apply
+- **Task 3** - Text tool auto-switch behavior
 
 ## Task Status Legend
 
@@ -184,13 +186,13 @@ Documents:
 ## Architecture Specs
 
 ### AGENT_WORKFLOWS_SPEC.md
-Planning document for AI agent integration:
-- Task automation
-- Code generation
-- Review assistance
-- Documentation generation
+Reference and planning document for AI agent integration:
+- canvas-aware workflow principles
+- review, rewrite, and diagram-generation architecture
+- current transport and safety constraints
+- first-release limitations and future workflow expansion
 
-**Status**: Planning phase
+**Status**: Partially implemented / reference
 
 ### AGENT_DIAGRAM_PRESENTATION_SPEC.md
 Focused planning document for prompt-to-diagram generation:
@@ -199,7 +201,7 @@ Focused planning document for prompt-to-diagram generation:
 - structured presentation brief output
 - example flows for architecture and storyboard generation
 
-**Status**: Planning phase
+**Status**: Partially implemented / reference
 
 ## Maintenance
 

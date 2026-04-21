@@ -61,6 +61,10 @@ Components are organized by functionality:
 - Audience and presentation-goal fields tucked into setup details instead of always-on cards
 - Starter examples for backend architecture and storyboard prompts inside the setup details section
 - Full-board context lock for first-pass generation
+- Preview summary stays visible above the detailed sections and shows planned node/connector counts
+- Starter-example regressions now lock the expected preview experience for:
+  - messaging app backend architecture
+  - storytelling storyboard
 - Preview opens in an expanded sheet for:
   - diagram sections
   - planned nodes
@@ -87,8 +91,11 @@ Components are organized by functionality:
 
 **Known Issues**:
 - Cleanup Suggestions remains scaffolded and is still not wired to a provider/apply flow
+- Diagram generation is still full-board only in the first release
+- Live diagram generation depends on a reachable OpenCode server; if it is unavailable, the UI falls back to the deterministic mock transport and shows a warning in the draft preview
 - Rectangle and circle node labels are applied as separate text shapes because the canvas primitives do not yet support inline text
 - Applied connector endpoints are static; moving nodes later does not auto-reroute the generated arrows/lines
+- Presentation briefs remain session-level preview content and are not yet persisted into workspace data
 
 **Dependencies**:
 - `AgentOrchestrator`

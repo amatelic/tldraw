@@ -327,6 +327,9 @@ describe('AgentPanel', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Draft diagram' })).toBeInTheDocument();
+      expect(screen.getAllByText(/Drafted a simple architecture view/i).length).toBeGreaterThan(0);
+      expect(screen.getByText('7 planned nodes')).toBeInTheDocument();
+      expect(screen.getByText('6 planned connectors')).toBeInTheDocument();
       expect(screen.getByText('Diagram plan')).toBeInTheDocument();
       expect(screen.getByText('Presentation brief')).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Warnings' })).toBeInTheDocument();
@@ -336,6 +339,27 @@ describe('AgentPanel', () => {
       expect(screen.getByText('API Gateway')).toBeInTheDocument();
       expect(screen.getByText(/Realtime websocket infrastructure is summarized/i)).toBeInTheDocument();
       expect(screen.getByText(/Product and engineering stakeholders/i)).toBeInTheDocument();
+    });
+  });
+
+  it('should render the storytelling storyboard starter example with the expected preview summary', async () => {
+    renderPanel();
+
+    chooseWorkflow('Diagram Generator');
+    fireEvent.click(screen.getByRole('button', { name: /Show setup details/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Storytelling Storyboard/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate draft' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Draft diagram' })).toBeInTheDocument();
+      expect(screen.getAllByText(/Drafted a simple storyboard/i).length).toBeGreaterThan(0);
+      expect(screen.getByText('6 planned nodes')).toBeInTheDocument();
+      expect(screen.getByText('5 planned connectors')).toBeInTheDocument();
+      expect(screen.getAllByText('Storyboard for Learning Storytelling').length).toBeGreaterThan(0);
+      expect(screen.getByText('Foundations')).toBeInTheDocument();
+      expect(screen.getByText('Know the audience')).toBeInTheDocument();
+      expect(screen.getByText(/Exercises and references are not included/i)).toBeInTheDocument();
+      expect(screen.getByText(/Learners, coaches, or workshop attendees/i)).toBeInTheDocument();
     });
   });
 

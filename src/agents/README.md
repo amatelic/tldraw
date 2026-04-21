@@ -21,6 +21,7 @@ Agent logic is intentionally split into small layers so the UI does not depend o
 | `providers/reviewModeProvider.ts` | Current review-mode provider | Deterministic/mock-backed |
 | `providers/selectionRewriteProvider.ts` | Selection rewrite provider | Deterministic text-only rewrite pass for selected text shapes |
 | `providers/openCodeDiagramProvider.ts` | Diagram-generation provider | Uses the live OpenCode transport by default and adds low-confidence/incomplete draft warnings |
+| `providers/openCodeDiagramProvider.test.ts` | Diagram provider tests | Locks the starter messaging-architecture and storytelling-storyboard prompts with regression coverage |
 | `agentOrchestrator.test.ts` | Orchestrator validation tests | Covers context packaging and invalid proposal rejection |
 | `openCodeClient.test.ts` | OpenCode client tests | Covers response normalization and fallback behavior |
 | `openCodeHttpTransport.test.ts` | OpenCode HTTP transport tests | Covers session lifecycle, JSON-schema prompting, fallback parsing, and availability failures |
@@ -39,6 +40,9 @@ Agent logic is intentionally split into small layers so the UI does not depend o
 - Exposes reusable generation validation for canvas apply flows
 - Runs diagram-generation requests through the OpenCode-backed provider path
 - Creates short-lived OpenCode sessions and prompts them for structured diagram JSON
+- Keeps the two starter diagram prompts stable through provider-level regression tests:
+  - backend architecture for a messaging app
+  - storyboard for learning storytelling
 - Normalizes OpenCode diagram responses into:
   - create-shape actions
   - create-connector actions
