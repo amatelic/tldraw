@@ -31,7 +31,7 @@ interface WorkspaceStore {
   deleteWorkspace: (id: string) => boolean;
   renameWorkspace: (id: string, name: string) => void;
   switchWorkspace: (id: string) => void;
-  canDeleteWorkspace: (id: string) => boolean;
+  canDeleteWorkspace: () => boolean;
   getWorkspace: (id: string) => Workspace | undefined;
   getActiveWorkspace: () => Workspace;
   getNextWorkspaceNumber: () => number;
@@ -135,9 +135,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
         }
       },
 
-      canDeleteWorkspace: (id: string) => {
-        // id parameter kept for API consistency, but we only check total count
-        void id;
+      canDeleteWorkspace: () => {
         const state = get();
         return state.workspaces.length > 1;
       },

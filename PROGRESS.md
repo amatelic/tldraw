@@ -171,21 +171,7 @@ const initialData = useMemo(
 ```
 **Impact**: Missing dependencies could cause stale closures or missed updates.
 
-### Issue 2: Unused Parameter Warning Suppression
-**Problem**: The `canDeleteWorkspace` function takes an `id` parameter but only uses it with `void id` to suppress warnings.
-**Location**: `src/stores/workspaceStore.ts:136-140`
-**Bad Code**:
-```tsx
-canDeleteWorkspace: (id: string) => {
-  // id parameter kept for API consistency, but we only check total count
-  void id;
-  const state = get();
-  return state.workspaces.length > 1;
-},
-```
-**Impact**: Confusing API - parameter is required but ignored.
-
-### Issue 3: Auto-save Race Condition
+### Issue 2: Auto-save Race Condition
 **Problem**: Multiple useEffect hooks auto-save shapes and state with separate timeouts, which could cause race conditions.
 **Location**: `src/hooks/useCanvas.ts:112-124`
 **Bad Code**:
@@ -206,11 +192,11 @@ useEffect(() => {
 ```
 **Impact**: Shapes and state could get out of sync during rapid changes.
 
-### Issue 4: Missing Error Boundaries
+### Issue 3: Missing Error Boundaries
 **Problem**: No React error boundaries are implemented to catch rendering errors.
 **Impact**: A single component crash could crash the entire application.
 
-### Issue 5: No Input Validation on Workspace Names
+### Issue 4: No Input Validation on Workspace Names
 **Problem**: Workspace names can be empty strings or excessively long.
 **Location**: `src/stores/workspaceStore.ts:117-126`
 **Impact**: UI issues with empty or overly long tab names.
@@ -227,6 +213,7 @@ useEffect(() => {
 ### April 21, 2026
 - Locked in repeat text placement with an App-level regression test that verifies the text tool stays active across consecutive insertions until the user switches tools manually
 - Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
+- Simplified the workspace deletion guard API by removing the unused `id` parameter from `canDeleteWorkspace()` and adding store-level regression coverage
 
 ### April 13, 2026
 - Completed a full right-side inspector redesign to match the latest UI reference more closely

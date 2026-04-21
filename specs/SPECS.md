@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Removed the unused `canDeleteWorkspace(id)` parameter, added store-level regression coverage, and documented the simplified workspace deletion guard API.
 - 2026-04-21: Added a header export menu with viewport PNG plus all-shapes/selected-shapes PNG and SVG downloads backed by new canvas export helpers and regression coverage.
 - 2026-04-21: Added App-level regression coverage confirming the text tool stays active across repeated text placement until the user switches tools manually.
 - 2026-04-13: Extended the inspector redesign language into the app header/workspace rail and added Playwright coverage for the new chrome styling.
@@ -138,27 +139,6 @@ useEffect(() => {
   }, 100);
   return () => clearTimeout(timeoutId);
 }, [editorState, workspaceId, workspaceStore]);
-```
-
----
-
-### Task 7: Remove Unused Parameter in canDeleteWorkspace
-**Status**: 🔴 Not Started
-**Priority**: LOW
-**Description**: The canDeleteWorkspace function takes an id parameter but ignores it
-**Acceptance Criteria**:
-- Remove id parameter from function signature
-- Update all call sites
-- Update interface definition
-
-**Bad Code to Fix** (from `src/stores/workspaceStore.ts:136-140`):
-```tsx
-canDeleteWorkspace: (id: string) => {
-  // id parameter kept for API consistency, but we only check total count
-  void id;
-  const state = get();
-  return state.workspaces.length > 1;
-},
 ```
 
 ---

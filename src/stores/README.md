@@ -55,7 +55,7 @@ interface WorkspaceStore {
   deleteWorkspace: (id: string) => boolean;      // Returns success
   renameWorkspace: (id: string, name: string) => void;
   switchWorkspace: (id: string) => void;
-  canDeleteWorkspace: (id: string) => boolean;   // Always returns true (see issues)
+  canDeleteWorkspace: () => boolean;             // True when more than one workspace exists
   getWorkspace: (id: string) => Workspace | undefined;
   getActiveWorkspace: () => Workspace;
   getNextWorkspaceNumber: () => number;
@@ -151,31 +151,13 @@ const id = `workspace-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 **Known Issues**:
 
-1. **Unused Parameter** (Line 107):
-   ```typescript
-   canDeleteWorkspace: (id: string) => {
-     const { workspaces } = get();
-     return workspaces.length > 1;  // 'id' is never used
-   }
-   ```
-   The `id` parameter is never used because deletion eligibility depends only on workspace count, not specific workspace.
-   
-   **Fix**: Either remove the parameter or check if workspace exists:
-   ```typescript
-   canDeleteWorkspace: (id: string) => {
-     const { workspaces } = get();
-     const workspace = workspaces.find((w) => w.id === id);
-     return workspace !== undefined && workspaces.length > 1;
-   }
-   ```
+1. **No Name Validation**: Workspace names can be any length. Very long names break UI.
 
-2. **No Name Validation**: Workspace names can be any length. Very long names break UI.
+2. **No Uniqueness Check**: Duplicate names allowed ("Workspace 1", "Workspace 1")
 
-3. **No Uniqueness Check**: Duplicate names allowed ("Workspace 1", "Workspace 1")
+3. **Storage Limits**: localStorage has ~5-10MB limit. Large drawings with many shapes or images may hit limit.
 
-4. **Storage Limits**: localStorage has ~5-10MB limit. Large drawings with many shapes or images may hit limit.
-
-5. **No Migration**: If shape types change, old data may break. No versioning/migration system.
+4. **No Migration**: If shape types change, old data may break. No versioning/migration system.
 
 **Performance Considerations**:
 
