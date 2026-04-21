@@ -79,6 +79,7 @@ This document tracks the implementation progress of the TLDraw Clone application
 - [x] Zoom controls - Visual zoom level indicator
 - [x] Workspace tabs - Tab bar with add/delete/rename
 - [x] Dialogs - Image and audio upload dialogs
+- [x] Application error boundary - App bootstrap now falls back to retry/refresh recovery UI instead of crashing to a blank screen
 - [x] Dark mode support - Automatic light/dark theme switching
 - [x] Responsive design - Adapts to screen sizes
 
@@ -176,11 +177,7 @@ useEffect(() => {
 ```
 **Impact**: Shapes and state could get out of sync during rapid changes.
 
-### Issue 2: Missing Error Boundaries
-**Problem**: No React error boundaries are implemented to catch rendering errors.
-**Impact**: A single component crash could crash the entire application.
-
-### Issue 3: No Input Validation on Workspace Names
+### Issue 2: No Input Validation on Workspace Names
 **Problem**: Workspace names can be empty strings or excessively long.
 **Location**: `src/stores/workspaceStore.ts:117-126`
 **Impact**: UI issues with empty or overly long tab names.
@@ -199,6 +196,7 @@ useEffect(() => {
 - Added a header export menu that can download the current viewport as PNG and export all or selected shapes as PNG/SVG using timestamped filenames
 - Simplified the workspace deletion guard API by removing the unused `id` parameter from `canDeleteWorkspace()` and adding store-level regression coverage
 - Removed the `useCanvas` exhaustive-deps suppression and added initialization coverage for workspace-backed state plus workspace switching
+- Added an application error boundary with retry/refresh recovery actions and component-level crash coverage
 
 ### April 13, 2026
 - Completed a full right-side inspector redesign to match the latest UI reference more closely
@@ -219,9 +217,7 @@ useEffect(() => {
 
 1. Write more unit tests for remaining utilities and shape operations
 2. Fix the auto-save race condition in workspace persistence
-3. Remove the stale exhaustive-deps disable in `useCanvas`
-4. Implement proper error boundaries
-5. Add validation for workspace names
+3. Add validation for workspace names
 
 ## 📝 Notes
 

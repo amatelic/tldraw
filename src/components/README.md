@@ -9,6 +9,7 @@ Components are organized by functionality:
 - **Agent UI**: AgentPanel
 - **Dialogs**: ImageUploadDialog, AudioUploadDialog, EmbedDialog
 - **Workspace**: WorkspaceTabs, WorkspaceTab
+- **Resilience**: ErrorBoundary
 - **Utilities**: Tooltip, ColorPicker, selectedInspectorItems
 
 ## Component Files
@@ -18,6 +19,7 @@ Components are organized by functionality:
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
 | Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~1050 |
 | AgentPanel | `AgentPanel.tsx` | Sidebar-first agent composer with inline results and expanded diagram preview | ~560 |
+| ErrorBoundary | `ErrorBoundary.tsx` | App-level crash boundary with retry and refresh actions | ~150 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
 | PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for selection styling and multi-select metadata | ~430 |
@@ -30,6 +32,35 @@ Components are organized by functionality:
 | AudioUploadDialog | `AudioUploadDialog.tsx` | Dialog for uploading audio | ~200 |
 
 ## Detailed Component Documentation
+
+### ErrorBoundary
+
+**Purpose**: Catch unexpected render failures at the application shell level so the whole editor does not disappear into a blank screen.
+
+**Behavior**:
+- Renders children normally when no error is thrown
+- Switches to a user-friendly fallback when any descendant render crashes
+- Shows the captured error message in an alert block
+- Exposes `Retry` to reset the boundary locally
+- Exposes `Refresh` to reload the app or call an injected refresh handler in tests
+
+**Integration**:
+- Mounted around `App` in `src/main.tsx`
+- Designed to protect the editor shell rather than individual widget-level failures
+
+**Success Criteria**:
+- [ ] App bootstrap is wrapped in an error boundary
+- [ ] Crashes render a helpful fallback instead of a blank screen
+- [ ] Retry can recover if the next render succeeds
+- [ ] Refresh offers a clean restart path
+
+**Known Issues**:
+- Boundary fallback is intentionally app-wide; it does not yet isolate failures to smaller feature zones
+
+**Dependencies**:
+- None beyond React's class-based error boundary lifecycle
+
+---
 
 ### AgentPanel
 

@@ -6,6 +6,7 @@ This file contains active tasks that need to be implemented. Tasks are marked wi
 
 ## Recent Updates
 
+- 2026-04-21: Added an app-level `ErrorBoundary`, wrapped bootstrap in `main.tsx`, and added retry/refresh coverage for crash recovery.
 - 2026-04-21: Removed the `useCanvas` exhaustive-deps suppression, keyed initialization memoization to the live workspace object, and added regression coverage for workspace-backed initialization and switching.
 - 2026-04-21: Removed the unused `canDeleteWorkspace(id)` parameter, added store-level regression coverage, and documented the simplified workspace deletion guard API.
 - 2026-04-21: Added a header export menu with viewport PNG plus all-shapes/selected-shapes PNG and SVG downloads backed by new canvas export helpers and regression coverage.
@@ -141,24 +142,6 @@ useEffect(() => {
   return () => clearTimeout(timeoutId);
 }, [editorState, workspaceId, workspaceStore]);
 ```
-
----
-
-### Task 9: Add Error Boundaries
-**Status**: 🔴 Not Started
-**Priority**: LOW
-**Description**: Implement React error boundaries to prevent full app crashes
-**Acceptance Criteria**:
-- Create ErrorBoundary component
-- Wrap main App component
-- Show user-friendly error message
-- Provide retry/refresh option
-
-**Files to Create**:
-- `src/components/ErrorBoundary.tsx`
-
-**Files to Modify**:
-- `src/main.tsx` - wrap App with ErrorBoundary
 
 ---
 

@@ -58,6 +58,7 @@ User Input → Canvas Component → useCanvas Hook → workspaceStore
 4. **Transformation**: Drag updates via `onShapeUpdate()`
 5. **Persistence**: Auto-saved to workspace store every 100ms
 6. **Export**: The header export menu can download the live viewport as PNG and serialize all or selected shapes as PNG/SVG, while JSON export remains available for structured backup or downstream processing
+7. **Recovery**: App bootstrap is wrapped in an error boundary so unexpected render failures can surface a retry/refresh UI instead of a blank screen
 
 ### History System
 
