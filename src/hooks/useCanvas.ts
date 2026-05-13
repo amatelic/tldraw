@@ -287,6 +287,8 @@ function applyShapeBounds(shape: Shape, nextBounds: Partial<Shape['bounds']>): S
 
 export function useCanvas(workspaceId: string): UseCanvasReturn {
   const workspaceStore = useWorkspaceStore();
+  const getWorkspace = workspaceStore.getWorkspace;
+  const updateWorkspaceSnapshot = workspaceStore.updateWorkspaceSnapshot;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<CanvasEngine | null>(null);
   const previousWorkspaceIdRef = useRef(workspaceId);
@@ -294,7 +296,7 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const currentShapeRef = useRef<Shape | null>(null);
 
   // Get current workspace data
-  const workspace = workspaceStore.getWorkspace(workspaceId);
+  const workspace = getWorkspace(workspaceId);
 
   // Compute initial state only when workspaceId changes
   const initialData = useMemo(
@@ -309,9 +311,15 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const [past, setPast] = useState<HistoryState[]>([]);
   const [present, setPresent] = useState<HistoryState>(initialData);
   const [future, setFuture] = useState<HistoryState[]>([]);
+  const [loadedWorkspaceId, setLoadedWorkspaceId] = useState(workspaceId);
 
   const shapes = present.shapes;
   const editorState = present.editorState;
+  const latestPersistedSnapshotRef = useRef({ shapes, state: editorState });
+
+  useEffect(() => {
+    latestPersistedSnapshotRef.current = { shapes, state: editorState };
+  }, [editorState, shapes]);
 
   // Handle workspace switching
   useEffect(() => {
@@ -319,36 +327,54 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false;
       previousWorkspaceIdRef.current = workspaceId;
+      setLoadedWorkspaceId(workspaceId);
       return;
     }
 
-    // Only reset if workspaceId actually changed
-    if (workspaceId !== previousWorkspaceIdRef.current) {
-      const newWorkspace = workspaceStore.getWorkspace(workspaceId);
-      const newShapes = newWorkspace?.shapes || [];
-      const newState = newWorkspace?.state || defaultEditorState;
-
-      // Use requestAnimationFrame to defer state updates to next frame
-      requestAnimationFrame(() => {
-        setPast([]);
-        setPresent({ shapes: newShapes, editorState: newState });
-        setFuture([]);
-        previousWorkspaceIdRef.current = workspaceId;
-      });
+    if (workspaceId === loadedWorkspaceId) {
+      previousWorkspaceIdRef.current = workspaceId;
+      return;
     }
-  }, [workspaceId, workspaceStore]);
+
+    updateWorkspaceSnapshot(loadedWorkspaceId, latestPersistedSnapshotRef.current);
+
+    const newWorkspace = getWorkspace(workspaceId);
+    const newShapes = newWorkspace?.shapes || [];
+    const newState = newWorkspace?.state || defaultEditorState;
+    let didCancel = false;
+
+    queueMicrotask(() => {
+      if (didCancel) {
+        return;
+      }
+
+      setPast([]);
+      setPresent({ shapes: newShapes, editorState: newState });
+      setFuture([]);
+      previousWorkspaceIdRef.current = workspaceId;
+      setLoadedWorkspaceId(workspaceId);
+    });
+
+    return () => {
+      didCancel = true;
+    };
+  }, [getWorkspace, loadedWorkspaceId, updateWorkspaceSnapshot, workspaceId]);
 
   // Persist shapes and editor state together so workspace snapshots cannot drift out of sync.
   useEffect(() => {
+    if (loadedWorkspaceId !== workspaceId) {
+      return;
+    }
+
     const timeoutId = setTimeout(() => {
-      workspaceStore.updateWorkspaceSnapshot(workspaceId, {
+      updateWorkspaceSnapshot(workspaceId, {
         shapes,
         state: editorState,
       });
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [editorState, shapes, workspaceId, workspaceStore]);
+  }, [editorState, loadedWorkspaceId, shapes, updateWorkspaceSnapshot, workspaceId]);
 
   // Helper to save current state to history
   const saveToHistory = useCallback(

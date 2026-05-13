@@ -83,6 +83,9 @@ describe('useCanvas persistence', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     workspaceMap['workspace-1'] = createWorkspace('workspace-1');
+    workspaceMap['workspace-2'] = createWorkspace('workspace-2', {
+      shapes: [createRectangleShape('shape-2', 200)],
+    });
   });
 
   afterEach(() => {
@@ -161,5 +164,50 @@ describe('useCanvas persistence', () => {
         selectedShapeIds: ['shape-1', 'shape-2'],
       }),
     });
+  });
+
+  it('flushes previous workspace once when rerendering during a workspace switch', async () => {
+    const { result, rerender } = renderHook(
+      ({ currentWorkspaceId }: { currentWorkspaceId: string }) => useCanvas(currentWorkspaceId),
+      { initialProps: { currentWorkspaceId: 'workspace-1' } }
+    );
+
+    act(() => {
+      result.current.addShape(createRectangleShape('local-shape', 24));
+    });
+
+    storeStub.updateWorkspaceSnapshot.mockClear();
+
+    await act(async () => {
+      rerender({ currentWorkspaceId: 'workspace-2' });
+      rerender({ currentWorkspaceId: 'workspace-2' });
+      await Promise.resolve();
+    });
+
+    expect(storeStub.updateWorkspaceSnapshot).toHaveBeenCalledTimes(1);
+    expect(storeStub.updateWorkspaceSnapshot).toHaveBeenCalledWith(
+      'workspace-1',
+      expect.objectContaining({
+        shapes: [expect.objectContaining({ id: 'local-shape' })],
+      })
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(storeStub.updateWorkspaceSnapshot).toHaveBeenCalledTimes(2);
+    const secondCall = storeStub.updateWorkspaceSnapshot.mock.calls[1];
+    expect(secondCall?.[0]).toBe('workspace-2');
+    expect(secondCall?.[1]).toEqual(
+      expect.objectContaining({
+        shapes: [expect.objectContaining({ id: 'shape-2' })],
+      })
+    );
+    expect(
+      secondCall?.[1].shapes.some(
+        (shape: { id: string }) => shape.id === 'local-shape'
+      )
+    ).toBe(false);
   });
 });

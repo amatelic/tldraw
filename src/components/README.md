@@ -707,6 +707,7 @@ interface WorkspaceTabsProps {
 **Features**:
 - Click to switch workspace
 - Long-press (3s) or right-click for context menu
+- Right-click handling is attached to the full tab shell, so the menu opens from both the label area and close-icon area
 - Inline rename on double-click or menu option
 - Inline rename keeps the editor open when validation fails
 - Delete option (if not last workspace)
@@ -719,6 +720,7 @@ interface WorkspaceTabsProps {
 **Props**:
 ```typescript
 interface WorkspaceTabProps {
+  tabButtonId: string;
   workspace: Workspace;
   isActive: boolean;
   canDelete: boolean;
@@ -732,6 +734,8 @@ interface WorkspaceTabProps {
 - [ ] Click switches workspace
 - [ ] Long-press shows context menu
 - [ ] Right-click shows context menu
+- [ ] Right-click on the close-icon region opens the same context menu instead of being ignored
+- [ ] Switching to another workspace still allows right-click context menu access on the active tab (covered by regression tests)
 - [ ] Rename works inline
 - [ ] Invalid rename attempts keep the user in the editor and surface feedback
 - [ ] Delete removes workspace

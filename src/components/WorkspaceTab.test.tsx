@@ -245,6 +245,7 @@ describe('WorkspaceTab', () => {
   it('should show dropdown on right-click', () => {
     render(
       <WorkspaceTab
+        tabButtonId="workspace-tab-test"
         workspace={mockWorkspace}
         isActive={false}
         canDelete={true}
@@ -256,6 +257,25 @@ describe('WorkspaceTab', () => {
 
     const tab = screen.getByText(mockWorkspace.name).parentElement!;
     fireEvent.contextMenu(tab);
+
+    expect(screen.getByText('Rename')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
+  });
+
+  it('should show dropdown when right-clicking the close icon region', () => {
+    render(
+      <WorkspaceTab
+        tabButtonId="workspace-tab-test"
+        workspace={mockWorkspace}
+        isActive={false}
+        canDelete={true}
+        onClick={mockOnClick}
+        onClose={mockOnClose}
+        onRename={mockOnRename}
+      />
+    );
+
+    fireEvent.contextMenu(screen.getByTitle('Close workspace'));
 
     expect(screen.getByText('Rename')).toBeInTheDocument();
     expect(screen.getByText('Close')).toBeInTheDocument();

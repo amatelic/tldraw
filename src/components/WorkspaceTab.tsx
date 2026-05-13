@@ -228,6 +228,7 @@ export function WorkspaceTab({
       layout
       className={`workspace-tab ${isActive ? 'active' : ''} ${canDelete ? 'workspace-tab-closable' : ''}`}
       layoutId={workspace.id}
+      onContextMenu={handleContextMenu}
       transition={
         shouldReduceMotion
           ? { duration: 0 }
@@ -286,7 +287,6 @@ export function WorkspaceTab({
             tabIndex={isActive ? 0 : -1}
             onClick={onClick}
             onDoubleClick={handleDoubleClick}
-            onContextMenu={handleContextMenu}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onMouseDown={handleMouseDown}
