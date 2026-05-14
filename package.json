@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "ast-grep": "ast-grep scan -c sgconfig.yml --report-style short",
+    "ast-grep:test": "ast-grep test -c sgconfig.yml",
+    "complexity": "node scripts/complexity-report.mjs",
+    "complexity:strict": "node scripts/complexity-report.mjs --strict",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
@@ -20,6 +24,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@ast-grep/cli": "^0.42.2",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -28,7 +33,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
-    "@playwright/test": "^1.56.1",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

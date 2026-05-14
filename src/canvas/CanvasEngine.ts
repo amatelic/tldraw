@@ -14,17 +14,100 @@ import type {
   TextShape,
   FillGradient,
 } from '../types';
+import { getTextShapeTypography } from '../document/textStyle';
+import { getGroupChildIds } from '../types/selection';
+import { getArrowHeadPoints, getResizeHandles, getShapeBounds } from './geometry';
+import { createShapeFromPoints as createShapeFromPointsFromDrag } from './shapeFactory';
+
+export interface CanvasEngineOptions {
+  onImageLoad?: () => void;
+}
+
+interface CachedCanvasImage {
+  image: HTMLImageElement;
+  isLoaded: boolean;
+  hasError: boolean;
+  listeners: Set<() => void>;
+}
+
+const canvasImageCache = new Map<string, CachedCanvasImage>();
+
+function notifyCanvasImageListeners(entry: CachedCanvasImage): void {
+  for (const listener of entry.listeners) {
+    listener();
+  }
+  entry.listeners.clear();
+}
+
+function getCachedCanvasImage(src: string): CachedCanvasImage {
+  const cachedImage = canvasImageCache.get(src);
+  if (cachedImage) {
+    return cachedImage;
+  }
+
+  const image = new Image();
+  const entry: CachedCanvasImage = {
+    image,
+    isLoaded: false,
+    hasError: false,
+    listeners: new Set(),
+  };
+
+  image.onload = () => {
+    entry.isLoaded = true;
+    entry.hasError = false;
+    notifyCanvasImageListeners(entry);
+  };
+  image.onerror = () => {
+    entry.hasError = true;
+    entry.listeners.clear();
+  };
+  image.src = src;
+
+  if (image.complete && image.naturalWidth > 0) {
+    entry.isLoaded = true;
+  }
+
+  canvasImageCache.set(src, entry);
+  return entry;
+}
+
+function isCachedCanvasImageReady(entry: CachedCanvasImage): boolean {
+  if (entry.isLoaded) {
+    return true;
+  }
+
+  if (entry.image.complete && entry.image.naturalWidth > 0) {
+    entry.isLoaded = true;
+    return true;
+  }
+
+  return false;
+}
+
+export function screenToWorldPoint(point: Point, camera: CameraState): Point {
+  return {
+    x: (point.x - camera.x) / camera.zoom,
+    y: (point.y - camera.y) / camera.zoom,
+  };
+}
+
+export function worldToScreenPoint(point: Point, camera: CameraState): Point {
+  return {
+    x: point.x * camera.zoom + camera.x,
+    y: point.y * camera.zoom + camera.y,
+  };
+}
 
 export class CanvasEngine {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private dpr: number;
-  private static readonly ARROW_HEAD_MIN_LENGTH = 14;
-  private static readonly ARROW_HEAD_MAX_LENGTH = 24;
-  private static readonly ARROW_HEAD_ANGLE = Math.PI / 5;
+  private readonly onImageLoad?: () => void;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options: CanvasEngineOptions = {}) {
     this.canvas = canvas;
+    this.onImageLoad = options.onImageLoad;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       throw new Error('Failed to get canvas context');
@@ -61,17 +144,19 @@ export class CanvasEngine {
   }
 
   screenToWorld(point: Point, camera: CameraState): Point {
-    return {
-      x: (point.x - camera.x) / camera.zoom,
-      y: (point.y - camera.y) / camera.zoom,
-    };
+    return screenToWorldPoint(point, camera);
   }
 
   worldToScreen(point: Point, camera: CameraState): Point {
-    return {
-      x: point.x * camera.zoom + camera.x,
-      y: point.y * camera.zoom + camera.y,
-    };
+    return worldToScreenPoint(point, camera);
+  }
+
+  measureTextWidth(text: string, font: string): number {
+    const previousFont = this.ctx.font;
+    this.ctx.font = font;
+    const width = this.ctx.measureText(text).width;
+    this.ctx.font = previousFont;
+    return width;
   }
 
   private setStrokeStyle(style: ShapeStyle) {
@@ -277,7 +362,12 @@ export class CanvasEngine {
     // For image, audio, text, embed, group - shadows are handled differently or not supported
   }
 
-  drawShape(shape: Shape, isSelected: boolean = false, showSelectionHandles: boolean = true) {
+  drawShape(
+    shape: Shape,
+    isSelected: boolean = false,
+    showSelectionHandles: boolean = true,
+    allShapes: Shape[] = [shape]
+  ) {
     // Save current composite operation
     const prevComposite = this.ctx.globalCompositeOperation;
     
@@ -335,7 +425,7 @@ export class CanvasEngine {
         this.drawEmbed(shape);
         break;
       case 'group':
-        this.drawGroup(shape);
+        this.drawGroup(shape, getGroupChildIds(shape.id, allShapes).length);
         break;
     }
 
@@ -392,31 +482,15 @@ export class CanvasEngine {
   }
 
   private drawArrowhead(shape: ArrowShape): void {
-    const { start, end } = shape;
-    const lineLength = Math.hypot(end.x - start.x, end.y - start.y);
-    const arrowLength = Math.min(
-      CanvasEngine.ARROW_HEAD_MAX_LENGTH,
-      Math.max(CanvasEngine.ARROW_HEAD_MIN_LENGTH, shape.style.strokeWidth * 5)
-    );
-    const cappedArrowLength = Math.min(arrowLength, Math.max(lineLength * 0.6, 8));
-    const arrowAngle = CanvasEngine.ARROW_HEAD_ANGLE;
-    
-    // Calculate arrowhead angle
-    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const [leftPoint, endPoint, rightPoint] = getArrowHeadPoints(shape);
     
     // Keep the arrowhead readable even when the shaft is dashed or dotted.
     this.ctx.setLineDash([]);
     this.ctx.beginPath();
-    this.ctx.moveTo(end.x, end.y);
-    this.ctx.lineTo(
-      end.x - cappedArrowLength * Math.cos(angle - arrowAngle),
-      end.y - cappedArrowLength * Math.sin(angle - arrowAngle)
-    );
-    this.ctx.moveTo(end.x, end.y);
-    this.ctx.lineTo(
-      end.x - cappedArrowLength * Math.cos(angle + arrowAngle),
-      end.y - cappedArrowLength * Math.sin(angle + arrowAngle)
-    );
+    this.ctx.moveTo(endPoint.x, endPoint.y);
+    this.ctx.lineTo(leftPoint.x, leftPoint.y);
+    this.ctx.moveTo(endPoint.x, endPoint.y);
+    this.ctx.lineTo(rightPoint.x, rightPoint.y);
     this.ctx.stroke();
   }
 
@@ -440,22 +514,16 @@ export class CanvasEngine {
     this.ctx.stroke();
   }
 
-  private imageCache: Map<string, HTMLImageElement> = new Map();
-
   private drawImage(shape: Extract<Shape, { type: 'image' }>) {
     const { x, y, width, height } = shape.bounds;
+    const entry = getCachedCanvasImage(shape.src);
 
-    // Use cached image or create new one
-    let img = this.imageCache.get(shape.src);
-    if (!img) {
-      img = new Image();
-      img.src = shape.src;
-      this.imageCache.set(shape.src, img);
-    }
-
-    if (img.complete) {
-      this.ctx.drawImage(img, x, y, width, height);
+    if (isCachedCanvasImageReady(entry)) {
+      this.ctx.drawImage(entry.image, x, y, width, height);
     } else {
+      if (!entry.hasError && this.onImageLoad) {
+        entry.listeners.add(this.onImageLoad);
+      }
       // Draw placeholder while loading
       this.ctx.fillStyle = '#e0e0e0';
       this.ctx.fillRect(x, y, width, height);
@@ -464,73 +532,156 @@ export class CanvasEngine {
     }
   }
 
+  private drawRoundedRect(x: number, y: number, width: number, height: number, radius: number) {
+    const safeRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + safeRadius, y);
+    this.ctx.lineTo(x + width - safeRadius, y);
+    this.ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+    this.ctx.lineTo(x + width, y + height - safeRadius);
+    this.ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+    this.ctx.lineTo(x + safeRadius, y + height);
+    this.ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+    this.ctx.lineTo(x, y + safeRadius);
+    this.ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+    this.ctx.closePath();
+  }
+
   private drawAudio(shape: Extract<Shape, { type: 'audio' }>) {
     const { x, y, width, height } = shape.bounds;
-    const barCount = shape.waveformData.length;
-    const barWidth = width / barCount;
-
-    // Draw waveform bars
-    this.ctx.fillStyle = shape.style.color;
-    this.ctx.globalAlpha = shape.style.opacity;
-
-    for (let i = 0; i < barCount; i++) {
-      const barHeight = shape.waveformData[i] * height * 0.8;
-      const barX = x + i * barWidth;
-      const barY = y + (height - barHeight) / 2;
-
-      this.ctx.fillRect(barX, barY, barWidth - 1, barHeight);
-    }
-
-    // Draw play/pause indicator
+    const radius = Math.min(18, Math.max(8, Math.min(width, height) * 0.16));
+    const padding = Math.min(20, Math.max(10, Math.min(width, height) * 0.14));
+    const contentHeight = Math.max(1, height - padding * 2);
     const centerX = x + width / 2;
     const centerY = y + height / 2;
-    const indicatorSize = Math.min(width, height) * 0.3;
+    const buttonRadius = Math.min(32, Math.max(18, Math.min(width, height) * 0.28));
+    const durationText = this.formatTime(shape.duration);
 
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-    this.ctx.beginPath();
-    this.ctx.arc(centerX, centerY, indicatorSize, 0, Math.PI * 2);
+    this.ctx.save();
+    this.ctx.globalAlpha = shape.style.opacity;
+
+    this.ctx.shadowColor = 'rgba(15, 23, 42, 0.14)';
+    this.ctx.shadowBlur = 18;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 8;
+    this.drawRoundedRect(x, y, width, height, radius);
+    this.ctx.fillStyle = '#ffffff';
     this.ctx.fill();
 
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowOffsetX = 0;
+    this.ctx.shadowOffsetY = 0;
+    this.drawRoundedRect(x + 0.5, y + 0.5, width - 1, height - 1, radius);
+    this.ctx.strokeStyle = 'rgba(15, 23, 42, 0.12)';
+    this.ctx.lineWidth = 1;
+    this.ctx.stroke();
+
+    const textSize = Math.max(12, Math.min(18, height * 0.18));
+    this.ctx.font = `${textSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const durationWidth = Math.min(width * 0.28, this.ctx.measureText(durationText).width + 8);
+    const waveformX = x + padding;
+    const waveformRight = Math.max(
+      waveformX,
+      Math.min(centerX - buttonRadius - padding, x + width - padding - durationWidth)
+    );
+    const trackRight = Math.max(
+      waveformX,
+      x + width - padding - durationWidth - 8
+    );
+
+    this.ctx.strokeStyle = 'rgba(100, 116, 139, 0.24)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.moveTo(waveformX, centerY);
+    this.ctx.lineTo(trackRight, centerY);
+    this.ctx.stroke();
+
+    const barCount = shape.waveformData.length;
+    const waveformWidth = waveformRight - waveformX;
+
+    if (barCount > 0 && waveformWidth > 0) {
+      const barSlotWidth = waveformWidth / barCount;
+      const barWidth = Math.max(2, Math.min(6, barSlotWidth * 0.64));
+
+      this.ctx.fillStyle = shape.style.color;
+
+      for (let i = 0; i < barCount; i++) {
+        const amplitude = Math.max(0, Math.min(1, shape.waveformData[i]));
+        const barHeight = Math.max(3, amplitude * contentHeight * 0.92);
+        const barX = waveformX + i * barSlotWidth + (barSlotWidth - barWidth) / 2;
+        const barY = centerY - barHeight / 2;
+
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+      }
+    }
+
+    this.ctx.shadowColor = 'rgba(15, 23, 42, 0.1)';
+    this.ctx.shadowBlur = 12;
+    this.ctx.shadowOffsetY = 5;
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.beginPath();
+    this.ctx.arc(centerX, centerY, buttonRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowOffsetY = 0;
     this.ctx.fillStyle = shape.style.color;
     if (shape.isPlaying) {
-      // Draw pause icon (two bars)
-      const gap = indicatorSize * 0.2;
-      const barWidth2 = (indicatorSize - gap) / 2;
-      this.ctx.fillRect(centerX - indicatorSize / 2 + gap / 2, centerY - indicatorSize / 2, barWidth2, indicatorSize);
-      this.ctx.fillRect(centerX + gap / 2, centerY - indicatorSize / 2, barWidth2, indicatorSize);
+      const pauseHeight = buttonRadius * 0.9;
+      const gap = buttonRadius * 0.22;
+      const pauseBarWidth = buttonRadius * 0.24;
+      this.ctx.fillRect(
+        centerX - gap - pauseBarWidth / 2,
+        centerY - pauseHeight / 2,
+        pauseBarWidth,
+        pauseHeight
+      );
+      this.ctx.fillRect(
+        centerX + gap - pauseBarWidth / 2,
+        centerY - pauseHeight / 2,
+        pauseBarWidth,
+        pauseHeight
+      );
     } else {
-      // Draw play icon (triangle)
+      const iconSize = buttonRadius * 0.95;
       this.ctx.beginPath();
-      this.ctx.moveTo(centerX - indicatorSize / 3, centerY - indicatorSize / 2);
-      this.ctx.lineTo(centerX - indicatorSize / 3, centerY + indicatorSize / 2);
-      this.ctx.lineTo(centerX + indicatorSize / 2, centerY);
+      this.ctx.moveTo(centerX - iconSize * 0.28, centerY - iconSize * 0.42);
+      this.ctx.lineTo(centerX - iconSize * 0.28, centerY + iconSize * 0.42);
+      this.ctx.lineTo(centerX + iconSize * 0.46, centerY);
       this.ctx.closePath();
       this.ctx.fill();
     }
 
-    // Draw duration text
-    const minutes = Math.floor(shape.duration / 60);
-    const seconds = Math.floor(shape.duration % 60);
-    const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-    this.ctx.font = `${Math.max(10, height * 0.15)}px sans-serif`;
-    this.ctx.fillStyle = shape.style.color;
+    this.ctx.fillStyle = '#111827';
     this.ctx.textAlign = 'right';
-    this.ctx.fillText(timeText, x + width - 5, y + height - 5);
+    this.ctx.textBaseline = 'alphabetic';
+    this.ctx.fillText(durationText, x + width - padding, y + height - padding * 0.72);
+    this.ctx.restore();
+  }
+
+  private formatTime(seconds: number): string {
+    const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = Math.floor(safeSeconds % 60);
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
   private drawText(shape: TextShape) {
     const { x, y, width, height } = shape.bounds;
+    const typography = getTextShapeTypography(shape);
 
     // Set font properties
-    this.ctx.font = `${shape.fontStyle} ${shape.fontWeight} ${shape.fontSize}px ${shape.fontFamily}`;
+    this.ctx.font = `${typography.fontStyle} ${typography.fontWeight} ${typography.fontSize}px ${typography.fontFamily}`;
     this.ctx.fillStyle = shape.style.color;
-    this.ctx.textAlign = shape.textAlign;
+    this.ctx.textAlign = typography.textAlign;
     this.ctx.textBaseline = 'top';
     this.ctx.globalAlpha = shape.style.opacity;
 
     // Calculate line height
-    const lineHeight = shape.fontSize * 1.2;
+    const lineHeight = typography.fontSize * 1.2;
 
     // Word wrap function
     const wrapText = (text: string, maxWidth: number): string[] => {
@@ -572,9 +723,9 @@ export class CanvasEngine {
     // Draw each line
     lines.forEach((line, index) => {
       let textX = x + 5;
-      if (shape.textAlign === 'center') {
+      if (typography.textAlign === 'center') {
         textX = x + width / 2;
-      } else if (shape.textAlign === 'right') {
+      } else if (typography.textAlign === 'right') {
         textX = x + width - 5;
       }
 
@@ -628,7 +779,7 @@ export class CanvasEngine {
     this.ctx.fillText(shape.url, x + width / 2, y + height - 15, maxTextWidth);
   }
 
-  private drawGroup(shape: GroupShape) {
+  private drawGroup(shape: GroupShape, childCount: number) {
     // Groups are visual containers - we draw their bounds with a purple tint when selected
     const { x, y, width, height } = shape.bounds;
     
@@ -648,7 +799,7 @@ export class CanvasEngine {
     this.ctx.fillStyle = 'rgba(147, 51, 234, 0.8)';
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'top';
-    this.ctx.fillText(`Group (${shape.childrenIds.length})`, x + 4, y - 16);
+    this.ctx.fillText(`Group (${childCount})`, x + 4, y - 16);
     
     this.ctx.restore();
   }
@@ -669,7 +820,7 @@ export class CanvasEngine {
   }
 
   private drawSelectionIndicator(shape: Shape, showHandles: boolean = true) {
-    const bounds = this.getShapeBounds(shape);
+    const bounds = getShapeBounds(shape);
     const padding = 4;
 
     this.ctx.save();
@@ -688,7 +839,7 @@ export class CanvasEngine {
     this.ctx.stroke();
 
     if (showHandles) {
-      const handles = this.getResizeHandles(bounds);
+      const handles = getResizeHandles(bounds);
       this.ctx.fillStyle = '#fff';
       this.ctx.strokeStyle = '#2563eb';
       this.ctx.setLineDash([]);
@@ -705,86 +856,7 @@ export class CanvasEngine {
   }
 
   getShapeBounds(shape: Shape): Bounds {
-    return CanvasEngine.getBoundsForShape(shape);
-  }
-
-  static getBoundsForShape(shape: Shape): Bounds {
-    switch (shape.type) {
-      case 'rectangle':
-        return shape.bounds;
-      case 'circle':
-        return {
-          x: shape.center.x - shape.radius,
-          y: shape.center.y - shape.radius,
-          width: shape.radius * 2,
-          height: shape.radius * 2,
-        };
-      case 'line': {
-        return {
-          x: Math.min(shape.start.x, shape.end.x),
-          y: Math.min(shape.start.y, shape.end.y),
-          width: Math.abs(shape.end.x - shape.start.x),
-          height: Math.abs(shape.end.y - shape.start.y),
-        };
-      }
-      case 'arrow': {
-        return {
-          x: Math.min(shape.start.x, shape.end.x),
-          y: Math.min(shape.start.y, shape.end.y),
-          width: Math.abs(shape.end.x - shape.start.x),
-          height: Math.abs(shape.end.y - shape.start.y),
-        };
-      }
-      case 'pencil': {
-        const xs = shape.points.map((p) => p.x);
-        const ys = shape.points.map((p) => p.y);
-        return {
-          x: Math.min(...xs),
-          y: Math.min(...ys),
-          width: Math.max(...xs) - Math.min(...xs),
-          height: Math.max(...ys) - Math.min(...ys),
-        };
-      }
-      case 'image':
-      case 'audio':
-      case 'text':
-      case 'embed':
-      case 'group':
-        return shape.bounds;
-    }
-  }
-
-  static getBoundsForShapes(shapes: Shape[]): Bounds | null {
-    if (shapes.length === 0) {
-      return null;
-    }
-
-    const boundsList = shapes.map((shape) => CanvasEngine.getBoundsForShape(shape));
-    const minX = Math.min(...boundsList.map((bounds) => bounds.x));
-    const minY = Math.min(...boundsList.map((bounds) => bounds.y));
-    const maxX = Math.max(...boundsList.map((bounds) => bounds.x + bounds.width));
-    const maxY = Math.max(...boundsList.map((bounds) => bounds.y + bounds.height));
-
-    return {
-      x: minX,
-      y: minY,
-      width: maxX - minX,
-      height: maxY - minY,
-    };
-  }
-
-  private getResizeHandles(bounds: Bounds): Point[] {
-    const { x, y, width, height } = bounds;
-    return [
-      { x, y }, // top-left
-      { x: x + width / 2, y }, // top-center
-      { x: x + width, y }, // top-right
-      { x: x + width, y: y + height / 2 }, // right-center
-      { x: x + width, y: y + height }, // bottom-right
-      { x: x + width / 2, y: y + height }, // bottom-center
-      { x, y: y + height }, // bottom-left
-      { x, y: y + height / 2 }, // left-center
-    ];
+    return getShapeBounds(shape);
   }
 
   drawGrid(camera: CameraState, gridSize: number = 20) {
@@ -794,467 +866,33 @@ export class CanvasEngine {
     this.ctx.lineWidth = 1;
     this.ctx.globalAlpha = 0.5;
 
-    const startX = Math.floor(-camera.x / camera.zoom / gridSize) * gridSize;
-    const startY = Math.floor(-camera.y / camera.zoom / gridSize) * gridSize;
-    const endX = startX + rect.width / camera.zoom + gridSize * 2;
-    const endY = startY + rect.height / camera.zoom + gridSize * 2;
+    const visibleWorldLeft = (0 - camera.x) / camera.zoom;
+    const visibleWorldTop = (0 - camera.y) / camera.zoom;
+    const visibleWorldRight = (rect.width - camera.x) / camera.zoom;
+    const visibleWorldBottom = (rect.height - camera.y) / camera.zoom;
+
+    const startX = Math.floor(visibleWorldLeft / gridSize) * gridSize;
+    const startY = Math.floor(visibleWorldTop / gridSize) * gridSize;
+    const endX = Math.ceil(visibleWorldRight / gridSize) * gridSize;
+    const endY = Math.ceil(visibleWorldBottom / gridSize) * gridSize;
 
     for (let x = startX; x < endX; x += gridSize) {
+      const screenX = x * camera.zoom + camera.x;
       this.ctx.beginPath();
-      this.ctx.moveTo(x, startY);
-      this.ctx.lineTo(x, endY);
+      this.ctx.moveTo(screenX, 0);
+      this.ctx.lineTo(screenX, rect.height);
       this.ctx.stroke();
     }
 
     for (let y = startY; y < endY; y += gridSize) {
+      const screenY = y * camera.zoom + camera.y;
       this.ctx.beginPath();
-      this.ctx.moveTo(startX, y);
-      this.ctx.lineTo(endX, y);
+      this.ctx.moveTo(0, screenY);
+      this.ctx.lineTo(rect.width, screenY);
       this.ctx.stroke();
     }
 
     this.ctx.restore();
-  }
-
-  static exportViewportToPng(canvas: HTMLCanvasElement): string {
-    return canvas.toDataURL('image/png');
-  }
-
-  private static createExportEngine(
-    canvas: HTMLCanvasElement,
-    ctx: CanvasRenderingContext2D
-  ): CanvasEngine {
-    const engine = Object.create(CanvasEngine.prototype) as CanvasEngine;
-    engine.canvas = canvas;
-    engine.ctx = ctx;
-    engine.dpr = 1;
-    engine.imageCache = new Map();
-    return engine;
-  }
-
-  static exportShapesToPng(
-    shapes: Shape[],
-    options: {
-      padding?: number;
-      backgroundColor?: string;
-      scale?: number;
-    } = {}
-  ): string {
-    const bounds = CanvasEngine.getBoundsForShapes(shapes);
-    if (!bounds) {
-      throw new Error('Cannot export an empty shape collection');
-    }
-
-    const padding = options.padding ?? 24;
-    const backgroundColor = options.backgroundColor ?? '#ffffff';
-    const scale = options.scale ?? 2;
-    const width = Math.max(1, Math.ceil(bounds.width + padding * 2));
-    const height = Math.max(1, Math.ceil(bounds.height + padding * 2));
-    const canvas = document.createElement('canvas');
-
-    canvas.width = Math.max(1, Math.ceil(width * scale));
-    canvas.height = Math.max(1, Math.ceil(height * scale));
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('Failed to create export canvas context');
-    }
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(scale, scale);
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, width, height);
-
-    const engine = CanvasEngine.createExportEngine(canvas, ctx);
-    ctx.save();
-    ctx.translate(padding - bounds.x, padding - bounds.y);
-    shapes.forEach((shape) => {
-      engine.drawShape(shape, false, false);
-    });
-    ctx.restore();
-
-    return canvas.toDataURL('image/png');
-  }
-
-  private static getStrokeDasharray(style: ShapeStyle): string | null {
-    switch (style.strokeStyle) {
-      case 'dashed':
-        return '5 5';
-      case 'dotted':
-        return '2 4';
-      default:
-        return null;
-    }
-  }
-
-  private static getTextAnchor(textAlign: TextShape['textAlign']): 'start' | 'middle' | 'end' {
-    switch (textAlign) {
-      case 'center':
-        return 'middle';
-      case 'right':
-        return 'end';
-      default:
-        return 'start';
-    }
-  }
-
-  private static formatNumber(value: number): string {
-    if (Number.isInteger(value)) {
-      return String(value);
-    }
-
-    return value.toFixed(2).replace(/\.?0+$/, '');
-  }
-
-  private static escapeXml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/'/g, '&#39;');
-  }
-
-  private static getArrowheadPoints(shape: ArrowShape): { left: Point; right: Point } {
-    const { start, end } = shape;
-    const lineLength = Math.hypot(end.x - start.x, end.y - start.y);
-    const arrowLength = Math.min(
-      CanvasEngine.ARROW_HEAD_MAX_LENGTH,
-      Math.max(CanvasEngine.ARROW_HEAD_MIN_LENGTH, shape.style.strokeWidth * 5)
-    );
-    const cappedArrowLength = Math.min(arrowLength, Math.max(lineLength * 0.6, 8));
-    const angle = Math.atan2(end.y - start.y, end.x - start.x);
-
-    return {
-      left: {
-        x: end.x - cappedArrowLength * Math.cos(angle - CanvasEngine.ARROW_HEAD_ANGLE),
-        y: end.y - cappedArrowLength * Math.sin(angle - CanvasEngine.ARROW_HEAD_ANGLE),
-      },
-      right: {
-        x: end.x - cappedArrowLength * Math.cos(angle + CanvasEngine.ARROW_HEAD_ANGLE),
-        y: end.y - cappedArrowLength * Math.sin(angle + CanvasEngine.ARROW_HEAD_ANGLE),
-      },
-    };
-  }
-
-  static exportShapesToSvg(
-    shapes: Shape[],
-    options: {
-      padding?: number;
-      backgroundColor?: string;
-    } = {}
-  ): string {
-    const bounds = CanvasEngine.getBoundsForShapes(shapes);
-    if (!bounds) {
-      throw new Error('Cannot export an empty shape collection');
-    }
-
-    const padding = options.padding ?? 24;
-    const backgroundColor = options.backgroundColor ?? '#ffffff';
-    const width = Math.max(1, bounds.width + padding * 2);
-    const height = Math.max(1, bounds.height + padding * 2);
-    const offsetX = padding - bounds.x;
-    const offsetY = padding - bounds.y;
-    const defs: string[] = [];
-
-    const strokeAttributes = (style: ShapeStyle): string => {
-      const dasharray = CanvasEngine.getStrokeDasharray(style);
-      const dashAttribute = dasharray ? ` stroke-dasharray="${dasharray}"` : '';
-      const mixBlendMode =
-        style.blendMode !== 'source-over'
-          ? ` style="mix-blend-mode: ${CanvasEngine.escapeXml(style.blendMode)};"`
-          : '';
-
-      return `stroke="${CanvasEngine.escapeXml(style.color)}" stroke-width="${CanvasEngine.formatNumber(
-        style.strokeWidth
-      )}" stroke-opacity="${CanvasEngine.formatNumber(style.opacity)}"${dashAttribute}${mixBlendMode}`;
-    };
-
-    const createFillAttributes = (style: ShapeStyle, shapeBounds: Bounds, gradientId: string): string => {
-      if (style.fillStyle === 'none') {
-        return 'fill="none"';
-      }
-
-      if (style.fillGradient) {
-        const shiftedBounds = {
-          x: shapeBounds.x + offsetX,
-          y: shapeBounds.y + offsetY,
-          width: shapeBounds.width,
-          height: shapeBounds.height,
-        };
-        const centerX = shiftedBounds.x + shiftedBounds.width / 2;
-        const centerY = shiftedBounds.y + shiftedBounds.height / 2;
-
-        if (style.fillGradient.type === 'radial') {
-          const radius = Math.max(shiftedBounds.width, shiftedBounds.height) / 2;
-          defs.push(
-            `<radialGradient id="${gradientId}" gradientUnits="userSpaceOnUse" cx="${CanvasEngine.formatNumber(
-              centerX
-            )}" cy="${CanvasEngine.formatNumber(centerY)}" r="${CanvasEngine.formatNumber(
-              radius
-            )}"><stop offset="0%" stop-color="${CanvasEngine.escapeXml(
-              style.fillGradient.startColor
-            )}" /><stop offset="100%" stop-color="${CanvasEngine.escapeXml(
-              style.fillGradient.endColor
-            )}" /></radialGradient>`
-          );
-        } else {
-          const angleInRadians = (style.fillGradient.angle * Math.PI) / 180;
-          const halfDiagonal = Math.sqrt(shiftedBounds.width ** 2 + shiftedBounds.height ** 2) / 2;
-          const deltaX = Math.cos(angleInRadians) * halfDiagonal;
-          const deltaY = Math.sin(angleInRadians) * halfDiagonal;
-          defs.push(
-            `<linearGradient id="${gradientId}" gradientUnits="userSpaceOnUse" x1="${CanvasEngine.formatNumber(
-              centerX - deltaX
-            )}" y1="${CanvasEngine.formatNumber(centerY - deltaY)}" x2="${CanvasEngine.formatNumber(
-              centerX + deltaX
-            )}" y2="${CanvasEngine.formatNumber(centerY + deltaY)}"><stop offset="0%" stop-color="${CanvasEngine.escapeXml(
-              style.fillGradient.startColor
-            )}" /><stop offset="100%" stop-color="${CanvasEngine.escapeXml(
-              style.fillGradient.endColor
-            )}" /></linearGradient>`
-          );
-        }
-
-        return `fill="url(#${gradientId})" fill-opacity="${CanvasEngine.formatNumber(
-          style.opacity * 0.3
-        )}"`;
-      }
-
-      return `fill="${CanvasEngine.escapeXml(style.fillColor)}" fill-opacity="${CanvasEngine.formatNumber(
-        style.opacity * 0.3
-      )}"`;
-    };
-
-    const getShiftedPoint = (point: Point): Point => ({
-      x: point.x + offsetX,
-      y: point.y + offsetY,
-    });
-
-    const elements = shapes.map((shape, index) => {
-      const shapeBounds = CanvasEngine.getBoundsForShape(shape);
-      const shiftedBounds = {
-        x: shapeBounds.x + offsetX,
-        y: shapeBounds.y + offsetY,
-        width: shapeBounds.width,
-        height: shapeBounds.height,
-      };
-      const gradientId = `shape-gradient-${index}`;
-
-      switch (shape.type) {
-        case 'rectangle':
-          return `<rect x="${CanvasEngine.formatNumber(shiftedBounds.x)}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y
-          )}" width="${CanvasEngine.formatNumber(shiftedBounds.width)}" height="${CanvasEngine.formatNumber(
-            shiftedBounds.height
-          )}" ${createFillAttributes(shape.style, shape.bounds, gradientId)} ${strokeAttributes(shape.style)} />`;
-        case 'circle':
-          return `<circle cx="${CanvasEngine.formatNumber(shape.center.x + offsetX)}" cy="${CanvasEngine.formatNumber(
-            shape.center.y + offsetY
-          )}" r="${CanvasEngine.formatNumber(shape.radius)}" ${createFillAttributes(
-            shape.style,
-            shape.bounds,
-            gradientId
-          )} ${strokeAttributes(shape.style)} />`;
-        case 'line': {
-          const start = getShiftedPoint(shape.start);
-          const end = getShiftedPoint(shape.end);
-          return `<line x1="${CanvasEngine.formatNumber(start.x)}" y1="${CanvasEngine.formatNumber(
-            start.y
-          )}" x2="${CanvasEngine.formatNumber(end.x)}" y2="${CanvasEngine.formatNumber(
-            end.y
-          )}" fill="none" stroke-linecap="round" ${strokeAttributes(shape.style)} />`;
-        }
-        case 'arrow': {
-          const start = getShiftedPoint(shape.start);
-          const end = getShiftedPoint(shape.end);
-          const arrowhead = CanvasEngine.getArrowheadPoints(shape);
-          const left = getShiftedPoint(arrowhead.left);
-          const right = getShiftedPoint(arrowhead.right);
-          return `<g><line x1="${CanvasEngine.formatNumber(start.x)}" y1="${CanvasEngine.formatNumber(
-            start.y
-          )}" x2="${CanvasEngine.formatNumber(end.x)}" y2="${CanvasEngine.formatNumber(
-            end.y
-          )}" fill="none" stroke-linecap="round" ${strokeAttributes(shape.style)} /><line x1="${CanvasEngine.formatNumber(
-            end.x
-          )}" y1="${CanvasEngine.formatNumber(end.y)}" x2="${CanvasEngine.formatNumber(
-            left.x
-          )}" y2="${CanvasEngine.formatNumber(left.y)}" fill="none" stroke-linecap="round" stroke-dasharray="none" ${strokeAttributes(
-            shape.style
-          )} /><line x1="${CanvasEngine.formatNumber(end.x)}" y1="${CanvasEngine.formatNumber(
-            end.y
-          )}" x2="${CanvasEngine.formatNumber(right.x)}" y2="${CanvasEngine.formatNumber(
-            right.y
-          )}" fill="none" stroke-linecap="round" stroke-dasharray="none" ${strokeAttributes(
-            shape.style
-          )} /></g>`;
-        }
-        case 'pencil': {
-          const points = shape.points
-            .map((point) => getShiftedPoint(point))
-            .map((point) => `${CanvasEngine.formatNumber(point.x)},${CanvasEngine.formatNumber(point.y)}`)
-            .join(' ');
-          return `<polyline points="${points}" fill="none" stroke-linecap="round" stroke-linejoin="round" ${strokeAttributes(
-            shape.style
-          )} />`;
-        }
-        case 'image':
-          return `<image href="${CanvasEngine.escapeXml(shape.src)}" x="${CanvasEngine.formatNumber(
-            shiftedBounds.x
-          )}" y="${CanvasEngine.formatNumber(shiftedBounds.y)}" width="${CanvasEngine.formatNumber(
-            shiftedBounds.width
-          )}" height="${CanvasEngine.formatNumber(shiftedBounds.height)}" preserveAspectRatio="none" opacity="${CanvasEngine.formatNumber(
-            shape.style.opacity
-          )}" />`;
-        case 'audio': {
-          const barCount = Math.max(shape.waveformData.length, 1);
-          const barWidth = shiftedBounds.width / barCount;
-          const bars = shape.waveformData
-            .map((value, barIndex) => {
-              const barHeight = value * shiftedBounds.height * 0.8;
-              const barX = shiftedBounds.x + barIndex * barWidth;
-              const barY = shiftedBounds.y + (shiftedBounds.height - barHeight) / 2;
-              return `<rect x="${CanvasEngine.formatNumber(barX)}" y="${CanvasEngine.formatNumber(
-                barY
-              )}" width="${CanvasEngine.formatNumber(Math.max(barWidth - 1, 1))}" height="${CanvasEngine.formatNumber(
-                barHeight
-              )}" fill="${CanvasEngine.escapeXml(shape.style.color)}" fill-opacity="${CanvasEngine.formatNumber(
-                shape.style.opacity
-              )}" />`;
-            })
-            .join('');
-          const indicatorSize = Math.min(shiftedBounds.width, shiftedBounds.height) * 0.3;
-          const centerX = shiftedBounds.x + shiftedBounds.width / 2;
-          const centerY = shiftedBounds.y + shiftedBounds.height / 2;
-          const minutes = Math.floor(shape.duration / 60);
-          const seconds = Math.floor(shape.duration % 60);
-          const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-          return `<g>${bars}<circle cx="${CanvasEngine.formatNumber(centerX)}" cy="${CanvasEngine.formatNumber(
-            centerY
-          )}" r="${CanvasEngine.formatNumber(indicatorSize)}" fill="rgba(255,255,255,0.9)" />${
-            shape.isPlaying
-              ? `<rect x="${CanvasEngine.formatNumber(centerX - indicatorSize / 2 + indicatorSize * 0.1)}" y="${CanvasEngine.formatNumber(
-                  centerY - indicatorSize / 2
-                )}" width="${CanvasEngine.formatNumber((indicatorSize - indicatorSize * 0.2) / 2)}" height="${CanvasEngine.formatNumber(
-                  indicatorSize
-                )}" fill="${CanvasEngine.escapeXml(shape.style.color)}" /><rect x="${CanvasEngine.formatNumber(
-                  centerX + indicatorSize * 0.1
-                )}" y="${CanvasEngine.formatNumber(centerY - indicatorSize / 2)}" width="${CanvasEngine.formatNumber(
-                  (indicatorSize - indicatorSize * 0.2) / 2
-                )}" height="${CanvasEngine.formatNumber(indicatorSize)}" fill="${CanvasEngine.escapeXml(
-                  shape.style.color
-                )}" />`
-              : `<polygon points="${CanvasEngine.formatNumber(centerX - indicatorSize / 3)},${CanvasEngine.formatNumber(
-                  centerY - indicatorSize / 2
-                )} ${CanvasEngine.formatNumber(centerX - indicatorSize / 3)},${CanvasEngine.formatNumber(
-                  centerY + indicatorSize / 2
-                )} ${CanvasEngine.formatNumber(centerX + indicatorSize / 2)},${CanvasEngine.formatNumber(
-                  centerY
-                )}" fill="${CanvasEngine.escapeXml(shape.style.color)}" />`
-          }<text x="${CanvasEngine.formatNumber(
-            shiftedBounds.x + shiftedBounds.width - 5
-          )}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y + shiftedBounds.height - 5
-          )}" text-anchor="end" font-size="${CanvasEngine.formatNumber(
-            Math.max(10, shiftedBounds.height * 0.15)
-          )}" fill="${CanvasEngine.escapeXml(shape.style.color)}">${CanvasEngine.escapeXml(
-            timeText
-          )}</text></g>`;
-        }
-        case 'text': {
-          const lineHeight = shape.fontSize * 1.2;
-          const lines = shape.text.split('\n');
-          const textX =
-            shape.textAlign === 'center'
-              ? shiftedBounds.x + shiftedBounds.width / 2
-              : shape.textAlign === 'right'
-                ? shiftedBounds.x + shiftedBounds.width - 5
-                : shiftedBounds.x + 5;
-          const startY = shiftedBounds.y + 5;
-          const textAnchor = CanvasEngine.getTextAnchor(shape.textAlign);
-          const spans = lines
-            .map(
-              (line, lineIndex) =>
-                `<tspan x="${CanvasEngine.formatNumber(textX)}" y="${CanvasEngine.formatNumber(
-                  startY + lineIndex * lineHeight
-                )}">${CanvasEngine.escapeXml(line)}</tspan>`
-            )
-            .join('');
-          return `<text text-anchor="${textAnchor}" font-family="${CanvasEngine.escapeXml(
-            shape.fontFamily
-          )}" font-size="${CanvasEngine.formatNumber(shape.fontSize)}" font-weight="${CanvasEngine.escapeXml(
-            shape.fontWeight
-          )}" font-style="${CanvasEngine.escapeXml(shape.fontStyle)}" fill="${CanvasEngine.escapeXml(
-            shape.style.color
-          )}" fill-opacity="${CanvasEngine.formatNumber(shape.style.opacity)}">${spans}</text>`;
-        }
-        case 'embed': {
-          const centerX = shiftedBounds.x + shiftedBounds.width / 2;
-          const centerY = shiftedBounds.y + shiftedBounds.height / 2;
-          const iconSize = Math.min(shiftedBounds.width, shiftedBounds.height) * 0.2;
-          const label = shape.embedType === 'youtube' ? 'YouTube' : 'Website';
-          return `<g><rect x="${CanvasEngine.formatNumber(shiftedBounds.x)}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y
-          )}" width="${CanvasEngine.formatNumber(shiftedBounds.width)}" height="${CanvasEngine.formatNumber(
-            shiftedBounds.height
-          )}" fill="#f0f0f0" stroke="#ccc" stroke-width="1" />${
-            shape.embedType === 'youtube'
-              ? `<polygon points="${CanvasEngine.formatNumber(centerX - iconSize / 2)},${CanvasEngine.formatNumber(
-                  centerY - iconSize / 2
-                )} ${CanvasEngine.formatNumber(centerX + iconSize / 2)},${CanvasEngine.formatNumber(
-                  centerY
-                )} ${CanvasEngine.formatNumber(centerX - iconSize / 2)},${CanvasEngine.formatNumber(
-                  centerY + iconSize / 2
-                )}" fill="#666" />`
-              : `<rect x="${CanvasEngine.formatNumber(centerX - iconSize / 2)}" y="${CanvasEngine.formatNumber(
-                  centerY - iconSize / 3
-                )}" width="${CanvasEngine.formatNumber(iconSize)}" height="${CanvasEngine.formatNumber(
-                  iconSize / 3
-                )}" fill="#666" /><rect x="${CanvasEngine.formatNumber(
-                  centerX - iconSize / 2
-                )}" y="${CanvasEngine.formatNumber(centerY + iconSize / 6)}" width="${CanvasEngine.formatNumber(
-                  iconSize
-                )}" height="${CanvasEngine.formatNumber(iconSize / 3)}" fill="#666" />`
-          }<text x="${CanvasEngine.formatNumber(centerX)}" y="${CanvasEngine.formatNumber(
-            centerY + iconSize
-          )}" text-anchor="middle" font-size="${CanvasEngine.formatNumber(
-            Math.max(10, Math.min(14, shiftedBounds.height * 0.1))
-          )}" fill="#333">${label}</text><text x="${CanvasEngine.formatNumber(
-            centerX
-          )}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y + shiftedBounds.height - 15
-          )}" text-anchor="middle" font-size="${CanvasEngine.formatNumber(
-            Math.max(8, Math.min(12, shiftedBounds.height * 0.08))
-          )}" fill="#999">${CanvasEngine.escapeXml(shape.url)}</text></g>`;
-        }
-        case 'group':
-          return `<g><rect x="${CanvasEngine.formatNumber(shiftedBounds.x)}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y
-          )}" width="${CanvasEngine.formatNumber(shiftedBounds.width)}" height="${CanvasEngine.formatNumber(
-            shiftedBounds.height
-          )}" fill="rgba(147, 51, 234, 0.2)" stroke="rgba(147, 51, 234, 0.6)" stroke-width="1" stroke-dasharray="4 4" /><text x="${CanvasEngine.formatNumber(
-            shiftedBounds.x + 4
-          )}" y="${CanvasEngine.formatNumber(
-            shiftedBounds.y - 4
-          )}" font-size="12" fill="rgba(147, 51, 234, 0.8)">Group (${shape.childrenIds.length})</text></g>`;
-      }
-    });
-
-    const defsMarkup = defs.length > 0 ? `<defs>${defs.join('')}</defs>` : '';
-
-    return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${CanvasEngine.formatNumber(
-      width
-    )}" height="${CanvasEngine.formatNumber(
-      height
-    )}" viewBox="0 0 ${CanvasEngine.formatNumber(width)} ${CanvasEngine.formatNumber(
-      height
-    )}" fill="none">${defsMarkup}<rect width="${CanvasEngine.formatNumber(
-      width
-    )}" height="${CanvasEngine.formatNumber(height)}" fill="${CanvasEngine.escapeXml(
-      backgroundColor
-    )}" />${elements.join('')}</svg>`;
   }
 
   drawPreviewShape(start: Point, end: Point, type: Shape['type'], style: ShapeStyle) {
@@ -1263,100 +901,6 @@ export class CanvasEngine {
   }
 
   createShapeFromPoints(start: Point, end: Point, type: Shape['type'], style: ShapeStyle): Shape {
-    const now = Date.now();
-    const id = `shape-${now}`;
-
-    switch (type) {
-      case 'rectangle':
-        return {
-          id,
-          type: 'rectangle',
-          bounds: {
-            x: Math.min(start.x, end.x),
-            y: Math.min(start.y, end.y),
-            width: Math.abs(end.x - start.x),
-            height: Math.abs(end.y - start.y),
-          },
-          style: { ...style },
-          createdAt: now,
-          updatedAt: now,
-        };
-      case 'circle': {
-        const dx = end.x - start.x;
-        const dy = end.y - start.y;
-        const radius = Math.sqrt(dx * dx + dy * dy);
-        return {
-          id,
-          type: 'circle',
-          bounds: {
-            x: start.x - radius,
-            y: start.y - radius,
-            width: radius * 2,
-            height: radius * 2,
-          },
-          center: start,
-          radius,
-          style: { ...style },
-          createdAt: now,
-          updatedAt: now,
-        };
-      }
-      case 'line':
-        return {
-          id,
-          type: 'line',
-          bounds: {
-            x: Math.min(start.x, end.x),
-            y: Math.min(start.y, end.y),
-            width: Math.abs(end.x - start.x),
-            height: Math.abs(end.y - start.y),
-          },
-          start,
-          end,
-          style: { ...style },
-          createdAt: now,
-          updatedAt: now,
-        };
-      case 'arrow':
-        return {
-          id,
-          type: 'arrow',
-          bounds: {
-            x: Math.min(start.x, end.x),
-            y: Math.min(start.y, end.y),
-            width: Math.abs(end.x - start.x),
-            height: Math.abs(end.y - start.y),
-          },
-          start,
-          end,
-          style: { ...style },
-          createdAt: now,
-          updatedAt: now,
-        };
-      case 'pencil':
-        return {
-          id,
-          type: 'pencil',
-          bounds: {
-            x: Math.min(start.x, end.x),
-            y: Math.min(start.y, end.y),
-            width: Math.abs(end.x - start.x),
-            height: Math.abs(end.y - start.y),
-          },
-          points: [start, end],
-          style: { ...style },
-          createdAt: now,
-          updatedAt: now,
-        };
-      case 'image':
-      case 'audio':
-        throw new Error(`Cannot create ${type} shape from points. Use file upload instead.`);
-      case 'text':
-        throw new Error('Cannot create text shape from points. Use text tool instead.');
-      case 'embed':
-        throw new Error('Cannot create embed shape from points. Use embed dialog instead.');
-      default:
-        throw new Error(`Cannot create shape of type ${type} from points.`);
-    }
+    return createShapeFromPointsFromDrag(start, end, type, style);
   }
 }

@@ -150,6 +150,15 @@ function chooseWorkflow(label: string) {
   fireEvent.click(screen.getByRole('button', { name: label }));
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver;
+  });
+
+  return { promise, resolve };
+}
+
 describe('AgentPanel', () => {
   it('should not render when closed', () => {
     const orchestrator = new AgentOrchestrator([new ReviewModeProvider()]);
@@ -638,6 +647,67 @@ describe('AgentPanel', () => {
     await waitFor(() => {
       expect(onApplyMutationProposal).toHaveBeenCalledTimes(1);
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('should ignore stale run results after the workflow changes', async () => {
+    const deferred = createDeferred<{
+      providerId: string;
+      request: never;
+      proposal: {
+        kind: 'review';
+        workflow: 'review';
+        summary: string;
+        findings: Array<{
+          id: string;
+          category: 'clarity';
+          severity: 'medium';
+          title: string;
+          detail: string;
+          targetIds: string[];
+        }>;
+      };
+    }>();
+    const fakeOrchestrator = {
+      run: vi.fn(() => deferred.promise),
+    } as unknown as AgentOrchestrator;
+
+    renderPanel({ orchestrator: fakeOrchestrator });
+
+    fireEvent.click(screen.getByText('Run'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Generating')).toBeInTheDocument();
+    });
+
+    chooseWorkflow('Cleanup Suggestions');
+    expect(screen.getByText('Idle')).toBeInTheDocument();
+
+    deferred.resolve({
+      providerId: 'slow-review-provider',
+      request: {} as never,
+      proposal: {
+        kind: 'review',
+        workflow: 'review',
+        summary: 'This stale review result should never render.',
+        findings: [
+          {
+            id: 'finding-stale',
+            category: 'clarity',
+            severity: 'medium',
+            title: 'Stale finding',
+            detail: 'This belongs to the previous workflow.',
+            targetIds: ['shape-1'],
+          },
+        ],
+      },
+    });
+    await deferred.promise;
+
+    await waitFor(() => {
+      expect(screen.getByText('Idle')).toBeInTheDocument();
+      expect(screen.queryByText('This stale review result should never render.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Stale finding')).not.toBeInTheDocument();
     });
   });
 

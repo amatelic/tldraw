@@ -1,0 +1,81 @@
+.canvas-ruler {
+  position: absolute;
+  background: var(--surface-panel);
+  z-index: 60;
+  overflow: hidden;
+  user-select: none;
+}
+
+.canvas-ruler.horizontal {
+  top: 0;
+  left: 260px;
+  right: 0;
+  height: 24px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.canvas-ruler.vertical {
+  top: 0;
+  left: 0;
+  width: 260px;
+  bottom: 0;
+  border-right: 1px solid var(--border-default);
+}
+
+.canvas-ruler-track {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-ruler-tick {
+  position: absolute;
+  display: flex;
+  align-items: flex-start;
+}
+
+.canvas-ruler.horizontal .canvas-ruler-tick {
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.canvas-ruler.vertical .canvas-ruler-tick {
+  flex-direction: row-reverse;
+  align-items: center;
+  width: 100%;
+}
+
+.canvas-ruler-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.canvas-ruler.horizontal .canvas-ruler-label {
+  margin-top: 2px;
+}
+
+.canvas-ruler.vertical .canvas-ruler-label {
+  margin-right: 2px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+.canvas-ruler-mark {
+  background: var(--border-default);
+}
+
+.canvas-ruler.horizontal .canvas-ruler-mark {
+  width: 1px;
+  height: 8px;
+  margin-top: 2px;
+}
+
+.canvas-ruler.vertical .canvas-ruler-mark {
+  width: 8px;
+  height: 1px;
+  margin-right: 2px;
+}

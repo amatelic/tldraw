@@ -6,6 +6,8 @@
 - Last updated: 2026-04-17
 - Primary implementation references:
   - `src/App.tsx`
+  - `src/app/AppShell.tsx`
+  - `src/app/useAppShellState.ts`
   - `src/components/PropertiesPanel.tsx`
   - `src/components/AgentPanel.tsx`
   - `src/components/Toolbar.tsx`

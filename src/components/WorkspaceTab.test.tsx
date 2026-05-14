@@ -10,8 +10,6 @@ const mockWorkspace: Workspace = {
     tool: 'select',
     selectedShapeIds: [],
     camera: { x: 0, y: 0, zoom: 1 },
-    isDragging: false,
-    isDrawing: false,
     shapeStyle: {
       color: '#000000',
       fillColor: '#000000',
@@ -25,7 +23,6 @@ const mockWorkspace: Workspace = {
       fontStyle: 'normal',
       textAlign: 'left',
     },
-    editingTextId: null,
   },
   shapes: [],
   createdAt: Date.now(),
@@ -300,6 +297,56 @@ describe('WorkspaceTab', () => {
     fireEvent.click(renameButton);
 
     expect(screen.getByDisplayValue(mockWorkspace.name)).toBeInTheDocument();
+  });
+
+  it('should keep inline rename open and show an error for blank names', () => {
+    render(
+      <WorkspaceTab
+        tabButtonId="workspace-tab-test"
+        workspace={mockWorkspace}
+        isActive={false}
+        canDelete={true}
+        onClick={mockOnClick}
+        onClose={mockOnClose}
+        onRename={mockOnRename}
+      />
+    );
+
+    fireEvent.doubleClick(screen.getByRole('tab', { name: mockWorkspace.name }));
+
+    const renameInput = screen.getByLabelText('Rename workspace');
+    fireEvent.change(renameInput, { target: { value: '   ' } });
+    fireEvent.keyDown(renameInput, { key: 'Enter' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Workspace name is required.');
+    expect(mockOnRename).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Rename workspace')).toBeInTheDocument();
+  });
+
+  it('should reject inline rename values over 50 characters', () => {
+    render(
+      <WorkspaceTab
+        tabButtonId="workspace-tab-test"
+        workspace={mockWorkspace}
+        isActive={false}
+        canDelete={true}
+        onClick={mockOnClick}
+        onClose={mockOnClose}
+        onRename={mockOnRename}
+      />
+    );
+
+    fireEvent.doubleClick(screen.getByRole('tab', { name: mockWorkspace.name }));
+
+    fireEvent.change(screen.getByLabelText('Rename workspace'), {
+      target: { value: 'x'.repeat(51) },
+    });
+    fireEvent.keyDown(screen.getByLabelText('Rename workspace'), { key: 'Enter' });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Workspace names must be 50 characters or fewer.'
+    );
+    expect(mockOnRename).not.toHaveBeenCalled();
   });
 
   it('should delete workspace when Close is clicked', async () => {

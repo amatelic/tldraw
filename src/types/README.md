@@ -4,16 +4,32 @@ This directory contains TypeScript type definitions used throughout the applicat
 
 ## Overview
 
-Centralized type definitions ensure consistency across the application. All modules import types from here.
+Centralized type definitions ensure consistency across the application. The core contracts and pure helper modules are now split by responsibility, while `index.ts` stays in place as a compatibility barrel plus `createShapeId()`.
 
 ## Files
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `index.ts` | Core canvas/editor types plus export-contract definitions | ~360 |
+| `document.ts` | Document geometry, style, and shape contracts | ~180 |
+| `editor.ts` | Tool, camera, and editor-session contracts | ~40 |
+| `export.ts` | Versioned workspace export contracts | ~110 |
+| `geometry.ts` | Shared geometry helpers such as bounds generation/intersection | ~20 |
+| `hitTesting.ts` | Shared point-in-shape hit-testing helpers | ~45 |
+| `selection.ts` | Group traversal, selection normalization, and selection-bounds helpers | ~120 |
+| `index.ts` | Compatibility barrel plus `createShapeId()` | ~15 |
 | `agents.ts` | Agent workflow and proposal contracts | ~150 |
 
 ## Type Definitions
+
+### Focused Core Modules
+
+The base app contracts are now split by ownership:
+
+- `document.ts` owns durable canvas entities such as shapes, bounds, points, styles, and shared drawing constants.
+- `editor.ts` owns runtime editor/session contracts such as `ToolType`, `CameraState`, `PersistedEditorState`, `EditorRuntimeState`, `EditorState`, and `CanvasState`.
+- `export.ts` owns the versioned workspace export schema used by `src/utils/workspaceExport.ts`.
+- `geometry.ts`, `hitTesting.ts`, and `selection.ts` own the extracted pure helper logic that used to live in the type barrel.
+- `index.ts` re-exports those modules so existing imports keep working while the rest of the app migrates gradually.
 
 ### Agent Contracts
 
@@ -34,7 +50,7 @@ These types keep the UI, orchestrator, providers, and OpenCode transport aligned
 
 ### Workspace Export Contract
 
-`index.ts` also defines the public-facing versioned export schema used by `src/utils/workspaceExport.ts`.
+`export.ts` defines the public-facing versioned export schema used by `src/utils/workspaceExport.ts`.
 
 Key pieces:
 - `WORKSPACE_EXPORT_FORMAT`: stable format id for downloaded workspace JSON
@@ -49,8 +65,9 @@ Key pieces:
 - Preserves group hierarchy explicitly for nested groups and future import support
 
 **Grouping model**:
+- Runtime group relationships use child `parentId` values as the canonical source of truth
 - Every exported node includes `parentId`
-- Group nodes include `childrenIds`
+- Exported group nodes derive `childrenIds` from those parent relationships for compatibility
 - The exported `nodes` array preserves canvas layer order and each node also includes `zIndex`
 
 ### Core Types
@@ -112,14 +129,21 @@ Axis-aligned bounding box.
 
 ### Selection Helper Utilities
 
-`index.ts` also exposes shared selection helpers so canvas, hooks, and app-level actions all agree on what a selectable entity means.
+`selection.ts` exposes shared selection helpers so canvas, hooks, and app-level actions all agree on what a selectable entity means.
 
 Key helpers:
+- `getGroupChildren(groupId, shapes)` returns a group's direct children from canonical `parentId` links
+- `getGroupChildIds(groupId, shapes)` returns those child ids when callers need ids instead of shapes
 - `getTopLevelSelectableShape(shapeId, shapes)` resolves grouped children up to their root group
 - `normalizeShapeIdsForSelection(shapeIds, shapes)` deduplicates selection sets to top-level IDs
 - `getSelectableShapeBounds(shapeId, shapes)` returns bounds for one selectable entity, including live group bounds
 - `getSelectionBounds(shapeIds, shapes)` combines a selection into one frame
 - `boundsIntersect(a, b)` supports marquee selection and other bounds math
+
+### Geometry And Hit-Testing Utilities
+
+- `geometry.ts` exposes shared bounds math such as `generateBounds()` and `boundsIntersect()`
+- `hitTesting.ts` exposes `isPointInShape()` so canvas hit-testing stays out of the type barrel
 
 #### FillGradient
 ```typescript
@@ -154,6 +178,23 @@ interface ShapeStyle {
 ```
 
 Visual styling applied to shapes. Text-specific properties only apply to text shapes.
+
+#### TextTypography
+```typescript
+interface TextTypography {
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textAlign: 'left' | 'center' | 'right';
+}
+```
+
+Shared typography contract used by both `ShapeStyle` and `TextShape`.
+
+**Canonical text model**:
+- `TextShape` now treats these top-level typography fields as the canonical runtime source
+- `shape.style` still mirrors the same typography for compatibility while Task 07 migration code normalizes older persisted data
 
 **Gradient Fills**:
 - `fillGradient: null` means the fill uses `fillColor`
@@ -420,20 +461,38 @@ interface CameraState {
 
 Camera position and zoom for canvas view transformation.
 
-#### EditorState
+#### PersistedEditorState
 ```typescript
-interface EditorState {
+interface PersistedEditorState {
   tool: ToolType;
   selectedShapeIds: string[];
   camera: CameraState;
+  shapeStyle: ShapeStyle;
+}
+```
+
+Durable editor fields that are safe to restore from workspace persistence.
+
+#### EditorRuntimeState
+```typescript
+interface EditorRuntimeState {
   isDragging: boolean;
   isDrawing: boolean;
-  shapeStyle: ShapeStyle;
   editingTextId: string | null;
 }
 ```
 
-Complete editor state. Stored per-workspace.
+Transient editor/session fields that should start from defaults on reload.
+
+#### EditorState
+```typescript
+interface EditorState {
+  ...PersistedEditorState,
+  ...EditorRuntimeState,
+}
+```
+
+Complete runtime editor state used by the canvas session layer.
 
 #### CanvasState
 ```typescript
@@ -518,7 +577,7 @@ Available font families.
 function createShapeId(): string
 ```
 
-Generates unique shape IDs:
+Defined in `index.ts`. Generates unique shape IDs:
 ```typescript
 return `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 // Example: "shape-1712530800000-abc123xyz"
@@ -531,7 +590,7 @@ Uses timestamp + random string for uniqueness.
 function generateBounds(start: Point, end: Point): Bounds
 ```
 
-Creates Bounds from two corner points:
+Defined in `geometry.ts`. Creates bounds from two corner points:
 ```typescript
 const x = Math.min(start.x, end.x);
 const y = Math.min(start.y, end.y);
@@ -546,15 +605,13 @@ Used when creating shapes from drag operations.
 function isPointInShape(point: Point, shape: Shape): boolean
 ```
 
-Hit testing for all shape types:
+Defined in `hitTesting.ts`. Performs hit testing for all shape types:
 
 - **Rectangle**: Point-in-rect test
 - **Circle**: Distance from center ≤ radius
 - **Line/Arrow**: Distance to line segment ≤ 5px
 - **Pencil**: Distance to any point ≤ 10px
 - **Image/Audio/Text/Embed**: Point-in-bounds test
-
-**⚠️ NOTE**: This is a duplicate - same logic exists in Canvas component. Consider consolidating.
 
 ## Type Safety Best Practices
 
@@ -577,18 +634,16 @@ Hit testing for all shape types:
 - Adding new shape type requires updating:
   - This file (add interface + union)
   - CanvasEngine (add rendering)
-  - Canvas component (add hit testing)
+  - `hitTesting.ts` (add hit testing)
   - Toolbar (add tool)
   - Keyboard shortcuts
   - Possibly workspace store
 
 ## Known Issues
 
-1. **Duplicate Hit Testing**: `isPointInShape()` exists here and in Canvas component. Should consolidate.
+1. **Type Changes Cascade**: Adding a field to `Shape` still requires updates in many places.
 
-2. **Type Changes Cascade**: Adding a field to Shape requires updates in many places.
-
-3. **No Runtime Validation**: TypeScript types don't validate at runtime. Corrupted localStorage data could break app.
+2. **No Runtime Validation**: TypeScript types don't validate at runtime. Corrupted localStorage data could break app.
 
 ## Adding New Types
 

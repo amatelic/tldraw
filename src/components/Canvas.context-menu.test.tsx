@@ -1,18 +1,33 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Canvas } from './Canvas';
-import type { GroupShape, Point, Shape, ShapeStyle } from '../types';
+import type { CameraState, GroupShape, Point, Shape, ShapeStyle } from '../types';
 
 vi.mock('../canvas/CanvasEngine', () => ({
+  screenToWorldPoint: (point: Point, camera: CameraState) => ({
+    x: (point.x - camera.x) / camera.zoom,
+    y: (point.y - camera.y) / camera.zoom,
+  }),
+  worldToScreenPoint: (point: Point, camera: CameraState) => ({
+    x: point.x * camera.zoom + camera.x,
+    y: point.y * camera.zoom + camera.y,
+  }),
   CanvasEngine: class {
     clear = vi.fn();
     drawGrid = vi.fn();
     applyCamera = vi.fn();
     restoreCamera = vi.fn();
     drawShape = vi.fn();
-    screenToWorld = vi.fn((point: Point) => point);
-    worldToScreen = vi.fn((point: Point) => point);
+    screenToWorld = vi.fn((point: Point, camera: CameraState) => ({
+      x: (point.x - camera.x) / camera.zoom,
+      y: (point.y - camera.y) / camera.zoom,
+    }));
+    worldToScreen = vi.fn((point: Point, camera: CameraState) => ({
+      x: point.x * camera.zoom + camera.x,
+      y: point.y * camera.zoom + camera.y,
+    }));
     resize = vi.fn();
+    measureTextWidth = vi.fn(() => 100);
     ctx = {
       font: '',
       measureText: vi.fn(() => ({ width: 100 })),
@@ -47,11 +62,10 @@ describe('Canvas context menu', () => {
     updatedAt: Date.now(),
   });
 
-  const createGroup = (id: string, childrenIds: string[]): GroupShape => ({
+  const createGroup = (id: string): GroupShape => ({
     id,
     type: 'group',
     bounds: { x: 20, y: 20, width: 220, height: 160 },
-    childrenIds,
     style: { ...mockShapeStyle },
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -75,8 +89,6 @@ describe('Canvas context menu', () => {
     onDrawingChange: vi.fn(),
     onPan: vi.fn(),
     onZoomAt: vi.fn(),
-    screenToWorld: vi.fn((point) => point),
-    worldToScreen: vi.fn((point) => point),
     onTextEditStart: vi.fn(),
     onTextEditCommit: vi.fn(),
     onTextEditCancel: vi.fn(),
@@ -140,7 +152,7 @@ describe('Canvas context menu', () => {
   });
 
   it('should show ungroup for a selected group and trigger the action', () => {
-    const group = createGroup('group-1', ['shape-1', 'shape-2']);
+    const group = createGroup('group-1');
     const onUngroupSelected = vi.fn();
 
     const { container } = render(
@@ -186,5 +198,35 @@ describe('Canvas context menu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /delete/i }));
 
     expect(onDeleteSelected).toHaveBeenCalledTimes(1);
+  });
+
+  it('should close the menu when the selection becomes invalid', async () => {
+    const shape1 = createRectangle('shape-1', 40);
+
+    const { container, rerender } = render(
+      <Canvas
+        {...defaultProps}
+        shapes={[shape1]}
+        selectedIds={[shape1.id]}
+      />
+    );
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).toBeInTheDocument();
+
+    fireEvent.contextMenu(canvas!, { clientX: 60, clientY: 80 });
+    expect(screen.getByRole('menu', { name: 'Canvas actions' })).toBeInTheDocument();
+
+    rerender(
+      <Canvas
+        {...defaultProps}
+        shapes={[shape1]}
+        selectedIds={[]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu', { name: 'Canvas actions' })).not.toBeInTheDocument();
+    });
   });
 });

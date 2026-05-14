@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STYLE, normalizeShapeIdsForSelection } from '../types';
-import type { GroupShape, Point, Shape, ShapeStyle } from '../types';
+import { DEFAULT_STYLE, normalizeShapeIdsForSelection } from '../../../types';
+import type { Point, Shape, ShapeStyle } from '../../../types';
 import { buildSelectedInspectorItems } from './selectedInspectorItems';
 
 interface ShapeFixture {
@@ -31,7 +31,6 @@ interface ShapeFixture {
   url?: string;
   embedType?: 'youtube' | 'website';
   embedSrc?: string;
-  childrenIds?: string[];
 }
 
 function createShape(shape: ShapeFixture): Shape {
@@ -132,8 +131,7 @@ function createShape(shape: ShapeFixture): Shape {
         ...baseShape,
         id: shape.id,
         type: 'group',
-        childrenIds: shape.childrenIds ?? [],
-      } as GroupShape;
+      };
   }
 }
 
@@ -187,7 +185,7 @@ describe('buildSelectedInspectorItems', () => {
   });
 
   it('returns Top level for root groups', () => {
-    const shapes: Shape[] = [createShape({ id: 'group-1', type: 'group', childrenIds: [] })];
+    const shapes: Shape[] = [createShape({ id: 'group-1', type: 'group' })];
 
     const items = buildSelectedInspectorItems(['group-1'], shapes);
 
@@ -196,12 +194,11 @@ describe('buildSelectedInspectorItems', () => {
 
   it('returns generic breadcrumbs for nested ancestry', () => {
     const shapes: Shape[] = [
-      createShape({ id: 'group-root', type: 'group', childrenIds: ['group-inner'] }),
+      createShape({ id: 'group-root', type: 'group' }),
       createShape({
         id: 'group-inner',
         type: 'group',
         parentId: 'group-root',
-        childrenIds: ['shape-child'],
       }),
       createShape({ id: 'shape-child', type: 'text', parentId: 'group-inner' }),
     ];
@@ -216,7 +213,6 @@ describe('buildSelectedInspectorItems', () => {
       createShape({
         id: 'group-root',
         type: 'group',
-        childrenIds: ['shape-child'],
       }),
       createShape({
         id: 'shape-child',

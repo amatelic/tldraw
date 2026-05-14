@@ -1,18 +1,33 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Canvas } from './Canvas';
-import type { EmbedShape, Point, Shape, ShapeStyle } from '../types';
+import type { CameraState, EmbedShape, Point, Shape, ShapeStyle } from '../types';
 
 vi.mock('../canvas/CanvasEngine', () => ({
+  screenToWorldPoint: (point: Point, camera: CameraState) => ({
+    x: (point.x - camera.x) / camera.zoom,
+    y: (point.y - camera.y) / camera.zoom,
+  }),
+  worldToScreenPoint: (point: Point, camera: CameraState) => ({
+    x: point.x * camera.zoom + camera.x,
+    y: point.y * camera.zoom + camera.y,
+  }),
   CanvasEngine: class {
     clear = vi.fn();
     drawGrid = vi.fn();
     applyCamera = vi.fn();
     restoreCamera = vi.fn();
     drawShape = vi.fn();
-    screenToWorld = vi.fn((point: Point) => point);
-    worldToScreen = vi.fn((point: Point) => point);
+    screenToWorld = vi.fn((point: Point, camera: CameraState) => ({
+      x: (point.x - camera.x) / camera.zoom,
+      y: (point.y - camera.y) / camera.zoom,
+    }));
+    worldToScreen = vi.fn((point: Point, camera: CameraState) => ({
+      x: point.x * camera.zoom + camera.x,
+      y: point.y * camera.zoom + camera.y,
+    }));
     resize = vi.fn();
+    measureTextWidth = vi.fn(() => 100);
     ctx = {
       font: '',
       measureText: vi.fn(() => ({ width: 100 })),
@@ -69,8 +84,6 @@ describe('Canvas embed resize', () => {
     onDrawingChange: vi.fn(),
     onPan: vi.fn(),
     onZoomAt: vi.fn(),
-    screenToWorld: vi.fn((point) => point),
-    worldToScreen: vi.fn((point) => point),
     onTextEditStart: vi.fn(),
     onTextEditCommit: vi.fn(),
     onTextEditCancel: vi.fn(),
@@ -105,6 +118,7 @@ describe('Canvas embed resize', () => {
   it('updates width and height when dragging a corner resize handle', () => {
     const embed = createEmbed();
     const onShapeUpdate = vi.fn();
+    const onDraggingChange = vi.fn();
 
     render(
       <Canvas
@@ -112,6 +126,7 @@ describe('Canvas embed resize', () => {
         shapes={[embed]}
         selectedIds={[embed.id]}
         onShapeUpdate={onShapeUpdate}
+        onDraggingChange={onDraggingChange}
       />
     );
 
@@ -133,6 +148,8 @@ describe('Canvas embed resize', () => {
         height: 250,
       },
     });
+    expect(onDraggingChange).toHaveBeenNthCalledWith(1, true);
+    expect(onDraggingChange).toHaveBeenLastCalledWith(false);
   });
 
   it('updates x and width when dragging a left edge resize handle', () => {

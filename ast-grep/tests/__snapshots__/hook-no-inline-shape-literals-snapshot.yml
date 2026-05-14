@@ -1,0 +1,73 @@
+id: hook-no-inline-shape-literals
+snapshots:
+  ? |
+    export function useCreateShape() {
+      const shape = {
+        id: createShapeId(),
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style,
+      };
+      return shape;
+    }
+  : labels:
+    - source: |-
+        {
+            id: createShapeId(),
+            type: 'rectangle',
+            bounds: { x: 0, y: 0, width: 100, height: 100 },
+            style,
+          }
+      style: primary
+      start: 51
+      end: 168
+    - source: |-
+        function useCreateShape() {
+          const shape = {
+            id: createShapeId(),
+            type: 'rectangle',
+            bounds: { x: 0, y: 0, width: 100, height: 100 },
+            style,
+          };
+          return shape;
+        }
+      style: secondary
+      start: 7
+      end: 187
+  ? |
+    export function useCreateTextShape() {
+      const shape: Shape = {
+        id: createShapeId(),
+        type: 'text',
+        bounds: { x: 0, y: 0, width: 200, height: 100 },
+        text: '',
+        style,
+      };
+      return shape;
+    }
+  : labels:
+    - source: |-
+        {
+            id: createShapeId(),
+            type: 'text',
+            bounds: { x: 0, y: 0, width: 200, height: 100 },
+            text: '',
+            style,
+          }
+      style: primary
+      start: 62
+      end: 188
+    - source: |-
+        function useCreateTextShape() {
+          const shape: Shape = {
+            id: createShapeId(),
+            type: 'text',
+            bounds: { x: 0, y: 0, width: 200, height: 100 },
+            text: '',
+            style,
+          };
+          return shape;
+        }
+      style: secondary
+      start: 7
+      end: 207

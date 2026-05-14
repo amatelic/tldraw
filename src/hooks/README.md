@@ -14,7 +14,7 @@ Hooks encapsulate complex logic that can be reused across components:
 
 | Hook | File | Purpose | Lines | Complexity |
 |------|------|---------|-------|------------|
-| useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and agent proposal apply | ~740 | High |
+| useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and thin agent-apply callbacks | ~740 | High |
 | useKeyboard | `useKeyboard.ts` | Global keyboard shortcuts | 170 | Medium |
 | useElementSize | `useElementSize.ts` | Observe DOM element width/height changes | ~60 | Low |
 | useDevColorOverrides | `useDevColorOverrides.ts` | Synchronize dev token overrides to CSS variables | ~20 | Low |
@@ -23,7 +23,7 @@ Hooks encapsulate complex logic that can be reused across components:
 
 ### useCanvas
 
-**Purpose**: Main canvas state management hook providing drawing operations, camera control, history (undo/redo), normalized selection state, text editing, grouping, and layer ordering.
+**Purpose**: Main canvas state management hook providing document/editor operations, camera state, history (undo/redo), normalized selection state, text editing, grouping, layer ordering, command orchestration around the pure document layer, thin agent-apply callbacks around the agent adapter layer, legacy text-shape normalization on load, and runtime-only editor defaults layered on top of persisted workspace data.
 
 **⚠️ WARNING**: This is the most complex hook in the application. It manages:
 - Shape state and operations
@@ -32,6 +32,8 @@ Hooks encapsulate complex logic that can be reused across components:
 - History for undo/redo
 - Workspace persistence
 - Text editing state
+
+It no longer creates or owns a `CanvasEngine`; render and coordinate-transform ownership now live in `src/components/Canvas.tsx`.
 
 **Interface**:
 ```typescript
@@ -49,16 +51,13 @@ interface UseCanvasReturn {
   // Shape operations
   addShape: (shape: Shape) => void;
   updateShape: (id: string, updates: Partial<Shape>) => void;
+  updateShapeBounds: (id: string, updates: Partial<Shape['bounds']>) => void;
   deleteShape: (id: string) => void;
   deleteSelectedShapes: () => void;
   
   // Selection
   selectShapes: (ids: string[]) => void;
   clearSelection: () => void;
-  
-  // Coordinate conversion
-  screenToWorld: (point: Point) => Point;
-  worldToScreen: (point: Point) => Point;
   
   // Camera
   zoomIn: () => void;
@@ -100,6 +99,9 @@ interface UseCanvasReturn {
   getAllShapesInGroup: (groupId: string) => string[];
   bringShapesToFront: (shapeIds: string[]) => void;
   sendShapesToBack: (shapeIds: string[]) => void;
+  alignShapes: (shapeIds: string[], alignment: LayoutAlignment) => void;
+  distributeShapes: (shapeIds: string[], direction: DistributionDirection) => void;
+  tidyShapes: (shapeIds: string[]) => void;
 }
 
 function useCanvas(workspaceId: string): UseCanvasReturn
@@ -135,12 +137,13 @@ const [future, setFuture] = useState<HistoryState[]>([]);
    - applyMutationProposal
    - groupShapes / ungroupShapes
    - bringShapesToFront / sendShapesToBack
+   - completed drag/resize interactions
+   - committed text edits
 
 2. **Don't Add to History** (non-undoable):
-   - Dragging (continuous updates)
+   - Dragging/text editing live preview updates before commit
    - Camera movement (pan/zoom)
    - Selection changes
-   - Text editing
 
 3. **Undo**:
    ```
@@ -157,12 +160,22 @@ const [future, setFuture] = useState<HistoryState[]>([]);
 **Workspace Integration**:
 
 - Loads initial state from workspace store
-- Derives the initial history snapshot from the current workspace object without suppressing hook dependency checks
-- Auto-saves changes back to workspace store through one debounced atomic snapshot write (100ms debounce)
-- Flushes the previous workspace snapshot before loading a new workspace
-- Uses a latest-snapshot ref during workspace switches to avoid re-entrant update loops
-- Clears history when switching workspaces
-- Uses refs to detect workspace changes
+- Normalizes loaded shapes so legacy text typography is promoted back into canonical text fields before runtime code reads it
+- Resets runtime-only editor flags (`isDragging`, `isDrawing`, `editingTextId`) when hydrating from persisted workspaces
+- Resets audio playback state on load so media session state is not restored from storage
+- Auto-saves through one coordinated workspace snapshot path (100ms debounce)
+- Flushes the current workspace snapshot synchronously before loading another workspace
+- Reads the switch-flush payload from a latest-snapshot ref so rerenders during a switch do not re-enter the transition effect
+- Persists only the durable editor subset (tool, selection, camera, style defaults)
+- Clears undo/redo history when switching workspaces, then loads the new workspace before persistence resumes
+- Keeps document edits and durable editor updates in one save cycle so shapes/state do not race each other
+
+**Rendering Boundary**:
+
+- `useCanvas` owns the shared `canvasRef` because upstream app code still needs access to the mounted element for viewport-aware actions
+- `Canvas.tsx` owns the live `CanvasEngine` instance and render/transform path
+- `src/document/commands.ts` now owns the pure board mutation rules that do not require React or persistence side effects
+- Parent surfaces that only need camera math should use the pure helpers exported from `src/canvas/CanvasEngine.ts` rather than constructing an engine in the hook
 
 **Hardcoded Values**:
 ```typescript
@@ -195,6 +208,7 @@ const defaultEditorState: EditorState = {
 - [ ] Auto-saves to workspace store
 - [ ] Workspace switches flush pending edits before loading the next workspace
 - [ ] Workspace switches do not trigger recursive React update loops
+- [ ] Persisted workspace hydration always starts with runtime flags cleared
 - [ ] Text editing state managed correctly
 - [ ] Selected shapes can be grouped and ungrouped
 - [ ] Selected shapes can be moved to front or back without splitting groups
@@ -205,25 +219,27 @@ const defaultEditorState: EditorState = {
 - History is lost when switching workspaces
 - Maximum 50 history states
 - Auto-save debounced at 100ms
-- Shape updates during drag not saved to history
+- Shape updates during drag/text editing are not individually saved to history; the completed interaction commits one history step
 - Selection APIs normalize grouped child ids to their top-level group before storing selection state
 - Layer ordering normalizes child selections up to their root group so grouped content moves as one stack item
 - Generated rectangle/circle labels are applied as companion text shapes because those primitives do not yet render inline text
 - Selection Rewrite validation is intentionally strict in Phase 1: only text updates are allowed, with no layout or style mutations
 
 **Known Issues**:
-1. **History Loss**: When switching workspaces, all undo history is lost. This is by design but could be improved to preserve history per-workspace.
+1. **History Loss**: When switching workspaces, all undo history is intentionally cleared once the next workspace loads. Preserving history per workspace is still future work.
 
 2. **Generated Connectors Are Static**: Applied diagram connectors keep their generated start/end points. Moving nodes later does not automatically retarget connector endpoints.
 
-3. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
+3. **Agent Wiring Still Flows Through The Hook API**: Proposal validation/application now lives in `src/agents/documentApplication.ts`, but `useCanvas` still exposes the history-wrapped apply callbacks that the app layer passes into `AgentPanel`.
+
+4. **Memory Usage**: All shapes stored in memory. Very large drawings could cause issues.
 
 **Testing Requirements**:
 
 Unit tests should cover:
-- Shape CRUD operations
+- Shape CRUD operations (`useCanvas.core.test.ts`)
 - History operations (undo/redo)
-- Camera transformations
+- Camera state updates, pointer-anchored zoom, and zoom clamping
 - Workspace switching
 - Text editing state
 
@@ -294,6 +310,8 @@ interface KeyboardActions {
   deleteSelected: () => void;
   clearSelection: () => void;
   setTool: (tool: ToolType) => void;
+  groupSelected: () => void;
+  ungroupSelected: () => void;
 }
 
 interface KeyboardShortcut {
@@ -358,6 +376,8 @@ function useElementSize<T extends Element>(
 | Delete | - | deleteSelected | Delete selected shapes |
 | Backspace | - | deleteSelected | Delete selected shapes |
 | Escape | - | clearSelection | Clear selection |
+| g | Ctrl | groupSelected | Group selected shapes |
+| g | Ctrl+Shift | ungroupSelected | Ungroup selected group |
 | v | - | setTool('select') | Select tool |
 | h | - | setTool('pan') | Hand/Pan tool |
 | r | - | setTool('rectangle') | Rectangle tool |
@@ -396,12 +416,13 @@ const altMatch = !!shortcut.alt === e.altKey;
 ```
 
 **Success Criteria**:
-- [ ] All shortcuts work when not editing text
-- [ ] Shortcuts disabled when typing in inputs
-- [ ] Ctrl+Z/Y work for undo/redo
-- [ ] Delete/Backspace delete selected shapes
-- [ ] Tool shortcuts switch tools correctly
-- [ ] PreventDefault works for system shortcuts
+- [x] All shortcuts work when not editing text
+- [x] Shortcuts disabled when typing in inputs
+- [x] Ctrl/Cmd+Z/Y work for undo/redo
+- [x] Delete/Backspace delete selected shapes
+- [x] Tool shortcuts switch tools correctly
+- [x] Ctrl/Cmd+G and Ctrl/Cmd+Shift+G route to grouping actions
+- [x] PreventDefault works for system shortcuts
 
 **Constraints**:
 - Uses native event listener (not React events)
@@ -427,10 +448,10 @@ Used for displaying shortcut help.
 **Testing Requirements**:
 
 Unit tests should cover:
-- Each shortcut fires correct action
-- Shortcuts disabled in input fields
-- Modifier key combinations work
-- PreventDefault prevents default behavior
+- Each shortcut fires correct action (`useKeyboard.test.tsx`)
+- Shortcuts disabled in input, textarea, and contenteditable targets
+- Modifier key combinations work for undo/redo and grouping
+- PreventDefault prevents default behavior for destructive/system shortcuts
 
 **Usage Example**:
 ```typescript
@@ -440,6 +461,8 @@ useKeyboard({
   deleteSelected: deleteSelectedShapes,
   clearSelection,
   setTool: handleToolChange,
+  groupSelected: handleGroupSelected,
+  ungroupSelected: handleUngroupSelected,
 });
 ```
 

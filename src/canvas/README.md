@@ -10,15 +10,18 @@ The CanvasEngine provides low-level canvas rendering capabilities:
 - Camera transformations (pan/zoom)
 - Grid rendering
 - Selection indicators
-- Shape creation from drag points
-- Raster/vector export helpers for viewport, all-shapes, and selection downloads
+- Live shape rendering only; export/download helpers live in `export.ts`
+- Drag-preview and interaction-start shape creation delegates to pure `shapeFactory.ts`
 
 ## Files
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `CanvasEngine.ts` | Canvas rendering engine class plus export helpers | ~1100 |
-| `CanvasEngine.test.ts` | Resize, gradient, arrow, and export coverage | ~340 |
+| `CanvasEngine.ts` | Live canvas rendering engine class | ~900 |
+| `export.ts` | PNG/SVG export rendering, serialization, and download helpers | ~460 |
+| `geometry.ts` | Shared shape bounds, resize handle, and arrowhead geometry helpers | ~110 |
+| `shapeFactory.ts` | Pure drag-point and pencil seed shape construction helpers | ~120 |
+| `CanvasEngine.export.test.ts` | Export filename, SVG serialization, and PNG/SVG download helper coverage | ~180 |
 | `CanvasEngine.shadow.test.ts` | Shadow rendering tests | 370 |
 
 ## Detailed Documentation
@@ -31,7 +34,7 @@ The CanvasEngine provides low-level canvas rendering capabilities:
 
 **Constructor**:
 ```typescript
-constructor(canvas: HTMLCanvasElement)
+constructor(canvas: HTMLCanvasElement, options?: CanvasEngineOptions)
 ```
 
 **Throws**: Error if canvas 2D context unavailable.
@@ -41,7 +44,7 @@ constructor(canvas: HTMLCanvasElement)
 private canvas: HTMLCanvasElement;
 private ctx: CanvasRenderingContext2D;
 private dpr: number;  // Device Pixel Ratio
-private imageCache: Map<string, HTMLImageElement>;
+private onImageLoad?: () => void;
 ```
 
 **Public Methods**:
@@ -54,15 +57,12 @@ private imageCache: Map<string, HTMLImageElement>;
 | `restoreCamera()` | Restores context |
 | `screenToWorld(point, camera)` | Convert screen to world coordinates |
 | `worldToScreen(point, camera)` | Convert world to screen coordinates |
-| `drawShape(shape, isSelected?, showSelectionHandles?)` | Render any shape type with blend mode support |
-| `drawGrid(camera, gridSize?)` | Render background grid |
+| `measureTextWidth(text, font)` | Measure canvas text width without exposing the private rendering context |
+| `drawShape(shape, isSelected?, showSelectionHandles?, allShapes?)` | Render any shape type with blend mode support and optional live document context |
+| `drawGrid(camera, gridSize?)` | Render camera-aligned background grid |
 | `drawPreviewShape(start, end, type, style)` | Draw preview during drag |
-| `createShapeFromPoints(start, end, type, style)` | Create shape object from drag |
-| `CanvasEngine.getBoundsForShape(shape)` | Static bounds helper for export/layout work |
-| `CanvasEngine.getBoundsForShapes(shapes)` | Static aggregate bounds for content export |
-| `CanvasEngine.exportViewportToPng(canvas)` | Serialize the current live canvas viewport to PNG |
-| `CanvasEngine.exportShapesToPng(shapes, options?)` | Render a shape collection to an offscreen PNG |
-| `CanvasEngine.exportShapesToSvg(shapes, options?)` | Serialize a shape collection to SVG markup |
+| `createShapeFromPoints(start, end, type, style)` | Delegate drag-point shape creation to `shapeFactory.ts` |
+| `getShapeBounds(shape)` | Delegate shape bounds to `geometry.ts` for compatibility with existing callers |
 
 **Private Methods**:
 
@@ -88,11 +88,24 @@ private imageCache: Map<string, HTMLImageElement>;
 | `drawPencil(shape)` | Render freehand pencil strokes |
 | `drawImage(shape)` | Render image (with caching) |
 | `drawAudio(shape)` | Render audio waveform |
-| `drawText(shape)` | Render text with word wrap |
+| `drawText(shape)` | Render text with word wrap and shared typography normalization |
 | `drawEmbed(shape)` | Render embed placeholder |
 | `drawSelectionIndicator(shape, showHandles?)` | Render selection border and optionally resize handles |
-| `getShapeBounds(shape)` | Calculate shape bounds |
-| `getResizeHandles(bounds)` | Get 8 resize handle positions |
+
+**Pure Helper Modules**:
+
+- `screenToWorldPoint(point, camera)` exposes the screen-to-world math without requiring an engine instance
+- `worldToScreenPoint(point, camera)` exposes the world-to-screen math without requiring an engine instance
+- `export.ts` exports `createCanvasImageExportFilename`, `downloadViewportAsPng`, `downloadShapesAsPng`, `createSvgExport`, and `downloadShapesAsSvg`
+- `geometry.ts` exports `getShapeBounds`, `getCombinedShapeBounds`, `getResizeHandles`, and `getArrowHeadPoints`
+- `shapeFactory.ts` exports `createShapeFromPoints` for drag-created drawing primitives and `createPencilShapeAtPoint` for the initial freehand preview seed
+
+**Ownership Boundary**:
+
+- The live `CanvasEngine` instance is now owned only by `src/components/Canvas.tsx`
+- `useCanvas.ts` no longer constructs or resizes render objects
+- `CanvasEngine.ts` is centered on live rendering and coordinate transforms
+- Export code can instantiate a temporary offscreen `CanvasEngine`, but export orchestration and SVG serialization stay outside the renderer class
 
 **Coordinate Systems**:
 
@@ -145,12 +158,12 @@ This ensures crisp rendering on Retina/4K displays.
 - CanvasEngine still renders per-shape selection outlines on the bitmap canvas
 - Resize handles are now only drawn for single selection; multi-selection can request outlines without handles
 - The combined multi-selection frame and marquee rectangle are rendered in the React `Canvas` layer as DOM overlays so they stay easy to evolve without complicating the engine
+- Group labels derive their child counts from the current `allShapes` parent relationships instead of cached group-local metadata
 
-**Export Support**:
-- `exportViewportToPng()` preserves the exact current viewport from the live canvas element
-- `exportShapesToPng()` renders an arbitrary shape list onto an offscreen canvas with padding and a solid background
-- `exportShapesToSvg()` serializes shapes into vector markup for rectangle/circle/line/arrow/pencil/image/audio/text/embed/group content
-- Selection exports can include grouped descendants as long as the caller expands the selection before passing shapes in
+**Text Typography Source**:
+- `drawText()` now reads typography through the shared `src/document/textStyle.ts` helper
+- Canonical runtime typography lives on the text shape itself
+- Legacy text shapes that only persisted typography inside `style` still render correctly through that compatibility path
 
 **Rendering Shapes**:
 
@@ -305,28 +318,28 @@ for (let i = 1; i < points.length - 1; i++) {
 ```
 
 ### Image
-Cached by URL:
+Cached by URL in a module-level cache so the mounted canvas and export renderers can reuse loaded image elements. The live engine can subscribe to pending loads and request a rerender when an image finishes:
 ```typescript
-let img = this.imageCache.get(src)
-if (!img) {
-  img = new Image()
-  img.src = src
-  this.imageCache.set(src, img)
+const entry = getCachedCanvasImage(src)
+if (isCachedCanvasImageReady(entry)) {
+  ctx.drawImage(entry.image, x, y, width, height)
+} else {
+  entry.listeners.add(onImageLoad)
+  drawPlaceholder()
 }
-ctx.drawImage(img, x, y, width, height)
 ```
 
 **⚠️ IMPORTANT**: Images are cached by URL, not by content. Two different images with same URL will show the same cached image.
 
 ### Audio
-Renders waveform bars:
+Renders each clip as a rounded media card with a white surface, subtle border/shadow, waveform bars, central play/pause control, and duration text:
 ```typescript
 waveformData.forEach((amplitude, i) => {
-  const barHeight = amplitude * height * 0.8
-  ctx.fillRect(barX, barY, barWidth - 1, barHeight)
+  const barHeight = amplitude * contentHeight * 0.92
+  ctx.fillRect(barX, barY, barWidth, barHeight)
 })
 ```
-Plus play/pause indicator and duration text.
+The renderer clamps amplitudes to the 0-1 range and keeps the card shell visible even if waveform data is temporarily empty.
 
 ### Text
 Word wrapping with alignment:
@@ -375,19 +388,16 @@ handles.forEach((handle) => {
 **Grid Rendering**:
 ```typescript
 // Calculate visible grid range
-const startX = Math.floor(-camera.x / camera.zoom / gridSize) * gridSize
-const endX = startX + rect.width / camera.zoom + gridSize * 2
+const visibleWorldLeft = (0 - camera.x) / camera.zoom
+const visibleWorldRight = (rect.width - camera.x) / camera.zoom
+const startX = Math.floor(visibleWorldLeft / gridSize) * gridSize
+const endX = Math.ceil(visibleWorldRight / gridSize) * gridSize
 
-// Draw vertical lines
+// Draw vertical lines in screen space so the grid tracks camera pan and zoom
 for (let x = startX; x < endX; x += gridSize) {
-  ctx.moveTo(x, startY)
-  ctx.lineTo(x, endY)
-}
-
-// Draw horizontal lines
-for (let y = startY; y < endY; y += gridSize) {
-  ctx.moveTo(startX, y)
-  ctx.lineTo(endX, y)
+  const screenX = x * camera.zoom + camera.x
+  ctx.moveTo(screenX, 0)
+  ctx.lineTo(screenX, rect.height)
 }
 ```
 
@@ -395,7 +405,7 @@ Grid is semi-transparent (50% opacity) light gray (#e5e5e5).
 
 **Shape Creation**:
 
-Factory method creates shape objects from drag coordinates:
+`shapeFactory.ts` creates shape objects from drag coordinates:
 ```typescript
 createShapeFromPoints(start, end, type, style): Shape
 ```
@@ -424,8 +434,8 @@ Supported types:
 - [x] **Shadow reset after drawing**
 - [x] **Blend mode support**
 - [x] **Shapes without shadows render normally**
-- [x] **Viewport PNG export works from the live canvas**
-- [x] **Shape collections can be exported to PNG and SVG**
+- [x] Export/download helpers are separated from the live renderer
+- [x] Arrowhead, bounds, resize handle, and drag-created shape helpers have direct unit coverage
 
 **Constraints**:
 - Canvas 2D Context required
@@ -446,11 +456,12 @@ Supported types:
 
 5. **Embed Placeholder**: Embed shapes just show placeholder, not actual embedded content. Actual embeds rendered as DOM overlays by Canvas component.
 
-6. **SVG Fidelity**: SVG export focuses on shape geometry and common styling. Some canvas-only presentation details such as live image loading state and multi-shadow fidelity remain approximate.
+6. **Raster Export Still Uses CanvasEngine**: PNG export correctly reuses live drawing code through a temporary offscreen `CanvasEngine`, so render changes still affect PNG output.
 
 **Performance Considerations**:
 
 - Reuse CanvasEngine instance (don't recreate)
+- Keep engine ownership inside the mounted canvas surface instead of mirroring it in a hook
 - Call `applyCamera`/`restoreCamera` around all drawing
 - Use `requestAnimationFrame` for smooth animation
 - Cache expensive calculations (e.g., text measurements)
@@ -507,8 +518,8 @@ To add a new shape type:
 3. Add to Shape union type
 4. Add case in `drawShape()` method
 5. Create `drawNewShape()` private method
-6. Add case in `getShapeBounds()`
-7. Update `createShapeFromPoints()` if drawable
+6. Add bounds support in `src/canvas/geometry.ts`
+7. Update `src/canvas/shapeFactory.ts` if drawable from drag points
 8. Update hit testing in Canvas component
 9. Add to Toolbar
 10. Add keyboard shortcut

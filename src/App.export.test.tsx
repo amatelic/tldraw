@@ -1,84 +1,65 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Shape } from './types';
 
 const {
-  mockShape,
-  mockCanvasElement,
-  mockWorkspace,
+  mockCanvasState,
   serializeWorkspaceForExport,
   createWorkspaceExportFilename,
   downloadWorkspaceExport,
-  createCanvasExportFilename,
-  downloadDataUrlExport,
-  downloadStringExport,
-  exportViewportToPng,
-  exportShapesToPng,
-  exportShapesToSvg,
-} = vi.hoisted(() => {
-  const mockShape = {
-    id: 'shape-1',
-    type: 'rectangle' as const,
-    bounds: { x: 24, y: 48, width: 180, height: 120 },
-    style: {
-      color: '#111111',
-      fillColor: '#ffffff',
-      fillGradient: null,
-      strokeWidth: 2,
-      strokeStyle: 'solid' as const,
-      fillStyle: 'none' as const,
-      opacity: 1,
-      blendMode: 'source-over' as const,
-      shadows: [],
-      fontSize: 16,
-      fontFamily: 'sans-serif',
-      fontWeight: 'normal' as const,
-      fontStyle: 'normal' as const,
-      textAlign: 'left' as const,
-    },
-    createdAt: 1,
-    updatedAt: 2,
-  };
-
-  const mockCanvasElement = {
-    toDataURL: vi.fn(() => 'data:image/png;base64,viewport'),
-  } as unknown as HTMLCanvasElement;
-
-  const mockWorkspace = {
-    id: 'workspace-1',
-    name: 'Export Demo',
-    state: {
+  downloadViewportAsPng,
+  downloadShapesAsPng,
+  downloadShapesAsSvg,
+} = vi.hoisted(() => ({
+  mockCanvasState: {
+    shapes: [] as Shape[],
+    editorState: {
       tool: 'select' as const,
-      selectedShapeIds: [mockShape.id],
+      selectedShapeIds: [] as string[],
       camera: { x: 0, y: 0, zoom: 1 },
       isDragging: false,
       isDrawing: false,
-      shapeStyle: { ...mockShape.style },
+      shapeStyle: {
+        color: '#111111',
+        fillColor: '#ffffff',
+        fillGradient: null,
+        strokeWidth: 2,
+        strokeStyle: 'solid' as const,
+        fillStyle: 'none' as const,
+        opacity: 1,
+        blendMode: 'source-over' as const,
+        shadows: [],
+        fontSize: 16,
+        fontFamily: 'sans-serif',
+        fontWeight: 'normal' as const,
+        fontStyle: 'normal' as const,
+        textAlign: 'left' as const,
+      },
       editingTextId: null,
     },
-    shapes: [mockShape],
+    canvasElement: {
+      getBoundingClientRect: vi.fn(() => ({ width: 1200, height: 800 })),
+    } as unknown as HTMLCanvasElement,
+  },
+  serializeWorkspaceForExport: vi.fn(() => ({ format: 'tldraw-workspace-export', version: 1 })),
+  createWorkspaceExportFilename: vi.fn(() => 'export-demo-2026-04-16T09-15-30Z.json'),
+  downloadWorkspaceExport: vi.fn(),
+  downloadViewportAsPng: vi.fn(),
+  downloadShapesAsPng: vi.fn(),
+  downloadShapesAsSvg: vi.fn(),
+}));
+
+function getActiveWorkspace() {
+  return {
+    id: 'workspace-1',
+    name: 'Export Demo',
+    state: mockCanvasState.editorState,
+    shapes: mockCanvasState.shapes,
     createdAt: 1,
     updatedAt: 2,
   };
-
-  return {
-    mockShape,
-    mockCanvasElement,
-    mockWorkspace,
-    serializeWorkspaceForExport: vi.fn(() => ({ format: 'tldraw-workspace-export', version: 1 })),
-    createWorkspaceExportFilename: vi.fn(() => 'export-demo-2026-04-16T09-15-30Z.json'),
-    downloadWorkspaceExport: vi.fn(),
-    createCanvasExportFilename: vi.fn(
-      (_workspaceName: string, format: 'png' | 'svg', scope: 'viewport' | 'all' | 'selection') =>
-        `export-demo-${scope}.${format}`
-    ),
-    downloadDataUrlExport: vi.fn(),
-    downloadStringExport: vi.fn(),
-    exportViewportToPng: vi.fn(() => 'data:image/png;base64,viewport'),
-    exportShapesToPng: vi.fn(() => 'data:image/png;base64,shapes'),
-    exportShapesToSvg: vi.fn(() => '<svg />'),
-  };
-});
+}
 
 vi.mock('motion/react', () => ({
   motion: {
@@ -89,28 +70,19 @@ vi.mock('motion/react', () => ({
     React.createElement(React.Fragment, {}, children),
 }));
 
-vi.mock('./canvas/CanvasEngine', () => ({
-  CanvasEngine: {
-    exportViewportToPng,
-    exportShapesToPng,
-    exportShapesToSvg,
-  },
-}));
-
 vi.mock('./hooks/useCanvas', () => ({
   useCanvas: () => ({
-    canvasRef: { current: mockCanvasElement },
-    shapes: [mockShape],
-    editorState: mockWorkspace.state,
+    canvasRef: { current: mockCanvasState.canvasElement },
+    shapes: mockCanvasState.shapes,
+    editorState: mockCanvasState.editorState,
     setEditorState: vi.fn(),
     addShape: vi.fn(),
     updateShape: vi.fn(),
+    updateShapeBounds: vi.fn(),
     deleteShape: vi.fn(),
     deleteSelectedShapes: vi.fn(),
     selectShapes: vi.fn(),
     clearSelection: vi.fn(),
-    screenToWorld: vi.fn((point) => point),
-    worldToScreen: vi.fn((point) => point),
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
     resetZoom: vi.fn(),
@@ -130,6 +102,9 @@ vi.mock('./hooks/useCanvas', () => ({
     ungroupShapes: vi.fn(),
     bringShapesToFront: vi.fn(),
     sendShapesToBack: vi.fn(),
+    alignShapes: vi.fn(),
+    distributeShapes: vi.fn(),
+    tidyShapes: vi.fn(),
   }),
 }));
 
@@ -142,20 +117,24 @@ vi.mock('./hooks/useElementSize', () => ({
 }));
 
 vi.mock('./stores/workspaceStore', () => ({
+  normalizePersistedWorkspaceState: (state: typeof mockCanvasState.editorState) => ({
+    tool: state.tool,
+    selectedShapeIds: [...state.selectedShapeIds],
+    camera: { ...state.camera },
+    shapeStyle: { ...state.shapeStyle },
+  }),
   useWorkspaceStore: () => ({
-    workspaces: [mockWorkspace],
-    activeWorkspaceId: mockWorkspace.id,
+    workspaces: [getActiveWorkspace()],
+    activeWorkspaceId: 'workspace-1',
     addWorkspace: vi.fn(),
     deleteWorkspace: vi.fn(),
     renameWorkspace: vi.fn(),
     switchWorkspace: vi.fn(),
     canDeleteWorkspace: vi.fn(() => false),
-    getWorkspace: vi.fn(() => mockWorkspace),
-    getActiveWorkspace: vi.fn(() => mockWorkspace),
+    getWorkspace: vi.fn(() => getActiveWorkspace()),
+    getActiveWorkspace: vi.fn(() => getActiveWorkspace()),
     getNextWorkspaceNumber: vi.fn(() => 2),
-    updateWorkspaceSnapshot: vi.fn(),
-    updateWorkspaceShapes: vi.fn(),
-    updateWorkspaceState: vi.fn(),
+    saveWorkspaceSnapshot: vi.fn(),
   }),
 }));
 
@@ -199,25 +178,47 @@ vi.mock('./utils/workspaceExport', () => ({
   serializeWorkspaceForExport,
   createWorkspaceExportFilename,
   downloadWorkspaceExport,
-  createCanvasExportFilename,
-  downloadDataUrlExport,
-  downloadStringExport,
 }));
+
+vi.mock('./canvas/export', async () => {
+  const actual = await vi.importActual<typeof import('./canvas/export')>('./canvas/export');
+
+  return {
+    ...actual,
+    downloadViewportAsPng,
+    downloadShapesAsPng,
+    downloadShapesAsSvg,
+  };
+});
 
 import App from './App';
 
-function openExportMenu() {
-  fireEvent.click(screen.getByRole('button', { name: 'Export' }));
-}
-
 describe('App export actions', () => {
-  it('exports the active workspace JSON from the export menu', () => {
+  beforeEach(() => {
+    mockCanvasState.shapes = [];
+    mockCanvasState.editorState = {
+      ...mockCanvasState.editorState,
+      selectedShapeIds: [],
+      camera: { x: 0, y: 0, zoom: 1 },
+    };
+    vi.clearAllMocks();
+  });
+
+  it('exports the active workspace through the versioned JSON serializer', () => {
     render(<App />);
 
-    openExportMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Export JSON' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export JSON' }));
 
-    expect(serializeWorkspaceForExport).toHaveBeenCalledWith(mockWorkspace);
+    expect(serializeWorkspaceForExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'workspace-1',
+        name: 'Export Demo',
+        shapes: mockCanvasState.shapes,
+        state: expect.objectContaining({
+          camera: mockCanvasState.editorState.camera,
+        }),
+      })
+    );
     expect(createWorkspaceExportFilename).toHaveBeenCalledWith('Export Demo');
     expect(downloadWorkspaceExport).toHaveBeenCalledWith(
       { format: 'tldraw-workspace-export', version: 1 },
@@ -225,32 +226,45 @@ describe('App export actions', () => {
     );
   });
 
-  it('exports the current viewport as a PNG', () => {
+  it('exports the current viewport as PNG from the export menu', () => {
     render(<App />);
 
-    openExportMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Export PNG Viewport' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Current viewport PNG' }));
 
-    expect(exportViewportToPng).toHaveBeenCalledWith(mockCanvasElement);
-    expect(createCanvasExportFilename).toHaveBeenCalledWith('Export Demo', 'png', 'viewport');
-    expect(downloadDataUrlExport).toHaveBeenCalledWith(
-      'data:image/png;base64,viewport',
-      'export-demo-viewport.png'
-    );
+    expect(downloadViewportAsPng).toHaveBeenCalledWith({
+      canvas: mockCanvasState.canvasElement,
+      camera: mockCanvasState.editorState.camera,
+      shapes: [],
+      workspaceName: 'Export Demo',
+    });
   });
 
-  it('exports the selected shapes as SVG', () => {
+  it('exports the normalized selected shapes as SVG', () => {
+    mockCanvasState.shapes = [
+      {
+        id: 'shape-1',
+        type: 'rectangle',
+        bounds: { x: 20, y: 30, width: 120, height: 80 },
+        style: { ...mockCanvasState.editorState.shapeStyle },
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    mockCanvasState.editorState = {
+      ...mockCanvasState.editorState,
+      selectedShapeIds: ['shape-1'],
+    };
+
     render(<App />);
 
-    openExportMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Export SVG Selected Shapes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Selected SVG' }));
 
-    expect(exportShapesToSvg).toHaveBeenCalledWith([mockShape]);
-    expect(createCanvasExportFilename).toHaveBeenCalledWith('Export Demo', 'svg', 'selection');
-    expect(downloadStringExport).toHaveBeenCalledWith(
-      '<svg />',
-      'export-demo-selection.svg',
-      'image/svg+xml'
-    );
+    expect(downloadShapesAsSvg).toHaveBeenCalledWith({
+      shapes: mockCanvasState.shapes,
+      workspaceName: 'Export Demo',
+      scope: 'selected',
+    });
   });
 });

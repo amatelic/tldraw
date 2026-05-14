@@ -22,7 +22,7 @@ const primaryTools: ToolDefinition[] = [
     id: 'select',
     label: 'Select',
     shortcut: 'V',
-    icon: 'M5 3l14 9-5 1-4 8-5-1 3-15z',
+    icon: 'M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.91a.5.5 0 0 0 .35-.85L6.35 2.86a.5.5 0 0 0-.85.35z',
   },
   {
     id: 'pan',
@@ -40,7 +40,7 @@ const primaryTools: ToolDefinition[] = [
     id: 'eraser',
     label: 'Eraser',
     shortcut: 'E',
-    icon: 'M15.36 3.36a2.5 2.5 0 00-3.54 0L4.21 10.96a2.5 2.5 0 000 3.54l2.83 2.83a2.5 2.5 0 003.54 0L19.21 8.66a2.5 2.5 0 000-3.54l-3.85-3.76zM10 15.5l-2.83-2.83 5.3-5.3 2.83 2.83-5.3 5.3z',
+    icon: 'M16.24 3.56l4.2 4.2a2 2 0 010 2.83L13.5 17.5a2 2 0 01-2.83 0L6.5 13.33a2 2 0 010-2.82L12.9 4.1a2 2 0 012.83 0zM4 20l5.66-5.66',
   },
   {
     id: 'arrow',
@@ -52,7 +52,7 @@ const primaryTools: ToolDefinition[] = [
     id: 'text',
     label: 'Text',
     shortcut: 'T',
-    icon: 'M4 7V5h16v2H4zm0 4h16v2H4v-2zm0 4h10v2H4v-2z',
+    icon: 'M6 4h12M12 4v16m-4 0h8',
   },
   {
     id: 'rectangle',

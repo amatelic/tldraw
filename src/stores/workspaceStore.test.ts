@@ -1,171 +1,364 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorState } from '../types';
 import {
-  MAX_WORKSPACE_NAME_LENGTH,
+  mergePersistedWorkspaceStoreState,
+  normalizePersistedWorkspaceState,
+  normalizeWorkspaceSnapshot,
+  partializeWorkspaceStoreState,
+  stripRuntimeStateFromShapes,
   useWorkspaceStore,
+  validatePersistedWorkspaceStoreState,
+  validateWorkspaceSnapshot,
   validateWorkspaceName,
+  type Workspace,
+  type WorkspaceStore,
 } from './workspaceStore';
 
-function createWorkspace(id: string, name = `Workspace ${id}`) {
+const baseEditorState: EditorState = {
+  tool: 'select',
+  selectedShapeIds: ['shape-1'],
+  camera: { x: 12, y: 24, zoom: 1.5 },
+  isDragging: true,
+  isDrawing: true,
+  shapeStyle: {
+    color: '#111111',
+    fillColor: '#ffffff',
+    fillGradient: null,
+    strokeWidth: 2,
+    strokeStyle: 'solid',
+    fillStyle: 'none',
+    opacity: 1,
+    blendMode: 'source-over',
+    shadows: [],
+    fontSize: 16,
+    fontFamily: 'sans-serif',
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    textAlign: 'left',
+  },
+  editingTextId: 'text-1',
+};
+
+function createWorkspace(): Workspace {
   return {
-    id,
-    name,
-    state: {
-      tool: 'select' as const,
-      selectedShapeIds: [],
-      camera: { x: 0, y: 0, zoom: 1 },
-      isDragging: false,
-      isDrawing: false,
-      shapeStyle: {
-        color: '#111111',
-        fillColor: '#ffffff',
-        fillGradient: null,
-        strokeWidth: 2,
-        strokeStyle: 'solid' as const,
-        fillStyle: 'none' as const,
-        opacity: 1,
-        blendMode: 'source-over' as const,
-        shadows: [],
-        fontSize: 16,
-        fontFamily: 'sans-serif',
-        fontWeight: 'normal' as const,
-        fontStyle: 'normal' as const,
-        textAlign: 'left' as const,
+    id: 'workspace-1',
+    name: 'Workspace 1',
+    state: normalizePersistedWorkspaceState(baseEditorState),
+    shapes: [
+      {
+        id: 'audio-1',
+        type: 'audio',
+        bounds: { x: 0, y: 0, width: 200, height: 60 },
+        style: { ...baseEditorState.shapeStyle },
+        createdAt: 1,
+        updatedAt: 2,
+        src: 'audio.mp3',
+        duration: 30,
+        isPlaying: true,
+        waveformData: [0.1, 0.5, 0.3],
+        isBase64: false,
       },
-      editingTextId: null,
-    },
-    shapes: [],
+    ],
     createdAt: 1,
-    updatedAt: 1,
+    updatedAt: 2,
   };
 }
 
-describe('workspaceStore', () => {
-  beforeEach(() => {
-    localStorage.clear();
-    useWorkspaceStore.setState({
-      workspaces: [],
-      activeWorkspaceId: '',
+function createStoreSnapshot(): WorkspaceStore {
+  return {
+    workspaces: [createWorkspace()],
+    activeWorkspaceId: 'workspace-1',
+    addWorkspace: () => 'workspace-2',
+    deleteWorkspace: () => true,
+    renameWorkspace: () => true,
+    switchWorkspace: () => undefined,
+    canDeleteWorkspace: () => true,
+    getWorkspace: () => undefined,
+    getActiveWorkspace: () => createWorkspace(),
+    getNextWorkspaceNumber: () => 2,
+    saveWorkspaceSnapshot: () => ({ success: true, error: null, warnings: [] }),
+  };
+}
+
+describe('workspaceStore persistence helpers', () => {
+  it('drops runtime editor flags when normalizing legacy persisted state', () => {
+    const persistedState = normalizePersistedWorkspaceState(baseEditorState);
+
+    expect(persistedState).toEqual({
+      tool: 'select',
+      selectedShapeIds: ['shape-1'],
+      camera: { x: 12, y: 24, zoom: 1.5 },
+      shapeStyle: expect.objectContaining({
+        color: '#111111',
+      }),
     });
+    expect('isDragging' in persistedState).toBe(false);
+    expect('isDrawing' in persistedState).toBe(false);
+    expect('editingTextId' in persistedState).toBe(false);
   });
 
-  it('validates trimmed workspace names', () => {
-    expect(validateWorkspaceName('  Client Review  ')).toEqual({
-      success: true,
-      error: null,
-      trimmedName: 'Client Review',
-    });
+  it('resets runtime audio playback state when sanitizing shapes', () => {
+    const [audioShape] = stripRuntimeStateFromShapes(createWorkspace().shapes);
+
+    expect(audioShape.type).toBe('audio');
+    expect(audioShape.type === 'audio' ? audioShape.isPlaying : null).toBe(false);
   });
 
-  it('rejects empty workspace names after trimming', () => {
-    expect(validateWorkspaceName('   ')).toEqual({
-      success: false,
-      error: 'Workspace names must contain at least 1 non-space character.',
-      trimmedName: null,
+  it('normalizes one coordinated workspace snapshot for atomic persistence', () => {
+    const snapshot = normalizeWorkspaceSnapshot({
+      shapes: createWorkspace().shapes,
+      state: baseEditorState,
     });
+
+    expect(snapshot.state).toEqual({
+      tool: 'select',
+      selectedShapeIds: [],
+      camera: { x: 12, y: 24, zoom: 1.5 },
+      shapeStyle: expect.objectContaining({
+        color: '#111111',
+      }),
+    });
+    expect('isDragging' in snapshot.state).toBe(false);
+
+    const [audioShape] = snapshot.shapes;
+    expect(audioShape.type === 'audio' ? audioShape.isPlaying : null).toBe(false);
   });
 
-  it('rejects workspace names longer than fifty characters', () => {
-    const longName = 'A'.repeat(MAX_WORKSPACE_NAME_LENGTH + 1);
+  it('partializes persisted store data without runtime editor or audio playback state', () => {
+    const storeState = createStoreSnapshot();
+    const partialized = partializeWorkspaceStoreState(storeState);
+    const persistedWorkspace = partialized.workspaces[0];
+    const persistedAudio = persistedWorkspace.shapes[0];
 
-    expect(validateWorkspaceName(longName)).toEqual({
-      success: false,
-      error: `Workspace names must be ${MAX_WORKSPACE_NAME_LENGTH} characters or fewer.`,
-      trimmedName: null,
-    });
+    expect(partialized.activeWorkspaceId).toBe('workspace-1');
+    expect('isDragging' in persistedWorkspace.state).toBe(false);
+    expect('isDrawing' in persistedWorkspace.state).toBe(false);
+    expect('editingTextId' in persistedWorkspace.state).toBe(false);
+    expect(persistedAudio.type === 'audio' ? persistedAudio.isPlaying : null).toBe(false);
   });
 
-  it('returns false when only one workspace exists', () => {
-    useWorkspaceStore.setState({
-      workspaces: [createWorkspace('1')],
-      activeWorkspaceId: '1',
-    });
+  it('merges legacy persisted workspaces back into safe runtime defaults', () => {
+    const currentState = createStoreSnapshot();
+    const merged = mergePersistedWorkspaceStoreState(
+      {
+        workspaces: [
+          {
+            ...createWorkspace(),
+            state: {
+              ...baseEditorState,
+            },
+            shapes: [
+              {
+                ...createWorkspace().shapes[0],
+                type: 'audio',
+                isPlaying: true,
+              },
+            ],
+          },
+        ],
+        activeWorkspaceId: 'workspace-1',
+      },
+      currentState
+    );
 
-    expect(useWorkspaceStore.getState().canDeleteWorkspace()).toBe(false);
+    expect(merged.workspaces[0].state).toEqual({
+      tool: 'select',
+      selectedShapeIds: [],
+      camera: { x: 12, y: 24, zoom: 1.5 },
+      shapeStyle: expect.objectContaining({
+        color: '#111111',
+      }),
+    });
+    const mergedAudio = merged.workspaces[0].shapes[0];
+    expect(mergedAudio.type === 'audio' ? mergedAudio.isPlaying : null).toBe(false);
   });
 
-  it('returns true when more than one workspace exists without requiring an id argument', () => {
-    useWorkspaceStore.setState({
-      workspaces: [createWorkspace('1'), createWorkspace('2')],
-      activeWorkspaceId: '1',
-    });
+  it('falls back to the current store when hydrated workspace data is malformed', () => {
+    const currentState = createStoreSnapshot();
+    const validation = validatePersistedWorkspaceStoreState(
+      {
+        workspaces: 'not-an-array',
+        activeWorkspaceId: 'missing-workspace',
+      },
+      currentState
+    );
 
-    expect(useWorkspaceStore.getState().canDeleteWorkspace()).toBe(true);
+    expect(validation.success).toBe(true);
+    expect(validation.value.workspaces).toHaveLength(1);
+    expect(validation.value.activeWorkspaceId).toBe('workspace-1');
+    expect(validation.warnings).toContain('Persisted workspaces were ignored because the value is not an array.');
   });
 
-  it('renames workspaces with trimmed valid names', () => {
-    useWorkspaceStore.setState({
-      workspaces: [createWorkspace('1')],
-      activeWorkspaceId: '1',
-    });
+  it('resets an invalid active workspace id to the first hydrated workspace', () => {
+    const currentState = createStoreSnapshot();
+    const validation = validatePersistedWorkspaceStoreState(
+      {
+        workspaces: [
+          createWorkspace(),
+          {
+            ...createWorkspace(),
+            id: 'workspace-2',
+            name: 'Workspace 2',
+          },
+        ],
+        activeWorkspaceId: 'stale-workspace',
+      },
+      currentState
+    );
 
-    const result = useWorkspaceStore.getState().renameWorkspace('1', '  Client Review  ');
-
-    expect(result).toEqual({
-      success: true,
-      error: null,
-      trimmedName: 'Client Review',
-    });
-    expect(useWorkspaceStore.getState().workspaces[0]?.name).toBe('Client Review');
+    expect(validation.value.activeWorkspaceId).toBe('workspace-1');
+    expect(validation.warnings).toContain(
+      'Active workspace id was reset because it does not match a persisted workspace.'
+    );
   });
 
-  it('keeps the existing name when rename validation fails', () => {
-    useWorkspaceStore.setState({
-      workspaces: [createWorkspace('1', 'Existing Name')],
-      activeWorkspaceId: '1',
+  it('resets invalid camera values during snapshot validation', () => {
+    const validation = validateWorkspaceSnapshot({
+      shapes: createWorkspace().shapes,
+      state: {
+        ...baseEditorState,
+        camera: { x: Number.NaN, y: Number.POSITIVE_INFINITY, zoom: -4 },
+      },
     });
 
-    const result = useWorkspaceStore.getState().renameWorkspace('1', '   ');
-
-    expect(result).toEqual({
-      success: false,
-      error: 'Workspace names must contain at least 1 non-space character.',
-      trimmedName: null,
-    });
-    expect(useWorkspaceStore.getState().workspaces[0]?.name).toBe('Existing Name');
+    expect(validation.value.state.camera).toEqual({ x: 0, y: 0, zoom: 0.1 });
+    expect(validation.warnings).toContain('Invalid camera values were reset or clamped.');
   });
 
-  it('updates shapes and editor state together with updateWorkspaceSnapshot', () => {
-    useWorkspaceStore.setState({
-      workspaces: [createWorkspace('1')],
-      activeWorkspaceId: '1',
+  it('drops stale selected ids that do not match hydrated shapes', () => {
+    const validation = validateWorkspaceSnapshot({
+      shapes: createWorkspace().shapes,
+      state: {
+        ...baseEditorState,
+        selectedShapeIds: ['audio-1', 'missing-shape', 'audio-1'],
+      },
     });
 
-    useWorkspaceStore.getState().updateWorkspaceSnapshot('1', {
+    expect(validation.value.state.selectedShapeIds).toEqual(['audio-1']);
+  });
+
+  it('drops malformed shapes and repairs style defaults and timestamps', () => {
+    const validation = validateWorkspaceSnapshot({
       shapes: [
         {
-          id: 'shape-1',
+          id: 'rect-1',
           type: 'rectangle',
-          bounds: { x: 20, y: 30, width: 120, height: 80 },
-          style: {
-            color: '#111111',
-            fillColor: '#ffffff',
-            fillGradient: null,
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            fillStyle: 'none',
-            opacity: 1,
-            blendMode: 'source-over',
-            shadows: [],
-            fontSize: 16,
-            fontFamily: 'sans-serif',
-            fontWeight: 'normal',
-            fontStyle: 'normal',
-            textAlign: 'left',
-          },
+          bounds: { x: 10, y: 20, width: 120, height: 80 },
+          style: { color: '#2563eb', strokeWidth: 'wide' },
+          createdAt: 'yesterday',
+          updatedAt: 44,
+        },
+        {
+          id: 'bad-shape',
+          type: 'rectangle',
+          bounds: { x: 0, y: 0, width: Number.NaN, height: 20 },
+          style: {},
           createdAt: 1,
           updatedAt: 1,
         },
       ],
       state: {
-        ...createWorkspace('1').state,
-        tool: 'rectangle',
-        selectedShapeIds: ['shape-1'],
+        ...baseEditorState,
+        selectedShapeIds: ['rect-1', 'bad-shape'],
       },
     });
 
-    const workspace = useWorkspaceStore.getState().workspaces[0];
-    expect(workspace?.shapes.map((shape) => shape.id)).toEqual(['shape-1']);
-    expect(workspace?.state.tool).toBe('rectangle');
-    expect(workspace?.state.selectedShapeIds).toEqual(['shape-1']);
+    expect(validation.value.shapes).toHaveLength(1);
+    expect(validation.value.shapes[0]).toMatchObject({
+      id: 'rect-1',
+      style: expect.objectContaining({
+        color: '#2563eb',
+        strokeWidth: 2,
+        fillColor: '#000000',
+      }),
+      createdAt: 0,
+      updatedAt: 44,
+    });
+    expect(validation.value.state.selectedShapeIds).toEqual(['rect-1']);
+    expect(validation.warnings).toContain('Shape bad-shape was dropped because it has invalid bounds.');
+  });
+
+  it('returns a structured failure when saving a missing workspace', () => {
+    useWorkspaceStore.setState({
+      workspaces: [createWorkspace()],
+      activeWorkspaceId: 'workspace-1',
+    });
+
+    const result = useWorkspaceStore.getState().saveWorkspaceSnapshot('missing-workspace', {
+      shapes: [],
+      state: baseEditorState,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: 'Workspace missing-workspace was not found.',
+      warnings: [],
+    });
+  });
+});
+
+describe('useWorkspaceStore workspace actions', () => {
+  beforeEach(() => {
+    useWorkspaceStore.setState({
+      workspaces: [createWorkspace()],
+      activeWorkspaceId: 'workspace-1',
+    });
+  });
+
+  it('checks delete eligibility from workspace count without an id argument', () => {
+    expect(useWorkspaceStore.getState().canDeleteWorkspace()).toBe(false);
+
+    useWorkspaceStore.setState({
+      workspaces: [
+        createWorkspace(),
+        {
+          ...createWorkspace(),
+          id: 'workspace-2',
+          name: 'Workspace 2',
+        },
+      ],
+      activeWorkspaceId: 'workspace-1',
+    });
+
+    expect(useWorkspaceStore.getState().canDeleteWorkspace()).toBe(true);
+  });
+
+  it('trims and validates workspace names before renaming', () => {
+    const result = useWorkspaceStore.getState().renameWorkspace('workspace-1', '  Client Board  ');
+
+    expect(result).toBe(true);
+    expect(useWorkspaceStore.getState().workspaces[0].name).toBe('Client Board');
+  });
+
+  it('rejects blank or overlong workspace names', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(useWorkspaceStore.getState().renameWorkspace('workspace-1', '   ')).toBe(false);
+    expect(useWorkspaceStore.getState().workspaces[0].name).toBe('Workspace 1');
+
+    expect(useWorkspaceStore.getState().renameWorkspace('workspace-1', 'x'.repeat(51))).toBe(false);
+    expect(useWorkspaceStore.getState().workspaces[0].name).toBe('Workspace 1');
+
+    warnSpy.mockRestore();
+  });
+});
+
+describe('validateWorkspaceName', () => {
+  it('returns a trimmed valid workspace name', () => {
+    expect(validateWorkspaceName('  Roadmap  ')).toEqual({
+      name: 'Roadmap',
+      error: null,
+    });
+  });
+
+  it('returns user-facing errors for invalid names', () => {
+    expect(validateWorkspaceName('')).toEqual({
+      name: '',
+      error: 'Workspace name is required.',
+    });
+    expect(validateWorkspaceName('x'.repeat(51))).toEqual({
+      name: 'x'.repeat(51),
+      error: 'Workspace names must be 50 characters or fewer.',
+    });
   });
 });

@@ -6,59 +6,59 @@ This directory contains all React UI components for the TLDraw Clone application
 
 Components are organized by functionality:
 - **Main UI**: Toolbar, Canvas, PropertiesPanel, ZoomControls
-- **Agent UI**: AgentPanel
+- **Shell Chrome**: LeftSidebar, CanvasRulers, DevColorTool
+- **Agent UI**: AgentPanel plus focused agent-panel workflow previews/controller helpers
 - **Dialogs**: ImageUploadDialog, AudioUploadDialog, EmbedDialog
 - **Workspace**: WorkspaceTabs, WorkspaceTab
-- **Resilience**: ErrorBoundary
-- **Utilities**: Tooltip, ColorPicker, selectedInspectorItems
+- **Utilities**: Tooltip, ColorPicker, ErrorBoundary
 
 ## Component Files
 
 | Component | File | Purpose | Lines |
 |-----------|------|---------|-------|
 | Toolbar | `Toolbar.tsx` | Floating bottom toolbar with tools | ~120 |
-| Canvas | `Canvas.tsx` | Main canvas rendering and interactions | ~1050 |
-| AgentPanel | `AgentPanel.tsx` | Sidebar-first agent composer with inline results and expanded diagram preview | ~560 |
-| ErrorBoundary | `ErrorBoundary.tsx` | App-level crash boundary with retry and refresh actions | ~150 |
+| Canvas | `Canvas.tsx` | Canvas engine lifecycle, render scheduling, and overlay composition | ~265 |
+| CanvasSelectionOverlays | `CanvasSelectionOverlays.tsx` | Selection frame, resize handles, and marquee overlay rendering | ~80 |
+| CanvasTextEditor | `CanvasTextEditor.tsx` | Textarea overlay for in-place text editing on the canvas | ~100 |
+| CanvasContextMenu | `CanvasContextMenu.tsx` | Selection context menu shell and dismissal wiring | ~120 |
+| CanvasEmbedOverlays | `CanvasEmbedOverlays.tsx` | Live embed iframe overlays plus resize and drag affordances | ~220 |
+| LeftSidebar | `LeftSidebar.tsx` | Fixed project sidebar with document, page, and layer sections | ~260 |
+| CanvasRulers | `CanvasRulers.tsx` | Camera-aware horizontal and vertical ruler tick rendering | ~70 |
+| DevColorTool | `DevColorTool.tsx` | Dev-only runtime design-token override panel | ~130 |
+| AgentPanel | `AgentPanel.tsx` | Sidebar-first agent composer that wires the workflow controller to focused preview components | ~320 |
+| agent-panel | `agent-panel/` | Agent workflow controller, pure preview model helpers, and review/cleanup/rewrite/diagram preview renderers | ~780 |
 | Tooltip | `Tooltip.tsx` | Hover tooltip with delay | ~50 |
 | ZoomControls | `ZoomControls.tsx` | Zoom in/out/reset buttons | ~60 |
-| PropertiesPanel | `PropertiesPanel.tsx` | Right sidebar for selection styling and multi-select metadata | ~430 |
+| PropertiesPanel | `PropertiesPanel.tsx` | Inspector orchestration, local section state, and picker portals | ~420 |
+| properties-panel | `properties-panel/` | Inspector section components, formatting helpers, and floating picker hook | ~1,180 |
 | WorkspaceTabs | `WorkspaceTabs.tsx` | Tab bar for workspace switching | ~150 |
 | WorkspaceTab | `WorkspaceTab.tsx` | Individual workspace tab | ~200 |
 | ColorPicker | `ColorPicker.tsx` | Color picker with HSL gradient and sliders | ~300 |
-| SelectedInspectorItems | `selectedInspectorItems.ts` | Pure helper for multi-select inspector metadata rows | ~60 |
 | EmbedDialog | `EmbedDialog.tsx` | Dialog for embedding content | ~150 |
 | ImageUploadDialog | `ImageUploadDialog.tsx` | Dialog for uploading images | ~200 |
 | AudioUploadDialog | `AudioUploadDialog.tsx` | Dialog for uploading audio | ~200 |
+| ErrorBoundary | `ErrorBoundary.tsx` | Root fallback for unexpected render errors | ~80 |
 
 ## Detailed Component Documentation
 
 ### ErrorBoundary
 
-**Purpose**: Catch unexpected render failures at the application shell level so the whole editor does not disappear into a blank screen.
+**Purpose**: App-level React error boundary that keeps unexpected render errors from blanking the full page.
 
 **Behavior**:
-- Renders children normally when no error is thrown
-- Switches to a user-friendly fallback when any descendant render crashes
-- Shows the captured error message in an alert block
-- Exposes `Retry` to reset the boundary locally
-- Exposes `Refresh` to reload the app or call an injected refresh handler in tests
-
-**Integration**:
-- Mounted around `App` in `src/main.tsx`
-- Designed to protect the editor shell rather than individual widget-level failures
+- Catches descendant render errors
+- Logs error details to `console.error`
+- Shows a friendly fallback with retry and refresh actions
+- Retry clears the captured error and attempts to render children again
+- Refresh calls `window.location.reload()`
 
 **Success Criteria**:
-- [ ] App bootstrap is wrapped in an error boundary
-- [ ] Crashes render a helpful fallback instead of a blank screen
-- [ ] Retry can recover if the next render succeeds
-- [ ] Refresh offers a clean restart path
-
-**Known Issues**:
-- Boundary fallback is intentionally app-wide; it does not yet isolate failures to smaller feature zones
+- [x] Main app tree is wrapped by an error boundary
+- [x] Fallback uses `role="alert"` with clear recovery actions
+- [x] Retry can recover when the next child render succeeds
 
 **Dependencies**:
-- None beyond React's class-based error boundary lifecycle
+- React class component error-boundary API
 
 ---
 
@@ -79,6 +79,12 @@ Components are organized by functionality:
 - Review and selection-rewrite results render inline inside the sidebar so the canvas stays visible while the user iterates
 - Diagram generation opens a larger preview sheet only after a draft is ready, so rich output no longer competes with setup controls in one column
 
+**Controller and Preview Structure**:
+- `agent-panel/useAgentPanelController.ts` owns workflow selection, scope locking, run/apply status, cleanup selection state, and stale async request protection
+- Workflow changes, starter-example changes, close events, and closed-panel state invalidate pending run/apply requests so late provider results cannot overwrite the current workflow
+- `agent-panel/model.ts` contains pure prompt, scope, grouped-finding, cleanup, rewrite, and generation preview helpers with direct unit coverage
+- `agent-panel/AgentPanelPreviews.tsx` renders focused review, cleanup, rewrite, and expanded diagram preview components so workflow UI changes stay isolated
+
 **Selection Rewrite UI**:
 - Workflow chip enables only when the current selection includes at least one text shape
 - Context locks to `Selection` because this pass only rewrites the current text selection
@@ -95,6 +101,7 @@ Components are organized by functionality:
   - the affected shape label
   - whether the action is an update or delete
   - the fields being changed
+- New cleanup drafts now start with every suggested action selected immediately, so apply controls do not wait on a follow-up effect before becoming interactive
 - Users can select or deselect individual cleanup actions before apply
 - Delete actions require explicit confirmation before `Apply selected` or `Apply all` becomes available
 - Both apply paths reuse the grouped mutation flow, so cleanup lands on the canvas as one undoable change
@@ -135,6 +142,8 @@ Components are organized by functionality:
 - [ ] Cleanup delete actions require explicit confirmation
 - [ ] Cleanup Suggestions applies in one undoable mutation batch
 - [ ] Review Mode behavior remains unchanged
+- [x] Late agent results are ignored after workflow changes or panel close events
+- [x] Preview derivation has direct unit coverage outside the full panel render tests
 
 **Known Issues**:
 - Diagram generation is still full-board only in the first release
@@ -146,6 +155,128 @@ Components are organized by functionality:
 **Dependencies**:
 - `AgentOrchestrator`
 - `types/agents.ts`
+
+---
+
+### LeftSidebar
+
+**Purpose**: Fixed left project rail for document/page navigation placeholders and a live shape layer tree.
+
+**Behavior**:
+- Renders collapsible Documents, Pages, and Layers sections
+- Uses static default document/page rows when no document/page props are provided
+- Builds the layer tree from current canvas shapes and nests child rows by `parentId`
+- Displays root-level layers in front-to-back order by reversing the current shape array
+- Calls `onShapeSelect(id)` when a layer row is clicked
+- Highlights rows whose ids appear in `selectedIds`
+
+**Props**:
+```typescript
+interface LeftSidebarProps {
+  documents?: Array<{ id: string; name: string; icon?: string }>;
+  pages?: Array<{ id: string; name: string }>;
+  selectedDocumentId?: string;
+  selectedPageId?: string;
+  onDocumentSelect?: (id: string) => void;
+  onPageSelect?: (id: string) => void;
+  shapes?: Shape[];
+  selectedIds?: string[];
+  onShapeSelect?: (id: string) => void;
+}
+```
+
+**Success Criteria**:
+- [x] Desktop shell reserves a 260px left rail
+- [x] Sections expand and collapse independently
+- [x] Layer rows reflect the current shape list
+- [x] Grouped children render indented under their parent group
+- [x] Clicking a layer row updates canvas selection through the shell callback
+
+**Constraints**:
+- Hidden in narrow shell layouts through app-level responsive CSS
+- Document and page sections are placeholders until document/page state is introduced
+- Layer selection is id-based and relies on the shell to normalize grouped selections
+
+**Known Issues**:
+- No drag-to-reorder, rename, lock, or visibility controls in the layer tree yet
+- Uses simple icon glyphs rather than the shared toolbar icon system
+
+**Dependencies**:
+- `Shape` types from `src/types`
+- App shell selection wiring from `src/app/useAppShellState.ts`
+
+---
+
+### CanvasRulers
+
+**Purpose**: Render horizontal and vertical ruler tracks from camera state and the measured canvas size.
+
+**Behavior**:
+- Chooses 100, 200, or 500 world-unit tick spacing based on zoom
+- Computes visible ticks from camera pan, zoom, width, and height
+- Translates ruler tracks so labels remain aligned to world coordinates
+
+**Props**:
+```typescript
+interface CanvasRulersProps {
+  camera: CameraState;
+  width: number;
+  height: number;
+}
+```
+
+**Success Criteria**:
+- [x] Tick labels update when camera pan or zoom changes
+- [x] Horizontal and vertical rulers share the same world-space step logic
+- [ ] Rulers are mounted in the live `AppShell` canvas surface
+
+**Constraints**:
+- Requires the caller to provide rendered canvas width and height
+- Pure presentation component; it does not own camera state or pointer behavior
+
+**Known Issues**:
+- Component exists but is not currently mounted by `AppShell`
+- No minor ticks, guide dragging, or ruler-origin controls yet
+
+---
+
+### DevColorTool
+
+**Purpose**: Vite-dev-only panel for adjusting shared CSS design tokens at runtime.
+
+**Behavior**:
+- Reads and writes token overrides through `useDevToolStore`
+- Applies overrides via `useDevColorOverrides` at the document root
+- Groups editable tokens by Surfaces, Text, Accent, and Borders
+- Can reset all overrides and remove inline document-root token styles
+- Can copy current overrides as a `:root` CSS block through the Clipboard API
+
+**Props**:
+```typescript
+function DevColorTool(): React.JSX.Element | null
+```
+
+**Success Criteria**:
+- [x] Tool only mounts in Vite dev mode
+- [x] Color and text inputs update CSS variables immediately
+- [x] Reset clears persisted overrides and inline styles
+- [x] Export generates a CSS block from current overrides
+
+**Constraints**:
+- Uses `document.documentElement.style` directly
+- Clipboard export depends on `navigator.clipboard`
+- Persists overrides in localStorage via `devToolStore`
+
+**Known Issues**:
+- No dedicated component test yet
+- Token groups are hardcoded in the component
+
+**Dependencies**:
+- `useDevToolStore`
+- `useDevColorOverrides`
+- `src/styles/design-tokens.css`
+
+---
 
 ### Toolbar
 
@@ -211,21 +342,24 @@ interface ToolbarProps {
 
 ### Canvas
 
-**Purpose**: Main drawing surface handling all pointer interactions, rendering, and shape management.
+**Purpose**: Main drawing surface that owns the single live `CanvasEngine` instance for the mounted canvas surface, schedules bitmap redraws, and composes the DOM overlays around the canvas.
 
-**⚠️ WARNING**: This component is ~1050 lines - very large and complex. Consider refactoring into smaller components or hooks.
+**Interaction Ownership**: Pointer sessions, pan/zoom handling, marquee selection, drag updates, rectangle/image resize handles, text-edit commands, context menu state, and audio playback now live in `src/features/canvas/useCanvasInteractions.ts`. `Canvas.tsx` wires the returned handlers into the DOM but no longer owns the mutable interaction controller state directly.
 
 **Responsibilities**:
-1. Render shapes using CanvasEngine
-2. Handle pointer events (down/move/up) for drawing
-3. Handle single selection, additive multi-selection, marquee selection, and dragging
-4. Handle panning and zooming
-5. Text editing with textarea overlay
-6. Embed iframe overlays
-7. Audio playback toggle
-8. Double-click for text editing
-9. Right-click context menu for selection actions
-10. Render combined multi-selection and marquee feedback overlays
+1. Own one `CanvasEngine` instance for render, resize, and coordinate transforms
+2. Redraw the bitmap canvas when camera, shape, selection, editing, resize, or image-load state changes
+3. Keep embed shapes out of bitmap rendering so DOM iframe overlays remain interactive
+4. Compose the interaction hook, selection overlays, text editor, context menu, and embed overlays
+5. Convert world-space bounds into screen-space frames for overlay components
+
+**Extracted Composition Surfaces**:
+- `CanvasSelectionOverlays.tsx` renders marquee feedback, combined selection bounds, and single-selection resize handles.
+- `CanvasTextEditor.tsx` owns the textarea overlay shell, typography alignment, and commit/cancel wiring for active text editing.
+- `CanvasContextMenu.tsx` owns the lightweight selection menu plus outside-click and Escape dismissal behavior.
+- `CanvasEmbedOverlays.tsx` owns iframe embeds, drag affordances, and eight-handle resize UI for selected embeds.
+- `src/features/canvas/useCanvasInteractions.ts` owns canvas pointer, keyboard-pan, wheel, text edit, context menu, audio, drag, resize, and marquee sessions.
+- `src/features/canvas/dragSession.ts`, `resizeSession.ts`, and `textMeasurement.ts` keep high-risk session math directly unit-tested.
 
 **Props**:
 ```typescript
@@ -247,11 +381,10 @@ interface CanvasProps {
   onDrawingChange: (isDrawing: boolean) => void;
   onPan: (dx: number, dy: number) => void;
   onZoomAt: (point: Point, factor: number) => void;
-  screenToWorld: (point: Point) => Point;
-  worldToScreen: (point: Point) => Point;
   onTextEditStart: (id: string) => void;
   onTextEditCommit: () => void;
   onTextEditCancel: () => void;
+  onCreationComplete?: () => void;
   onDeleteSelected: () => void;
   onGroupSelected: () => void;
   onUngroupSelected: () => void;
@@ -262,31 +395,36 @@ interface CanvasProps {
 }
 ```
 
-**Pointer Event Handling**:
+**Interaction Flow**:
+
+The interaction hook returns the handlers that `Canvas.tsx` attaches to the `<canvas>` element. Behavior remains:
 
 1. **Pointer Down**:
    - Pan tool: Start panning
-   - Select tool: single-click selects, `Shift + Click` toggles top-level entities, dragging a selected entity moves the full current selection, and dragging from empty canvas starts marquee selection
+   - Select tool: single-click selects, `Shift + Click` toggles top-level entities, dragging a selected entity moves the full current selection, dragging a selected rectangle/image handle resizes it, and dragging from empty canvas starts marquee selection
    - Drawing tools (rectangle, circle, line, arrow, pencil): Start drawing
    - Eraser: Delete clicked shape
-   - Text: Create a text shape, select it, and immediately enter edit mode while keeping the text tool active for repeated placement
+   - Text: Create text shape and start editing
 
 2. **Pointer Move**:
    - Panning: Update camera position
+   - Resizing: Update selected rectangle/image bounds from screen-sized handles using camera-aware world deltas
    - Marquee selection: Update the live selection rectangle
    - Dragging: Update shape positions using pre-computed functions
    - Drawing: Update shape preview or add pencil points
 
 3. **Pointer Up**:
-   - Stop panning/dragging/drawing
+   - Stop panning/resizing/dragging/drawing
    - Commit marquee selection when active
    - Finalize shape if meaningful size (>5px)
+   - Notify the shell after a drawn shape is created so one-shot creation tools can return to Select
 
 4. **Context Menu**:
    - Right-clicking a shape opens a lightweight selection menu
    - Right-clicking an unselected shape selects it before opening the menu
    - Right-clicking an already selected shape preserves the current selection
    - Menu actions currently include delete, group/ungroup, bring to front, and send to back
+   - Menu validity is derived from one state check: select tool, non-empty selection, and no active text edit session
    - Menu closes on outside click, Escape, tool changes, or when selection clears
 
 **Selection Model**:
@@ -294,6 +432,7 @@ interface CanvasProps {
 - `Shift + Click` adds or removes top-level entities from the current selection
 - Empty-canvas drag creates a marquee that selects intersecting top-level entities
 - `Shift + drag` adds marquee hits to the existing selection
+- Single selected rectangles and images expose interactive resize handles that stay usable under pan and zoom
 - Multi-selection keeps per-shape outlines and adds a combined selection frame without per-shape resize handles
 - `Space + drag`, middle click, and the pan tool all pan the board; `Shift + drag` is reserved for additive marquee selection
 
@@ -302,50 +441,66 @@ interface CanvasProps {
 - Auto-resizes based on content
 - Enter commits, Escape cancels
 - Click outside commits
+- Creating a text shape enters text edit immediately, then the app shell switches back to Select when edit mode commits or cancels
+- Text overlay typography now reads through the shared document text-style helper, so legacy text shapes without top-level font fields still render/edit correctly
+- Text auto-grow measures through `CanvasEngine.measureTextWidth()` instead of reaching into the private canvas rendering context
 
 **Embed Overlays**:
 - Positioned divs with iframes
 - Drag handle at top
 - Eight resize handles on the selected embed (corners + edges)
+- Drag and resize sessions signal canvas dragging state so each completed interaction becomes one undo step
 - Selection border
 - Sandboxed iframe for security
 
 **Performance Optimizations**:
-- Pre-computed drag update functions stored in ref
-- Debounced re-renders
+- Drag session shape lists and drag-update payloads are built in `src/features/canvas/dragSession.ts`
+- Effect-driven redraws now run through a single render effect, while canvas resize stays isolated from ordinary redraw dependencies
+- Camera-only pan/zoom updates trigger a redraw of the bitmap canvas without resizing the engine
 - Separate refs for all mutable state
 - Uses `useElementSize` to react to app-shell and layout resizes, not just browser window resizes
+- Reuses one `CanvasEngine` instance across rerenders instead of splitting engine ownership across the hook and component layers
+- Passes a render callback into `CanvasEngine` so asynchronously loaded images invalidate the mounted canvas
+- Passes the live `shapes` array into `CanvasEngine.drawShape()` so group labels can derive child counts from canonical `parentId` relationships
 
 **Success Criteria**:
-- [ ] All pointer interactions work smoothly
+- [x] Core pointer interactions for text creation, drawing commits, eraser delete, and Space-drag panning are covered by component tests
 - [ ] Shapes render correctly with all styles
+- [x] Camera-only pan and zoom changes redraw the bitmap canvas
+- [x] Image shapes rerender after their underlying image resource finishes loading
 - [ ] Selection indicators visible
-- [ ] `Shift + Click` supports additive multi-selection
-- [ ] Empty-canvas drag creates marquee selection
-- [ ] Multi-selection shows a combined frame without a wall of resize handles
-- [ ] Text editing works with proper positioning
-- [ ] Right-click menu exposes core selection actions without breaking drag/draw flows
-- [ ] Embed overlays move correctly
-- [ ] Embed overlays resize correctly from corners and edges
+- [x] `Shift + Click` supports additive multi-selection
+- [x] Empty-canvas drag creates marquee selection
+- [x] Multi-selection shows a combined frame without a wall of resize handles
+- [x] Rectangle and image resize handles update bounds correctly under pan and zoom
+- [x] Text editing works with proper positioning
+- [x] Shape and text creation return to the Select tool after completion
+- [x] Right-click menu exposes core selection actions without breaking drag/draw flows
+- [x] Embed overlays move correctly
+- [x] Embed overlays resize correctly from corners and edges
 - [ ] Audio toggle works
 - [ ] 60fps during dragging/panning
 
 **Constraints**:
-- Uses native wheel event listener (not React onWheel)
-- Coordinate transformation required for all operations
+- Uses native wheel event listener (not React onWheel) from the canvas interaction hook
+- Coordinate transformation for interactions reads through the same engine that renders the canvas
 - Textarea position must match zoom level
 - Embed iframes need pointer-events management
 - Embed resize handles clamp to a minimum frame of 160x120 world units
+- Canvas-drawn resize handles are currently interactive for rectangles and images, clamped to 8 world units
 - Select-mode `Shift + drag` is reserved for additive marquee selection, not panning
 
 **Known Issues**:
-- Very large component (~1050 lines) - hard to maintain
+- `useCanvasInteractions.ts` is now the larger coordination surface and should be split further by mode once additional behavior changes require it
 - Complex coordinate math for textarea positioning
 - Audio elements not cleaned up on unmount
-- Potential memory leak with drag update functions
+- Circle, line, arrow, pencil, text, audio, and group selection handles are still visual only until shape-specific scaling behavior is defined
 
 **Dependencies**:
 - CanvasEngine (rendering)
+- `worldToScreenPoint` helper from `src/canvas/CanvasEngine.ts`
+- `useCanvasInteractions` from `src/features/canvas/useCanvasInteractions.ts`
+- `CanvasSelectionOverlays`, `CanvasTextEditor`, `CanvasContextMenu`, and `CanvasEmbedOverlays`
 - All shape types
 - ToolType
 - `useElementSize` hook for resize-driven canvas refresh
@@ -413,6 +568,7 @@ interface TooltipProps {
 - Interactive gradient picker for saturation and lightness
 - Hue and alpha sliders with drag handles
 - Input validation for HSLA, RGBA, and Hex values
+- Reducer-backed draft state keeps local edits responsive while external `color`, `alpha`, and active gradient stop changes resync without hook-rule disables
 - Preset variable swatches for common inspector colors
 - Optional embedded fill-gradient editor with Solid, Linear, and Rounded modes
 - Gradient stop switching plus inline angle control for linear fills
@@ -454,6 +610,8 @@ interface ColorPickerProps {
 - [ ] Variables tab applies preset swatches
 - [ ] Embedded gradient controls can switch between solid, linear, and rounded fills
 - [ ] Gradient stop edits update the active stop without leaving the picker
+- [x] External color, alpha, and active gradient stop changes resync picker inputs without effect-driven state writes
+- [x] Invalid hex input can recover once a complete valid hex value is entered
 - [ ] Header actions remain accessible in supported browsers
 - [ ] Eyedropper works in supported browsers
 - [ ] All inputs are keyboard accessible
@@ -510,6 +668,8 @@ interface ZoomControlsProps {
 
 **Purpose**: Floating right-hand inspector for editing selection layout, styling, typography, color, and effects without reducing canvas width or height.
 
+The component now expects a selection-driven view model from `src/features/inspector/model/selectionInspectorModel.ts` instead of deriving inspector state directly from editor defaults inside the shell. `PropertiesPanel.tsx` owns orchestration only; section markup lives in `src/components/properties-panel/PropertiesPanelSections.tsx`, picker placement lives in `src/components/properties-panel/useFloatingColorPicker.ts`, and shared labels/formatters live in `src/components/properties-panel/format.ts`.
+
 **Design**:
 - Floating inspector shell with rounded surfaces and compact section rhythm
 - Collapsible sections with light metadata summaries in the header
@@ -536,6 +696,7 @@ interface ZoomControlsProps {
   - Fill style segmented control (none, solid, pattern)
   - Opacity slider with inline percentage readout
   - Blend mode selector (16 blend modes)
+  - Mixed multi-selection values surface explicit `Mixed` affordances instead of implying false concrete selections
 - **Type Section** (for text shapes):
   - Font family and size
   - Weight, emphasis, and alignment controls
@@ -549,6 +710,15 @@ interface ZoomControlsProps {
 - Shadow ColorPicker uses the same floating portal so the picker layout stays stable even when the inspector is narrow
   - Add/remove shadow buttons
   - Empty state prompt when no shadows exist
+
+**Section Ownership**:
+- `SelectedItemsSection` renders multi-select metadata rows.
+- `LayoutSection` renders frame inputs plus align, distribute, tidy, group, and ungroup commands.
+- `StyleSection` owns stroke width picker variant state plus stroke, fill mode, blend, and opacity controls.
+- `TypeSection` owns text typography controls.
+- `ColorSection` owns stroke/fill cards, swatches, and trigger refs for the floating picker.
+- `EffectsSection` owns shadow list editing and shadow picker triggers.
+- `useFloatingColorPicker` owns portal host selection, viewport repositioning, outside-click dismissal, and Escape dismissal.
 
 **Collapsible Sections**:
 - Each section can be expanded/collapsed independently
@@ -566,6 +736,7 @@ interface ZoomControlsProps {
 interface PropertiesPanelProps {
   style: ShapeStyle;
   onChange: (updates: Partial<ShapeStyle>) => void;
+  mixedStyleKeys?: Array<keyof ShapeStyle>;
   layoutBounds?: Bounds | null;
   onLayoutBoundsChange?: (bounds: Partial<Bounds>) => void;
   hasTextSelection?: boolean;
@@ -599,27 +770,27 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - Images, audio, text, and embeds (shadows not supported)
 
 **Success Criteria**:
-- [ ] All style controls work and apply immediately
-- [ ] Changes apply immediately to selected shapes
-- [ ] Stroke width picker can switch between the three comparison layouts without losing functionality
-- [ ] Layout X/Y/W/H reflects the current selected frame bounds
-- [ ] Layout X/Y/W/H edits update single selected frame-like shapes on blur or Enter
-- [ ] Text-specific controls hidden for non-text shapes
+- [x] All style controls work and apply immediately
+- [x] Changes apply immediately to selected shapes
+- [x] Stroke width picker can switch between the three comparison layouts without losing functionality
+- [x] Layout X/Y/W/H reflects the current selected frame bounds
+- [x] Layout X/Y/W/H edits update single selected frame-like shapes on blur or Enter
+- [x] Text-specific controls hidden for non-text shapes
 - [ ] Panel animates in/out smoothly
-- [ ] Sections can be collapsed/expanded independently
-- [ ] ColorPicker integration works for all color inputs
-- [ ] ColorPicker width stays stable regardless of inspector/sidebar width
-- [ ] Fill ColorPicker updates solid, linear, and rounded backgrounds immediately
-- [ ] Blend mode selector shows all 16 options
-- [ ] Multiple shadows can be added and configured
-- [ ] Shadow X/Y inputs work from negative to positive offsets
-- [ ] Shadow blur input works from 0 upward
-- [ ] Shadow opacity slider works from 0 to 100%
-- [ ] Add shadow button creates new shadow with defaults
-- [ ] Remove shadow button deletes individual shadows
-- [ ] Multi-select arrange actions remain available
-- [ ] Multi-select inspector shows selected items with type, layer index, and hierarchy metadata
-- [ ] Group and ungroup actions appear in the layout section when selection state allows them
+- [x] Sections can be collapsed/expanded independently
+- [x] ColorPicker integration works for all color inputs
+- [x] ColorPicker width stays stable regardless of inspector/sidebar width
+- [x] Fill ColorPicker updates solid, linear, and rounded backgrounds immediately
+- [x] Blend mode selector shows all 16 options
+- [x] Multiple shadows can be added and configured
+- [x] Shadow X/Y inputs work from negative to positive offsets
+- [x] Shadow blur input works from 0 upward
+- [x] Shadow opacity slider works from 0 to 100%
+- [x] Add shadow button creates new shadow with defaults
+- [x] Remove shadow button deletes individual shadows
+- [x] Multi-select arrange actions remain available
+- [x] Multi-select inspector shows selected items with type, layer index, and hierarchy metadata
+- [x] Group and ungroup actions appear in the layout section when selection state allows them
 - [ ] Dark mode displays correctly with component tokens
 - [ ] Panel is scrollable when content overflows
 
@@ -633,11 +804,12 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - Direct layout editing is intentionally limited to single selected rectangle, image, audio, text, and embed shapes; multi-select and other geometry types remain read-only
 
 **Known Issues**:
-- None currently
+- The app shell intentionally hides the panel when nothing is selected, so the model's `defaults` mode is not rendered as a visible no-selection panel.
 
 **Dependencies**:
 - `ColorPicker` component for color selection
-- `selectedInspectorItems.ts` for multi-select metadata shaping
+- `src/features/inspector/model/selectedInspectorItems.ts` for multi-select metadata shaping
+- `src/features/inspector/model/inspectorMixedValues.ts` for centralized mixed-value control flags
 - CSS variables from `index.css`
 
 ---
@@ -651,15 +823,14 @@ When a shape supports shadows (rectangles, circles, lines, arrows, pencil stroke
 - Active tab highlighted with the same soft-surface visual language used by the redesigned inspector
 - Add new workspace button (max 10)
 - Scrollable if too many tabs
-- Inline validation feedback for rename failures in the visible rail and hidden-workspace overflow menu
 - Switches to a compact overflow UI once the count exceeds 6 workspaces so the add button remains visible
 - Keeps the first 5 workspaces pinned in the rail and moves the remaining ones into an overflow menu
 - Hidden workspaces can still be switched, renamed, and closed from the overflow menu
-- Rounded workspace rail shell that matches the header chrome redesign in `src/App.css`
-- Rendered inside a floating header shell so the canvas can stay full-viewport
-- Shares a single desktop row with the floating header action pills
-- The previous standalone app title row has been removed to keep the floating header compact
-- Uses softer add/remove/layout motion and roomier internal spacing for the tab pills and add button
+- Rounded workspace rail shell that matches the header chrome in `src/App.css`
+- Rendered inside an edge-aligned header shell so the canvas can stay full-viewport without controls drifting away from the app grid
+- Shares a single desktop row with the header action pills
+- The previous standalone app title row has been removed to keep the header compact
+- Uses softer add/remove/layout motion while keeping the header and rail wrappers unpadded on the canvas edge so they align with the host project header band
 - Active workspace state is carried by a shared moving pill, so tab switching feels spatially connected instead of abruptly recolored
 
 **Props**:
@@ -670,7 +841,7 @@ interface WorkspaceTabsProps {
   onSwitch: (id: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
-  onRename: (id: string, name: string) => WorkspaceRenameResult;
+  onRename: (id: string, name: string) => boolean | void;
   maxWorkspaces: number;
 }
 ```
@@ -683,8 +854,8 @@ interface WorkspaceTabsProps {
 - [ ] Respects max workspaces limit
 - [ ] Overflow trigger appears after the 6th workspace without pushing the add button out of view
 - [ ] Hidden workspaces remain manageable from the overflow menu
-- [ ] Rename validation errors remain visible without collapsing the current editor
-- [ ] Header chrome and workspace rail feel visually aligned with the right-side inspector shell
+- [ ] Header chrome and workspace rail feel visually aligned with the app shell and right-side inspector shell
+- [x] Overflow rename shows an inline validation error for empty or overlong names
 
 **Constraints**:
 - Maximum 10 workspaces
@@ -693,10 +864,10 @@ interface WorkspaceTabsProps {
 - Overflow mode starts once more than 6 workspaces exist
 - In overflow mode, 5 tabs stay visible in the rail and the rest move into a dropdown menu
 - Visual styling is implemented from `src/App.css` because the header and workspace rail are treated as one shared chrome surface
-- On desktop, the rail is expected to align horizontally with the header action group
+- On desktop, the rail is expected to align horizontally with the header action group and vertically with the app shell edge
+- The header and rail wrappers intentionally avoid left/top inner padding on the canvas edge; tab spacing lives on the tab pills so the header height and first tab align to the project/sidebar header
 - Motion should respect `prefers-reduced-motion` and spacing should preserve clear separation between the active tab and the add button
 - Mobile-style header stacking is driven by the app shell container width, not only the browser viewport, so narrow embeds still collapse cleanly
-- Validation feedback currently covers empty/all-whitespace names and names longer than 50 characters; duplicate-name rejection is still not enforced
 
 ---
 
@@ -709,7 +880,7 @@ interface WorkspaceTabsProps {
 - Long-press (3s) or right-click for context menu
 - Right-click handling is attached to the full tab shell, so the menu opens from both the label area and close-icon area
 - Inline rename on double-click or menu option
-- Inline rename keeps the editor open when validation fails
+- Inline rename validates trimmed names before saving
 - Delete option (if not last workspace)
 - 15-character truncation with ellipsis
 - Hover tooltip showing full name (after 3s)
@@ -732,20 +903,20 @@ interface WorkspaceTabProps {
 
 **Success Criteria**:
 - [ ] Click switches workspace
-- [ ] Long-press shows context menu
-- [ ] Right-click shows context menu
-- [ ] Right-click on the close-icon region opens the same context menu instead of being ignored
-- [ ] Switching to another workspace still allows right-click context menu access on the active tab (covered by regression tests)
+- [x] Long-press shows context menu
+- [x] Right-click shows context menu
+- [x] Right-click on the close-icon region opens the same context menu instead of being ignored
+- [x] Switching to another workspace still allows right-click context menu access on the active tab (covered by E2E regression)
 - [ ] Rename works inline
-- [ ] Invalid rename attempts keep the user in the editor and surface feedback
 - [ ] Delete removes workspace
 - [ ] Cannot delete last workspace
-- [ ] Tooltip shows full name
-- [ ] Animation is smooth
+- [x] Tooltip shows full name
+- [x] Animation is smooth
+- [x] Invalid blank or over-50-character names stay in edit mode with an inline error
 
 **Constraints**:
 - Name truncated at 15 characters
-- Name validation is delegated to the store-backed parent rename handler
+- Rename requires 1-50 characters after trimming
 - Long-press requires 3 seconds
 - Context menu must close on outside click
 - Cannot delete if only one workspace
@@ -779,6 +950,8 @@ interface WorkspaceTabProps {
 - Waveform preview
 - Duration display
 - Loop option
+- Card-style input surface with explicit loading status while the file/URL metadata and waveform are prepared
+- Retry action after a failed file or URL load, reusing the last attempted input
 
 **EmbedDialog**:
 - URL input
@@ -792,6 +965,8 @@ interface WorkspaceTabProps {
 - [ ] File uploads work
 - [ ] URL inputs validated
 - [ ] Previews shown before submit
+- [ ] Audio loader remains visible until metadata and waveform extraction complete
+- [ ] Audio errors show a retry action that reprocesses the previous input
 - [ ] Cancel closes without action
 
 **Constraints**:
@@ -799,6 +974,7 @@ interface WorkspaceTabProps {
 - File size limits apply
 - URL must be valid format
 - Dialog sizing is bounded by the app shell so embeds can shrink without forcing viewport-width modals
+- Audio retry is only available after the dialog has a valid file or URL request to reprocess
 
 ## Testing
 
@@ -821,4 +997,5 @@ npm test -- ComponentName
 
 - Component-specific styles in `ComponentName.css` (if needed)
 - Most styles in `App.css`
-- Use CSS variables from `index.css` for consistency
+- Use global design tokens from `src/styles/design-tokens.css`, imported by `src/index.css`
+- App shell surfaces and sidebar offsets are centralized in `src/App.css`

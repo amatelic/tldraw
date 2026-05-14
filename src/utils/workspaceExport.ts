@@ -1,4 +1,6 @@
 import type { Workspace } from '../stores/workspaceStore';
+import { getTextShapeTypography, normalizeShapeStyle } from '../document/textStyle';
+import { getGroupChildIds } from '../types/selection';
 import type {
   ExportedShape,
   Shape,
@@ -9,17 +11,16 @@ import {
   WORKSPACE_EXPORT_VERSION,
 } from '../types';
 
-export type CanvasExportFormat = 'png' | 'svg';
-export type CanvasExportScope = 'viewport' | 'all' | 'selection';
-
 function createBaseShape(shape: Shape, zIndex: number) {
+  const style = normalizeShapeStyle(shape.style);
+
   return {
     id: shape.id,
     bounds: { ...shape.bounds },
     style: {
-      ...shape.style,
-      shadows: shape.style.shadows.map((shadow) => ({ ...shadow })),
-      fillGradient: shape.style.fillGradient ? { ...shape.style.fillGradient } : null,
+      ...style,
+      shadows: style.shadows.map((shadow) => ({ ...shadow })),
+      fillGradient: style.fillGradient ? { ...style.fillGradient } : null,
     },
     createdAt: shape.createdAt,
     updatedAt: shape.updatedAt,
@@ -28,7 +29,7 @@ function createBaseShape(shape: Shape, zIndex: number) {
   };
 }
 
-function serializeShape(shape: Shape, zIndex: number): ExportedShape {
+function serializeShape(shape: Shape, zIndex: number, shapes: Shape[]): ExportedShape {
   const baseShape = createBaseShape(shape, zIndex);
 
   switch (shape.type) {
@@ -83,17 +84,19 @@ function serializeShape(shape: Shape, zIndex: number): ExportedShape {
         isBase64: shape.isBase64,
         ...(shape.loop !== undefined ? { loop: shape.loop } : {}),
       };
-    case 'text':
+    case 'text': {
+      const typography = getTextShapeTypography(shape);
       return {
         ...baseShape,
         type: 'text',
         text: shape.text,
-        fontSize: shape.fontSize,
-        fontFamily: shape.fontFamily,
-        fontWeight: shape.fontWeight,
-        fontStyle: shape.fontStyle,
-        textAlign: shape.textAlign,
+        fontSize: typography.fontSize,
+        fontFamily: typography.fontFamily,
+        fontWeight: typography.fontWeight,
+        fontStyle: typography.fontStyle,
+        textAlign: typography.textAlign,
       };
+    }
     case 'embed':
       return {
         ...baseShape,
@@ -106,13 +109,13 @@ function serializeShape(shape: Shape, zIndex: number): ExportedShape {
       return {
         ...baseShape,
         type: 'group',
-        childrenIds: [...shape.childrenIds],
+        childrenIds: getGroupChildIds(shape.id, shapes),
       };
   }
 }
 
 export function serializeWorkspaceForExport(workspace: Workspace): WorkspaceExportDocumentV1 {
-  const nodes = workspace.shapes.map((shape, index) => serializeShape(shape, index));
+  const nodes = workspace.shapes.map((shape, index) => serializeShape(shape, index, workspace.shapes));
 
   return {
     format: WORKSPACE_EXPORT_FORMAT,
@@ -152,18 +155,6 @@ export function createWorkspaceExportFilename(
   return `${safeName}-${timestamp}.json`;
 }
 
-export function createCanvasExportFilename(
-  workspaceName: string,
-  format: CanvasExportFormat,
-  scope: CanvasExportScope,
-  date: Date = new Date()
-): string {
-  const safeName = sanitizeWorkspaceName(workspaceName) || 'workspace';
-  const timestamp = date.toISOString().replace(/[:]/g, '-').replace(/\.\d{3}Z$/, 'Z');
-  const scopeLabel = scope === 'all' ? 'all-shapes' : scope;
-  return `${safeName}-${scopeLabel}-${timestamp}.${format}`;
-}
-
 export function downloadWorkspaceExport(
   exportDocument: WorkspaceExportDocumentV1,
   filename: string
@@ -171,27 +162,6 @@ export function downloadWorkspaceExport(
   const blob = new Blob([JSON.stringify(exportDocument, null, 2)], {
     type: 'application/json',
   });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-export function downloadDataUrlExport(dataUrl: string, filename: string): void {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  link.click();
-}
-
-export function downloadStringExport(
-  contents: string,
-  filename: string,
-  mimeType: string
-): void {
-  const blob = new Blob([contents], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

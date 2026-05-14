@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { validateWorkspaceName } from '../stores/workspaceStore';
 import type { Workspace } from '../stores/workspaceStore';
 
 interface WorkspaceTabProps {
@@ -10,8 +11,6 @@ interface WorkspaceTabProps {
   onClick: () => void;
   onClose: () => void;
   onRename: (name: string) => boolean | void;
-  onRenameInteraction?: () => void;
-  renameError?: string | null;
 }
 
 const TRUNCATE_LENGTH = 15;
@@ -65,8 +64,6 @@ export function WorkspaceTab({
   onClick,
   onClose,
   onRename,
-  onRenameInteraction,
-  renameError = null,
 }: WorkspaceTabProps) {
   const shouldReduceMotion = useReducedMotion();
   const [isEditing, setIsEditing] = useState(false);
@@ -75,6 +72,7 @@ export function WorkspaceTab({
   const [showTooltip, setShowTooltip] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
   const [longPressProgress, setLongPressProgress] = useState(0);
+  const [renameError, setRenameError] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -83,6 +81,7 @@ export function WorkspaceTab({
 
   const displayName = getDisplayName(workspace.name);
   const nameIsTruncated = isNameTruncated(workspace.name);
+  const renameErrorId = `${tabButtonId}-rename-error`;
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -110,32 +109,35 @@ export function WorkspaceTab({
   }, []);
 
   const handleDoubleClick = () => {
-    onRenameInteraction?.();
     setIsEditing(true);
     setEditValue(workspace.name);
+    setRenameError(null);
   };
 
   const handleSubmit = () => {
-    const didRename = onRename(editValue);
-    if (didRename !== false) {
-      setIsEditing(false);
+    const validation = validateWorkspaceName(editValue);
+    if (validation.error) {
+      setRenameError(validation.error);
       return;
     }
 
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    });
+    const didRename = onRename(validation.name);
+    if (didRename === false) {
+      setRenameError('Workspace name could not be saved.');
+      return;
+    }
+
+    setRenameError(null);
+    setIsEditing(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      e.preventDefault();
       handleSubmit();
     } else if (e.key === 'Escape') {
-      onRenameInteraction?.();
       setIsEditing(false);
       setEditValue(workspace.name);
+      setRenameError(null);
     }
   };
 
@@ -262,20 +264,30 @@ export function WorkspaceTab({
       )}
 
       {isEditing ? (
-        <input
-          ref={inputRef}
-          type="text"
-          value={editValue}
-          onChange={(e) => {
-            onRenameInteraction?.();
-            setEditValue(e.target.value);
-          }}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSubmit}
-          className="workspace-rename-input"
-          aria-invalid={renameError ? 'true' : undefined}
-          onClick={(e) => e.stopPropagation()}
-        />
+        <div className="workspace-rename-editor" onClick={(e) => e.stopPropagation()}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => {
+              setEditValue(e.target.value);
+              if (renameError) {
+                setRenameError(null);
+              }
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSubmit}
+            className="workspace-rename-input"
+            aria-label="Rename workspace"
+            aria-invalid={renameError ? true : undefined}
+            aria-describedby={renameError ? renameErrorId : undefined}
+          />
+          {renameError && (
+            <div id={renameErrorId} className="workspace-rename-error" role="alert">
+              {renameError}
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <button
@@ -350,8 +362,8 @@ export function WorkspaceTab({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRenameInteraction?.();
                 setIsEditing(true);
+                setRenameError(null);
                 setShowMenu(false);
               }}
             >

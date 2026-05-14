@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { ChangeEvent, MouseEvent as ReactMouseEvent } from 'react';
 import type { FillGradient } from '../types';
 import { COLORS } from '../types';
@@ -26,6 +26,22 @@ export interface ColorPickerProps {
   gradientValue?: FillGradient | null;
   onGradientChange?: (gradient: FillGradient | null) => void;
 }
+
+interface PickerDraftState {
+  sourceColor: string;
+  sourceAlpha: number;
+  color: string;
+  h: number;
+  s: number;
+  l: number;
+  a: number;
+  hexInput: string;
+}
+
+type PickerDraftAction = {
+  type: 'replace';
+  state: PickerDraftState;
+};
 
 const DEFAULT_VARIABLES: ColorVariable[] = [
   { name: 'Ocean', color: '#2563EB', meta: 'Primary preset' },
@@ -167,6 +183,31 @@ function getHandlePosition(saturation: number, lightness: number): { left: strin
   };
 }
 
+function createPickerDraftState(
+  sourceColor: string,
+  sourceAlpha: number,
+  draftColor = sourceColor,
+  draftAlpha = sourceAlpha
+): PickerDraftState {
+  const normalized = normalizeHex(draftColor) ?? '#000000';
+  const hsl = hexToHsl(normalized);
+
+  return {
+    sourceColor,
+    sourceAlpha,
+    color: normalized,
+    h: hsl.h,
+    s: hsl.s,
+    l: hsl.l,
+    a: clamp(draftAlpha, 0, 1),
+    hexInput: normalized.slice(1),
+  };
+}
+
+function pickerDraftReducer(_state: PickerDraftState, action: PickerDraftAction): PickerDraftState {
+  return action.state;
+}
+
 export function ColorPicker({
   color,
   alpha = 1,
@@ -182,11 +223,6 @@ export function ColorPicker({
   const [format, setFormat] = useState<ColorFormat>('HSLA');
   const [isFormatMenuOpen, setIsFormatMenuOpen] = useState(false);
   const [activeGradientStop, setActiveGradientStop] = useState<GradientStop>('start');
-  const [h, setH] = useState(0);
-  const [s, setS] = useState(0);
-  const [l, setL] = useState(0);
-  const [a, setA] = useState(alpha);
-  const [hexInput, setHexInput] = useState('000000');
   const gradientRef = useRef<HTMLDivElement>(null);
   const hueRef = useRef<HTMLDivElement>(null);
   const alphaRef = useRef<HTMLDivElement>(null);
@@ -199,24 +235,39 @@ export function ColorPicker({
     gradientMode === 'solid'
       ? color
       : activeGradientStop === 'start'
-        ? gradientValue?.startColor ?? color
-        : gradientValue?.endColor ?? color;
+      ? gradientValue?.startColor ?? color
+      : gradientValue?.endColor ?? color;
 
-  const syncPickerState = useCallback((nextColor: string, nextAlpha: number) => {
-    const normalized = normalizeHex(nextColor) ?? '#000000';
-    const hsl = hexToHsl(normalized);
-    setH(hsl.h);
-    setS(hsl.s);
-    setL(hsl.l);
-    setA(clamp(nextAlpha, 0, 1));
-    setHexInput(normalized.slice(1));
-  }, []);
+  const sourceColor = normalizeHex(editableColor) ?? '#000000';
+  const sourceAlpha = clamp(alpha, 0, 1);
+  const [draftState, dispatchDraftState] = useReducer(
+    pickerDraftReducer,
+    { sourceColor, sourceAlpha },
+    ({ sourceColor: initialColor, sourceAlpha: initialAlpha }) =>
+      createPickerDraftState(initialColor, initialAlpha)
+  );
+  const pickerState =
+    draftState.sourceColor === sourceColor && draftState.sourceAlpha === sourceAlpha
+      ? draftState
+      : createPickerDraftState(sourceColor, sourceAlpha);
+  const { h, s, l, a, hexInput } = pickerState;
+  const currentColor = pickerState.color;
 
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    syncPickerState(editableColor, alpha);
-  }, [alpha, editableColor, syncPickerState]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  const replacePickerState = useCallback((nextState: PickerDraftState) => {
+    dispatchDraftState({ type: 'replace', state: nextState });
+  }, [dispatchDraftState]);
+
+  const getNextPickerState = useCallback(
+    (
+      nextColor: string,
+      nextAlpha: number,
+      overrides: Partial<Pick<PickerDraftState, 'h' | 's' | 'l' | 'hexInput'>> = {}
+    ): PickerDraftState => ({
+      ...createPickerDraftState(sourceColor, sourceAlpha, nextColor, nextAlpha),
+      ...overrides,
+    }),
+    [sourceAlpha, sourceColor]
+  );
 
   useEffect(() => {
     const handlePointerUp = () => {
@@ -237,7 +288,7 @@ export function ColorPicker({
         const nextS = clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100);
         const nextL = clamp(100 - ((event.clientY - rect.top) / rect.height) * 100, 0, 100);
         const nextHex = hslToHex(h, nextS, nextL);
-        syncPickerState(nextHex, a);
+        replacePickerState(getNextPickerState(nextHex, a));
         if (gradientMode !== 'solid' && onGradientChange) {
           const nextGradient = createGradient(gradientMode, color, gradientValue);
           onGradientChange({
@@ -255,7 +306,7 @@ export function ColorPicker({
         if (!rect) return;
         const nextH = clamp(((event.clientX - rect.left) / rect.width) * 360, 0, 360);
         const nextHex = hslToHex(nextH, s, l);
-        syncPickerState(nextHex, a);
+        replacePickerState(getNextPickerState(nextHex, a));
         if (gradientMode !== 'solid' && onGradientChange) {
           const nextGradient = createGradient(gradientMode, color, gradientValue);
           onGradientChange({
@@ -271,8 +322,8 @@ export function ColorPicker({
       const rect = alphaRef.current?.getBoundingClientRect();
       if (!rect) return;
       const nextAlpha = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      setA(nextAlpha);
-      onChange(normalizeHex(editableColor) ?? '#000000', nextAlpha);
+      replacePickerState(getNextPickerState(currentColor, nextAlpha));
+      onChange(currentColor, nextAlpha);
     };
 
     window.addEventListener('mouseup', handlePointerUp);
@@ -291,10 +342,12 @@ export function ColorPicker({
     gradientValue,
     h,
     l,
+    currentColor,
+    getNextPickerState,
     onChange,
     onGradientChange,
+    replacePickerState,
     s,
-    syncPickerState,
   ]);
 
   useEffect(() => {
@@ -311,13 +364,18 @@ export function ColorPicker({
   }, []);
 
   const commitColor = useCallback(
-    (nextColor: string, nextAlpha: number = a) => {
+    (
+      nextColor: string,
+      nextAlpha: number = a,
+      overrides: Partial<Pick<PickerDraftState, 'h' | 's' | 'l' | 'hexInput'>> = {}
+    ) => {
       const normalized = normalizeHex(nextColor);
       if (!normalized) {
         return;
       }
 
-      syncPickerState(normalized, nextAlpha);
+      const clampedAlpha = clamp(nextAlpha, 0, 1);
+      replacePickerState(getNextPickerState(normalized, clampedAlpha, overrides));
 
       if (gradientMode !== 'solid' && onGradientChange) {
         const nextGradient = createGradient(gradientMode, color, gradientValue);
@@ -328,17 +386,18 @@ export function ColorPicker({
         return;
       }
 
-      onChange(normalized, clamp(nextAlpha, 0, 1));
+      onChange(normalized, clampedAlpha);
     },
     [
       a,
       activeGradientStop,
       color,
+      getNextPickerState,
       gradientMode,
       gradientValue,
       onChange,
       onGradientChange,
-      syncPickerState,
+      replacePickerState,
     ]
   );
 
@@ -397,21 +456,26 @@ export function ColorPicker({
       }
 
       const nextAlpha = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      setA(nextAlpha);
-      onChange(normalizeHex(editableColor) ?? '#000000', nextAlpha);
+      replacePickerState(getNextPickerState(currentColor, nextAlpha));
+      onChange(currentColor, nextAlpha);
     },
-    [editableColor, onChange]
+    [currentColor, getNextPickerState, onChange, replacePickerState]
   );
 
   const handleHexChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = sanitizeHexInput(event.target.value);
-      setHexInput(nextValue);
+      replacePickerState({
+        ...pickerState,
+        sourceColor,
+        sourceAlpha,
+        hexInput: nextValue,
+      });
       if (nextValue.length === 6) {
         commitColor(`#${nextValue}`, a);
       }
     },
-    [a, commitColor]
+    [a, commitColor, pickerState, replacePickerState, sourceAlpha, sourceColor]
   );
 
   const handleEyedropper = useCallback(async () => {
@@ -428,8 +492,7 @@ export function ColorPicker({
     }
   }, [a, commitColor]);
 
-  const currentColor = normalizeHex(editableColor) ?? '#000000';
-  const currentHsl = hexToHsl(currentColor);
+  const currentHsl = { h, s, l };
   const currentRgb = hexToRgb(currentColor);
   const gradientHandlePosition = getHandlePosition(s, l);
   const alphaPercentage = Math.round(a * 100);
@@ -701,8 +764,7 @@ export function ColorPicker({
                   min: 0,
                   max: 360,
                   onValueChange: (value: number) => {
-                    commitColor(hslToHex(value, s, l), a);
-                    setH(value);
+                    commitColor(hslToHex(value, s, l), a, { h: value });
                   },
                 },
                 {
@@ -765,7 +827,7 @@ export function ColorPicker({
                         value: alphaPercentage,
                         onValueChange: (value: number) => {
                           const nextAlpha = clamp(value, 0, 100) / 100;
-                          setA(nextAlpha);
+                          replacePickerState(getNextPickerState(currentColor, nextAlpha));
                           onChange(currentColor, nextAlpha);
                         },
                       },
@@ -821,7 +883,7 @@ export function ColorPicker({
                   max={100}
                   onChange={(event) => {
                     const nextAlpha = clamp(Number(event.target.value), 0, 100) / 100;
-                    setA(nextAlpha);
+                    replacePickerState(getNextPickerState(currentColor, nextAlpha));
                     onChange(currentColor, nextAlpha);
                   }}
                 />

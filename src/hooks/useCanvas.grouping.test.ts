@@ -1,53 +1,172 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { act, fireEvent, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_STYLE, type GroupShape, type Shape } from '../types';
+import { getGroupChildIds } from '../types/selection';
 import { useCanvas } from './useCanvas';
-import type { Shape, GroupShape } from '../types';
+import { useKeyboard } from './useKeyboard';
 
-// Mock workspace store
-vi.mock('../stores/workspaceStore', () => ({
-  useWorkspaceStore: () => ({
-    workspaces: [],
-    activeWorkspaceId: 'test-workspace',
-    getWorkspace: vi.fn(() => ({
-      id: 'test-workspace',
-      name: 'Test',
-      shapes: [],
-      state: {
-        tool: 'select',
-        selectedShapeIds: [],
-        camera: { x: 0, y: 0, zoom: 1 },
-        isDragging: false,
-        isDrawing: false,
-        shapeStyle: {
-          color: '#000000',
-          fillColor: '#000000',
-          fillGradient: null,
-          strokeWidth: 2,
-          strokeStyle: 'solid',
-          fillStyle: 'none',
-          opacity: 1,
-          blendMode: 'source-over',
-          shadows: [],
-          fontSize: 16,
-          fontFamily: 'sans-serif',
-          fontWeight: 'normal',
-          fontStyle: 'normal',
-          textAlign: 'left',
+vi.mock('../stores/workspaceStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../stores/workspaceStore')>();
+
+  return {
+    ...actual,
+    useWorkspaceStore: () => ({
+      workspaces: [],
+      activeWorkspaceId: 'test-workspace',
+      getWorkspace: vi.fn(() => ({
+        id: 'test-workspace',
+        name: 'Test',
+        shapes: [],
+        state: {
+          tool: 'select',
+          selectedShapeIds: [],
+          camera: { x: 0, y: 0, zoom: 1 },
+          isDragging: false,
+          isDrawing: false,
+          shapeStyle: { ...DEFAULT_STYLE },
+          editingTextId: null,
         },
-        editingTextId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })),
+      saveWorkspaceSnapshot: vi.fn(),
+    }),
+  };
+});
+
+const workspaceId = 'test-workspace';
+
+type CanvasHook = ReturnType<typeof useCanvas>;
+interface CanvasResult {
+  current: CanvasHook;
+}
+
+function createRectangle(
+  id: string,
+  bounds: Partial<Shape['bounds']> = {},
+  parentId?: string
+): Shape {
+  return {
+    id,
+    type: 'rectangle',
+    bounds: {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      ...bounds,
+    },
+    style: { ...DEFAULT_STYLE },
+    createdAt: 1,
+    updatedAt: 1,
+    parentId,
+  };
+}
+
+function createCircle(id: string, bounds: Partial<Shape['bounds']> = {}): Shape {
+  const nextBounds = {
+    x: 150,
+    y: 150,
+    width: 100,
+    height: 100,
+    ...bounds,
+  };
+
+  return {
+    id,
+    type: 'circle',
+    bounds: nextBounds,
+    center: {
+      x: nextBounds.x + nextBounds.width / 2,
+      y: nextBounds.y + nextBounds.height / 2,
+    },
+    radius: Math.min(nextBounds.width, nextBounds.height) / 2,
+    style: { ...DEFAULT_STYLE },
+    createdAt: 1,
+    updatedAt: 1,
+  };
+}
+
+function addShapes(result: CanvasResult, shapes: Shape[]): void {
+  act(() => {
+    shapes.forEach((shape) => result.current.addShape(shape));
+  });
+}
+
+function selectShapes(result: CanvasResult, shapeIds: string[]): void {
+  act(() => {
+    result.current.selectShapes(shapeIds);
+  });
+}
+
+function getGroups(canvas: CanvasHook): GroupShape[] {
+  return canvas.shapes.filter((shape): shape is GroupShape => shape.type === 'group');
+}
+
+function getShapeById(canvas: CanvasHook, shapeId: string): Shape | undefined {
+  return canvas.shapes.find((shape) => shape.id === shapeId);
+}
+
+function groupShapes(result: CanvasResult, shapeIds: string[]): GroupShape {
+  const previousGroupIds = new Set(getGroups(result.current).map((group) => group.id));
+
+  act(() => {
+    result.current.groupShapes(shapeIds);
+  });
+
+  const group = getGroups(result.current).find((candidate) => !previousGroupIds.has(candidate.id));
+  expect(group).toBeDefined();
+  return group as GroupShape;
+}
+
+function ungroupShape(result: CanvasResult, groupId: string): void {
+  act(() => {
+    result.current.ungroupShapes(groupId);
+  });
+}
+
+function pressGroupShortcut(shiftKey: boolean = false): void {
+  act(() => {
+    fireEvent.keyDown(window, { key: 'g', ctrlKey: true, shiftKey });
+  });
+}
+
+function expectGroupChildren(canvas: CanvasHook, groupId: string, childIds: string[]): void {
+  expect(getGroupChildIds(groupId, canvas.shapes)).toEqual(childIds);
+}
+
+function expectShapeParent(
+  canvas: CanvasHook,
+  shapeId: string,
+  parentId: string | undefined
+): void {
+  expect(getShapeById(canvas, shapeId)?.parentId).toBe(parentId);
+}
+
+function renderCanvasWithKeyboard(): ReturnType<typeof renderHook<CanvasHook, unknown>> {
+  return renderHook(() => {
+    const canvas = useCanvas(workspaceId);
+
+    useKeyboard({
+      undo: canvas.undo,
+      redo: canvas.redo,
+      deleteSelected: canvas.deleteSelectedShapes,
+      clearSelection: canvas.clearSelection,
+      setTool: (tool) => canvas.setEditorState((prev) => ({ ...prev, tool })),
+      groupSelected: () => canvas.groupShapes(canvas.editorState.selectedShapeIds),
+      ungroupSelected: () => {
+        const [selectedId] = canvas.editorState.selectedShapeIds;
+        if (selectedId) {
+          canvas.ungroupShapes(selectedId);
+        }
       },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })),
-    updateWorkspaceSnapshot: vi.fn(),
-    updateWorkspaceShapes: vi.fn(),
-    updateWorkspaceState: vi.fn(),
-  }),
-}));
+    });
+
+    return canvas;
+  });
+}
 
 describe('useCanvas - Grouping', () => {
-  const workspaceId = 'test-workspace';
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -56,114 +175,70 @@ describe('useCanvas - Grouping', () => {
     it('should create a group from selected shapes', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      // Add some shapes first
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createCircle('shape-2'),
+      ]);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'circle',
-        bounds: { x: 150, y: 150, width: 100, height: 100 },
-        center: { x: 200, y: 200 },
-        radius: 50,
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-      });
+      expectGroupChildren(result.current, group.id, ['shape-1', 'shape-2']);
+      expectShapeParent(result.current, 'shape-1', group.id);
+      expectShapeParent(result.current, 'shape-2', group.id);
+      expect(result.current.editorState.selectedShapeIds).toEqual([group.id]);
+    });
 
-      // Group the shapes
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
+    it('should group and ungroup selected shapes through keyboard shortcuts', () => {
+      const { result, unmount } = renderCanvasWithKeyboard();
 
-      // Check that a group was created
-      const group = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 150, y: 150 }),
+      ]);
+      selectShapes(result, ['shape-1', 'shape-2']);
+
+      pressGroupShortcut();
+
+      const group = getGroups(result.current)[0];
       expect(group).toBeDefined();
-      expect(group.childrenIds).toContain('shape-1');
-      expect(group.childrenIds).toContain('shape-2');
+      expectGroupChildren(result.current, group.id, ['shape-1', 'shape-2']);
+      expectShapeParent(result.current, 'shape-1', group.id);
+      expectShapeParent(result.current, 'shape-2', group.id);
+      expect(result.current.editorState.selectedShapeIds).toEqual([group.id]);
 
-      // Check that shapes have parentId set
-      const updatedShape1 = result.current.shapes.find((s) => s.id === 'shape-1');
-      const updatedShape2 = result.current.shapes.find((s) => s.id === 'shape-2');
-      expect(updatedShape1?.parentId).toBe(group.id);
-      expect(updatedShape2?.parentId).toBe(group.id);
+      pressGroupShortcut(true);
 
-      // Check that group is selected
-      expect(result.current.editorState.selectedShapeIds).toContain(group.id);
+      expect(getShapeById(result.current, group.id)).toBeUndefined();
+      expectShapeParent(result.current, 'shape-1', undefined);
+      expectShapeParent(result.current, 'shape-2', undefined);
+      expect(result.current.editorState.selectedShapeIds).toEqual(['shape-1', 'shape-2']);
+
+      unmount();
     });
 
     it('should not create a group with less than 2 shapes', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [createRectangle('shape-1')]);
 
-      act(() => {
-        result.current.addShape(shape1);
-      });
-
-      // Try to group single shape
       act(() => {
         result.current.groupShapes(['shape-1']);
       });
 
-      // No group should be created
-      const group = result.current.shapes.find((s) => s.type === 'group');
-      expect(group).toBeUndefined();
+      expect(getGroups(result.current)).toEqual([]);
     });
 
     it('should calculate correct bounds for the group', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 10, y: 10, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1', { x: 10, y: 10 }),
+        createRectangle('shape-2', { x: 200, y: 200 }),
+      ]);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 200, y: 200, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-      });
-
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
-      expect(group.bounds.x).toBe(10);
-      expect(group.bounds.y).toBe(10);
-      expect(group.bounds.width).toBe(290); // 200 + 100 - 10
-      expect(group.bounds.height).toBe(290);
+      expect(group.bounds).toEqual({ x: 10, y: 10, width: 290, height: 290 });
     });
   });
 
@@ -171,123 +246,38 @@ describe('useCanvas - Grouping', () => {
     it('should ungroup a group and select its children', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      // Create shapes and group them
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 150, y: 150 }),
+      ]);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 150, y: 150, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-      });
+      ungroupShape(result, group.id);
 
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
-
-      // Ungroup
-      act(() => {
-        result.current.ungroupShapes(group.id);
-      });
-
-      // Group should be removed
-      expect(result.current.shapes.find((s) => s.id === group.id)).toBeUndefined();
-
-      // Children should no longer have parentId
-      const updatedShape1 = result.current.shapes.find((s) => s.id === 'shape-1');
-      const updatedShape2 = result.current.shapes.find((s) => s.id === 'shape-2');
-      expect(updatedShape1?.parentId).toBeUndefined();
-      expect(updatedShape2?.parentId).toBeUndefined();
-
-      // Children should be selected
-      expect(result.current.editorState.selectedShapeIds).toContain('shape-1');
-      expect(result.current.editorState.selectedShapeIds).toContain('shape-2');
+      expect(getShapeById(result.current, group.id)).toBeUndefined();
+      expectShapeParent(result.current, 'shape-1', undefined);
+      expectShapeParent(result.current, 'shape-2', undefined);
+      expect(result.current.editorState.selectedShapeIds).toEqual(['shape-1', 'shape-2']);
     });
 
     it('should preserve parent hierarchy when ungrouping nested groups', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      // Create shapes and group them
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 150, y: 150 }),
+        createRectangle('shape-3', { x: 300, y: 300 }),
+      ]);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 150, y: 150, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const innerGroup = groupShapes(result, ['shape-1', 'shape-2']);
+      const outerGroup = groupShapes(result, [innerGroup.id, 'shape-3']);
 
-      const shape3: Shape = {
-        id: 'shape-3',
-        type: 'rectangle',
-        bounds: { x: 300, y: 300, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      ungroupShape(result, outerGroup.id);
 
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.addShape(shape3);
-      });
-
-      // Create inner group with shape1 and shape2
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const innerGroup = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
-
-      // Create outer group containing inner group and shape3
-      act(() => {
-        result.current.groupShapes([innerGroup.id, 'shape-3']);
-      });
-
-      const outerGroup = result.current.shapes.find(
-        (s) => s.type === 'group' && s.id !== innerGroup.id
-      ) as GroupShape;
-
-      // Ungroup outer group
-      act(() => {
-        result.current.ungroupShapes(outerGroup.id);
-      });
-
-      // Inner group should now have no parent (was in outer group)
-      const updatedInnerGroup = result.current.shapes.find((s) => s.id === innerGroup.id);
-      expect(updatedInnerGroup?.parentId).toBeUndefined();
-
-      // Shapes should still be in inner group
-      expect(updatedInnerGroup?.type === 'group' && (updatedInnerGroup as GroupShape).childrenIds).toContain('shape-1');
-      
-      // shape3 should be unparented
-      const updatedShape3 = result.current.shapes.find((s) => s.id === 'shape-3');
-      expect(updatedShape3?.parentId).toBeUndefined();
+      expectShapeParent(result.current, innerGroup.id, undefined);
+      expectGroupChildren(result.current, innerGroup.id, ['shape-1', 'shape-2']);
+      expectShapeParent(result.current, 'shape-3', undefined);
     });
   });
 
@@ -295,45 +285,20 @@ describe('useCanvas - Grouping', () => {
     it('should delete group and all its descendants', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 150, y: 150 }),
+      ]);
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 150, y: 150, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-      });
-
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
-
-      // Select and delete the group
       act(() => {
         result.current.selectShapes([group.id]);
         result.current.deleteSelectedShapes();
       });
 
-      // Group and all children should be deleted
-      expect(result.current.shapes.find((s) => s.id === group.id)).toBeUndefined();
-      expect(result.current.shapes.find((s) => s.id === 'shape-1')).toBeUndefined();
-      expect(result.current.shapes.find((s) => s.id === 'shape-2')).toBeUndefined();
+      expect(getShapeById(result.current, group.id)).toBeUndefined();
+      expect(getShapeById(result.current, 'shape-1')).toBeUndefined();
+      expect(getShapeById(result.current, 'shape-2')).toBeUndefined();
     });
   });
 
@@ -341,48 +306,23 @@ describe('useCanvas - Grouping', () => {
     it('should return all shape IDs in a group including nested', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 150, y: 150 }),
+      ]);
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 150, y: 150, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-      });
-
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((s) => s.type === 'group') as GroupShape;
-
-      const allShapes = result.current.getAllShapesInGroup(group.id);
-
-      expect(allShapes).toContain(group.id);
-      expect(allShapes).toContain('shape-1');
-      expect(allShapes).toContain('shape-2');
+      expect(result.current.getAllShapesInGroup(group.id)).toEqual([
+        group.id,
+        'shape-1',
+        'shape-2',
+      ]);
     });
 
     it('should return empty array for non-group shape', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const allShapes = result.current.getAllShapesInGroup('non-existent-id');
-
-      expect(allShapes).toEqual([]);
+      expect(result.current.getAllShapesInGroup('non-existent-id')).toEqual([]);
     });
   });
 
@@ -390,127 +330,63 @@ describe('useCanvas - Grouping', () => {
     it('should bring selected shapes to the front', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 120, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape3: Shape = {
-        id: 'shape-3',
-        type: 'rectangle',
-        bounds: { x: 240, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 120 }),
+        createRectangle('shape-3', { x: 240 }),
+      ]);
 
       act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.addShape(shape3);
         result.current.bringShapesToFront(['shape-1']);
       });
 
-      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-2', 'shape-3', 'shape-1']);
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual([
+        'shape-2',
+        'shape-3',
+        'shape-1',
+      ]);
     });
 
     it('should send selected shapes to the back', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 120, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape3: Shape = {
-        id: 'shape-3',
-        type: 'rectangle',
-        bounds: { x: 240, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 120 }),
+        createRectangle('shape-3', { x: 240 }),
+      ]);
 
       act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.addShape(shape3);
         result.current.sendShapesToBack(['shape-3']);
       });
 
-      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-3', 'shape-1', 'shape-2']);
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual([
+        'shape-3',
+        'shape-1',
+        'shape-2',
+      ]);
     });
 
     it('should move grouped shapes and their descendants together when bringing to front', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 120, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const shape3: Shape = {
-        id: 'shape-3',
-        type: 'rectangle',
-        bounds: { x: 240, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.addShape(shape3);
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 120 }),
+        createRectangle('shape-3', { x: 240 }),
+      ]);
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
       act(() => {
         result.current.bringShapesToFront([group.id]);
       });
 
-      expect(result.current.shapes.map((shape) => shape.id)).toEqual(['shape-3', 'shape-1', 'shape-2', group.id]);
+      expect(result.current.shapes.map((shape) => shape.id)).toEqual([
+        'shape-3',
+        'shape-1',
+        'shape-2',
+        group.id,
+      ]);
     });
   });
 
@@ -518,35 +394,13 @@ describe('useCanvas - Grouping', () => {
     it('should normalize child selections to the root group id', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 120 }),
+      ]);
+      const group = groupShapes(result, ['shape-1', 'shape-2']);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 120, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const group = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
-
-      act(() => {
-        result.current.selectShapes(['shape-1']);
-      });
+      selectShapes(result, ['shape-1']);
 
       expect(result.current.editorState.selectedShapeIds).toEqual([group.id]);
     });
@@ -554,52 +408,19 @@ describe('useCanvas - Grouping', () => {
     it('should group top-level entities when child ids are provided', () => {
       const { result } = renderHook(() => useCanvas(workspaceId));
 
-      const shape1: Shape = {
-        id: 'shape-1',
-        type: 'rectangle',
-        bounds: { x: 0, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      addShapes(result, [
+        createRectangle('shape-1'),
+        createRectangle('shape-2', { x: 120 }),
+        createRectangle('shape-3', { x: 240 }),
+      ]);
 
-      const shape2: Shape = {
-        id: 'shape-2',
-        type: 'rectangle',
-        bounds: { x: 120, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
+      const innerGroup = groupShapes(result, ['shape-1', 'shape-2']);
+      const outerGroup = groupShapes(result, ['shape-1', 'shape-3']);
 
-      const shape3: Shape = {
-        id: 'shape-3',
-        type: 'rectangle',
-        bounds: { x: 240, y: 0, width: 100, height: 100 },
-        style: result.current.editorState.shapeStyle,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      act(() => {
-        result.current.addShape(shape1);
-        result.current.addShape(shape2);
-        result.current.addShape(shape3);
-        result.current.groupShapes(['shape-1', 'shape-2']);
-      });
-
-      const innerGroup = result.current.shapes.find((shape) => shape.type === 'group') as GroupShape;
-
-      act(() => {
-        result.current.groupShapes(['shape-1', 'shape-3']);
-      });
-
-      const outerGroup = result.current.shapes.find(
-        (shape) => shape.type === 'group' && shape.id !== innerGroup.id
-      ) as GroupShape;
-
-      expect(outerGroup.childrenIds).toContain(innerGroup.id);
-      expect(outerGroup.childrenIds).toContain('shape-3');
+      expect(getGroupChildIds(outerGroup.id, result.current.shapes)).toEqual(
+        expect.arrayContaining([innerGroup.id, 'shape-3'])
+      );
+      expect(getGroupChildIds(outerGroup.id, result.current.shapes)).toHaveLength(2);
       expect(result.current.editorState.selectedShapeIds).toEqual([outerGroup.id]);
     });
   });
