@@ -8,6 +8,7 @@ Hooks encapsulate complex logic that can be reused across components:
 - **useCanvas**: Canvas state management with history
 - **useKeyboard**: Global keyboard shortcuts
 - **useElementSize**: Shared element resize tracking for canvas-driven layout updates
+- **useDevColorOverrides**: Applies persisted dev design-token overrides to the document root
 
 ## Hook Files
 
@@ -16,6 +17,7 @@ Hooks encapsulate complex logic that can be reused across components:
 | useCanvas | `useCanvas.ts` | Canvas state, history, shapes, and agent proposal apply | ~740 | High |
 | useKeyboard | `useKeyboard.ts` | Global keyboard shortcuts | 170 | Medium |
 | useElementSize | `useElementSize.ts` | Observe DOM element width/height changes | ~60 | Low |
+| useDevColorOverrides | `useDevColorOverrides.ts` | Synchronize dev token overrides to CSS variables | ~20 | Low |
 
 ## Detailed Hook Documentation
 
@@ -157,6 +159,8 @@ const [future, setFuture] = useState<HistoryState[]>([]);
 - Loads initial state from workspace store
 - Derives the initial history snapshot from the current workspace object without suppressing hook dependency checks
 - Auto-saves changes back to workspace store through one debounced atomic snapshot write (100ms debounce)
+- Flushes the previous workspace snapshot before loading a new workspace
+- Uses a latest-snapshot ref during workspace switches to avoid re-entrant update loops
 - Clears history when switching workspaces
 - Uses refs to detect workspace changes
 
@@ -189,6 +193,8 @@ const defaultEditorState: EditorState = {
 - [ ] Selection works correctly
 - [ ] Selection normalizes grouped child ids to top-level selectable entities
 - [ ] Auto-saves to workspace store
+- [ ] Workspace switches flush pending edits before loading the next workspace
+- [ ] Workspace switches do not trigger recursive React update loops
 - [ ] Text editing state managed correctly
 - [ ] Selected shapes can be grouped and ungrouped
 - [ ] Selected shapes can be moved to front or back without splitting groups
@@ -239,6 +245,40 @@ const {
   canRedo,
 } = useCanvas(workspaceId);
 ```
+
+---
+
+### useDevColorOverrides
+
+**Purpose**: Bridge persisted dev-tool color overrides from the Zustand store into real CSS variables on `document.documentElement`.
+
+**Interface**:
+```typescript
+function useDevColorOverrides(): void
+```
+
+**Behavior**:
+- Reads `overrides` from `useDevToolStore`
+- Sets each override key/value as an inline CSS custom property on the root element
+- Removes the same inline properties when the effect cleans up or when keys disappear
+
+**Success Criteria**:
+- [x] Token edits in `DevColorTool` immediately affect app chrome
+- [x] Inline override properties are removed during cleanup
+- [x] Production state does not need to know about color-tool behavior
+
+**Constraints**:
+- Browser-only hook because it reads `document.documentElement`
+- Intended to be mounted once from `AppShell`
+- Only applies keys that the dev tool store exposes
+
+**Known Issues**:
+- No dedicated hook test yet
+- Cleanup only removes keys that existed in the current override snapshot
+
+**Dependencies**:
+- `useDevToolStore` from `src/stores/devToolStore.ts`
+- CSS variables defined in `src/styles/design-tokens.css`
 
 ---
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { WorkspaceTabs } from './WorkspaceTabs';
 import type { Workspace } from '../stores/workspaceStore';
 
@@ -185,5 +186,44 @@ describe('WorkspaceTabs', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Workspace names must be 50 characters or fewer.'
     );
+  });
+
+  it('keeps tab context-menu interactions working after switching workspaces', () => {
+    const workspaces = Array.from({ length: 3 }, (_, index) => createWorkspace(index + 1));
+    const onAdd = vi.fn();
+    const onDelete = vi.fn();
+    const onRename = vi.fn();
+
+    function StatefulWorkspaceTabs() {
+      const [activeId, setActiveId] = useState(workspaces[0]?.id ?? '');
+
+      return (
+        <WorkspaceTabs
+          workspaces={workspaces}
+          activeId={activeId}
+          onSwitch={setActiveId}
+          onAdd={onAdd}
+          onDelete={onDelete}
+          onRename={onRename}
+          maxWorkspaces={10}
+        />
+      );
+    }
+
+    render(<StatefulWorkspaceTabs />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Workspace 2' }));
+
+    const activeTab = screen.getByRole('tab', { name: 'Workspace 2' });
+    expect(activeTab).toHaveAttribute('aria-selected', 'true');
+
+    const tabShell = activeTab.closest('.workspace-tab');
+    expect(tabShell).not.toBeNull();
+
+    const closeButton = within(tabShell as HTMLElement).getByTitle('Close workspace');
+    fireEvent.contextMenu(closeButton);
+
+    expect(screen.getByText('Rename')).toBeInTheDocument();
+    expect(screen.getByText('Close')).toBeInTheDocument();
   });
 });
