@@ -8,6 +8,11 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist']),
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: 'warn',
+    },
+  },
+  {
     files: ['**/*.{ts,tsx}'],
     extends: [
       js.configs.recommended,
@@ -18,6 +23,21 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+  },
+  {
+    files: ['src/hooks/use*.{ts,tsx}', 'src/app/use*.{ts,tsx}', 'src/components/**/use*.{ts,tsx}'],
+    ignores: ['**/*.test.*', '**/*.spec.*'],
+    rules: {
+      complexity: ['warn', 16],
+      'max-lines-per-function': [
+        'warn',
+        {
+          max: 180,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
     },
   },
 ])

@@ -1,4 +1,4 @@
-import type { Shape } from '../types';
+import type { Shape } from '../../../types';
 
 export interface SelectedInspectorItem {
   id: string;

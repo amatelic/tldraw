@@ -1,0 +1,78 @@
+id: hook-no-inline-shape-literals
+language: TypeScript
+severity: hint
+message: Move inline Shape object creation out of hooks into a document or canvas factory.
+note: Hooks should orchestrate state and callbacks. Durable shape construction belongs in a tested factory under src/document, src/canvas, or a focused feature module.
+files:
+  - src/**/use*.ts
+  - src/**/use*.tsx
+ignores:
+  - src/**/*.test.ts
+  - src/**/*.test.tsx
+  - src/**/*.spec.ts
+  - src/**/*.spec.tsx
+rule:
+  all:
+    - any:
+        - pattern:
+            context: |
+              const $VAR = {
+                id: $ID,
+                type: '$TYPE',
+                bounds: $BOUNDS,
+                $$$REST
+              }
+            selector: object
+        - pattern:
+            context: |
+              const $VAR: $ANNOTATION = {
+                id: $ID,
+                type: '$TYPE',
+                bounds: $BOUNDS,
+                $$$REST
+              }
+            selector: object
+    - inside:
+        any:
+          - pattern:
+              context: |
+                function $HOOK($$$ARGS) {
+                  $$$BODY
+                }
+              selector: function_declaration
+          - pattern:
+              context: |
+                function $HOOK($$$ARGS): $RET {
+                  $$$BODY
+                }
+              selector: function_declaration
+          - pattern:
+              context: |
+                export function $HOOK($$$ARGS) {
+                  $$$BODY
+                }
+              selector: function_declaration
+          - pattern:
+              context: |
+                export function $HOOK($$$ARGS): $RET {
+                  $$$BODY
+                }
+              selector: function_declaration
+          - pattern:
+              context: |
+                const $HOOK = ($$$ARGS) => {
+                  $$$BODY
+                }
+              selector: arrow_function
+          - pattern:
+              context: |
+                const $HOOK = ($$$ARGS): $RET => {
+                  $$$BODY
+                }
+              selector: arrow_function
+        stopBy: end
+constraints:
+  HOOK:
+    regex: ^use[A-Z]
+  TYPE:
+    regex: ^(rectangle|ellipse|pencil|text|image|audio|embed|group)$

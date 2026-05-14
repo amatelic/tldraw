@@ -353,6 +353,45 @@ describe('PropertiesPanel', () => {
     expect(screen.queryByText('shape-2')).not.toBeInTheDocument();
   });
 
+  it('surfaces explicit mixed-value affordances for multi-selection controls', () => {
+    render(
+      <PropertiesPanel
+        style={DEFAULT_STYLE}
+        onChange={onChange}
+        selectedCount={2}
+        hasTextSelection
+        mixedStyleKeys={[
+          'color',
+          'fillColor',
+          'strokeWidth',
+          'blendMode',
+          'fontFamily',
+          'fontSize',
+          'fontWeight',
+          'fontStyle',
+          'textAlign',
+        ]}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        /Some properties differ across this selection\. Controls marked as mixed become concrete/i
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /stylemixed values/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /colormixed colors/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /typemixed type/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Blend')).toHaveValue('__mixed__');
+    expect(screen.getByLabelText('Typeface')).toHaveValue('__mixed__');
+    expect(screen.getByLabelText('Size')).toHaveValue('__mixed__');
+    fireEvent.click(screen.getByRole('tab', { name: 'Slider' }));
+    expect(screen.getByLabelText('Stroke width slider')).toHaveAttribute(
+      'aria-valuetext',
+      'Mixed stroke weight'
+    );
+  });
+
   it('keeps the selected items section hidden for single selection', () => {
     render(
       <PropertiesPanel

@@ -1,48 +1,43 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorState, Shape, ShapeStyle } from './types';
 
-const { shapeStyle, createEditorState, mockWorkspace } = vi.hoisted(() => {
-  const shapeStyle = {
+const { createInitialEditorState, getNextTextId, resetMockState } = vi.hoisted(() => {
+  const baseStyle: ShapeStyle = {
     color: '#111111',
     fillColor: '#ffffff',
     fillGradient: null,
     strokeWidth: 2,
-    strokeStyle: 'solid' as const,
-    fillStyle: 'none' as const,
+    strokeStyle: 'solid',
+    fillStyle: 'none',
     opacity: 1,
-    blendMode: 'source-over' as const,
+    blendMode: 'source-over',
     shadows: [],
     fontSize: 16,
     fontFamily: 'sans-serif',
-    fontWeight: 'normal' as const,
-    fontStyle: 'normal' as const,
-    textAlign: 'left' as const,
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    textAlign: 'left',
   };
 
-  const createEditorState = () => ({
-    tool: 'select' as const,
-    selectedShapeIds: [],
-    camera: { x: 0, y: 0, zoom: 1 },
-    isDragging: false,
-    isDrawing: false,
-    shapeStyle: { ...shapeStyle },
-    editingTextId: null,
-  });
-
-  const mockWorkspace = {
-    id: 'workspace-1',
-    name: 'Workspace 1',
-    state: createEditorState(),
-    shapes: [],
-    createdAt: 1,
-    updatedAt: 2,
-  };
+  let nextTextId = 1;
 
   return {
-    shapeStyle,
-    createEditorState,
-    mockWorkspace,
+    baseStyle,
+    createInitialEditorState: (): EditorState => ({
+      tool: 'select',
+      selectedShapeIds: [],
+      camera: { x: 0, y: 0, zoom: 1 },
+      isDragging: false,
+      isDrawing: false,
+      shapeStyle: { ...baseStyle },
+      editingTextId: null,
+    }),
+    getNextTextId: () => `text-${nextTextId++}`,
+    resetMockState: () => {
+      nextTextId = 1;
+    },
   };
 });
 
@@ -50,6 +45,10 @@ vi.mock('motion/react', () => ({
   motion: {
     div: ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement('div', props, children),
+    button: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('button', props, children),
+    svg: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('svg', props, children),
   },
   AnimatePresence: ({ children }: { children?: React.ReactNode }) =>
     React.createElement(React.Fragment, {}, children),
@@ -57,32 +56,32 @@ vi.mock('motion/react', () => ({
 
 vi.mock('./hooks/useCanvas', () => ({
   useCanvas: () => {
-    const [shapes, setShapes] = React.useState<Array<Record<string, unknown>>>([]);
-    const [editorState, setEditorStateState] = React.useState(createEditorState);
+    const [shapes, setShapes] = React.useState<Shape[]>([]);
+    const [editorState, setEditorStateState] = React.useState<EditorState>(
+      createInitialEditorState()
+    );
+
+    const setEditorState = (
+      updates: EditorState | ((previous: EditorState) => EditorState)
+    ) => {
+      setEditorStateState((previous) =>
+        typeof updates === 'function' ? updates(previous) : updates
+      );
+    };
 
     return {
       canvasRef: { current: null },
       shapes,
       editorState,
-      setEditorState: (
-        updater:
-          | typeof editorState
-          | ((prev: typeof editorState) => typeof editorState)
-      ) => {
-        setEditorStateState((prev) =>
-          typeof updater === 'function' ? updater(prev) : updater
-        );
-      },
-      addShape: (shape: Record<string, unknown>) => {
-        setShapes((prev) => [...prev, shape]);
-      },
+      setEditorState,
+      addShape: (shape: Shape) => setShapes((previous) => [...previous, shape]),
       updateShape: vi.fn(),
+      updateShapeBounds: vi.fn(),
       deleteShape: vi.fn(),
       deleteSelectedShapes: vi.fn(),
-      selectShapes: vi.fn(),
+      selectShapes: (ids: string[]) =>
+        setEditorState((previous) => ({ ...previous, selectedShapeIds: ids })),
       clearSelection: vi.fn(),
-      screenToWorld: vi.fn((point) => point),
-      worldToScreen: vi.fn((point) => point),
       zoomIn: vi.fn(),
       zoomOut: vi.fn(),
       resetZoom: vi.fn(),
@@ -93,15 +92,31 @@ vi.mock('./hooks/useCanvas', () => ({
       redo: vi.fn(),
       canUndo: false,
       canRedo: false,
-      startTextEdit: vi.fn(),
-      commitTextEdit: vi.fn(),
-      cancelTextEdit: vi.fn(),
+      startTextEdit: (id: string) =>
+        setEditorState((previous) => ({
+          ...previous,
+          editingTextId: id,
+          selectedShapeIds: [id],
+        })),
+      commitTextEdit: () =>
+        setEditorState((previous) => ({
+          ...previous,
+          editingTextId: null,
+        })),
+      cancelTextEdit: () =>
+        setEditorState((previous) => ({
+          ...previous,
+          editingTextId: null,
+        })),
       applyGeneratedDiagram: vi.fn(() => ({ success: true, error: null, appliedShapeIds: [] })),
       applyMutationProposal: vi.fn(() => ({ success: true, error: null, appliedShapeIds: [] })),
       groupShapes: vi.fn(),
       ungroupShapes: vi.fn(),
       bringShapesToFront: vi.fn(),
       sendShapesToBack: vi.fn(),
+      alignShapes: vi.fn(),
+      distributeShapes: vi.fn(),
+      tidyShapes: vi.fn(),
     };
   },
 }));
@@ -110,55 +125,111 @@ vi.mock('./hooks/useKeyboard', () => ({
   useKeyboard: () => undefined,
 }));
 
-vi.mock('./hooks/useElementSize', () => ({
-  useElementSize: () => ({ width: 1200, height: 800 }),
-}));
-
 vi.mock('./stores/workspaceStore', () => ({
   useWorkspaceStore: () => ({
-    workspaces: [mockWorkspace],
-    activeWorkspaceId: mockWorkspace.id,
+    workspaces: [
+      {
+        id: 'workspace-1',
+        name: 'Text Tool Demo',
+        state: createInitialEditorState(),
+        shapes: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    activeWorkspaceId: 'workspace-1',
     addWorkspace: vi.fn(),
     deleteWorkspace: vi.fn(),
     renameWorkspace: vi.fn(),
     switchWorkspace: vi.fn(),
     canDeleteWorkspace: vi.fn(() => false),
-    getWorkspace: vi.fn(() => mockWorkspace),
-    getActiveWorkspace: vi.fn(() => mockWorkspace),
+    getWorkspace: vi.fn((id: string) =>
+      id === 'workspace-1'
+        ? {
+            id: 'workspace-1',
+            name: 'Text Tool Demo',
+            state: createInitialEditorState(),
+            shapes: [],
+            createdAt: 1,
+            updatedAt: 1,
+          }
+        : undefined
+    ),
+    getActiveWorkspace: vi.fn(() => ({
+      id: 'workspace-1',
+      name: 'Text Tool Demo',
+      state: createInitialEditorState(),
+      shapes: [],
+      createdAt: 1,
+      updatedAt: 1,
+    })),
     getNextWorkspaceNumber: vi.fn(() => 2),
-    updateWorkspaceSnapshot: vi.fn(),
-    updateWorkspaceShapes: vi.fn(),
-    updateWorkspaceState: vi.fn(),
+    saveWorkspaceSnapshot: vi.fn(),
   }),
 }));
 
-vi.mock('./components/WorkspaceTabs', () => ({
-  WorkspaceTabs: () => React.createElement('div', {}, 'WorkspaceTabs'),
-}));
+interface MockCanvasProps {
+  tool: string;
+  style: ShapeStyle;
+  shapes: Shape[];
+  editingTextId: string | null;
+  onShapeAdd: (shape: Shape) => void;
+  onSelectionChange: (ids: string[]) => void;
+  onTextEditStart: (id: string) => void;
+  onTextEditCommit: () => void;
+}
 
-vi.mock('./components/Toolbar', () => ({
-  Toolbar: ({
-    currentTool,
-    onToolChange,
-  }: {
-    currentTool: string;
-    onToolChange: (tool: 'text' | 'select') => void;
-  }) =>
-    React.createElement(
+vi.mock('./components/Canvas', () => ({
+  Canvas: (props: MockCanvasProps) => {
+    const textShapeCount = props.shapes.filter((shape: Shape) => shape.type === 'text').length;
+    const canAddText = props.tool === 'text' && !props.editingTextId;
+
+    return React.createElement(
       'div',
-      {},
-      React.createElement('output', { 'data-testid': 'current-tool' }, currentTool),
+      { 'data-testid': 'mock-canvas' },
+      React.createElement('div', { 'data-testid': 'text-shape-count' }, String(textShapeCount)),
       React.createElement(
         'button',
-        { onClick: () => onToolChange('text') },
-        'Activate Text Tool'
+        {
+          'aria-label': 'Add text shape',
+          disabled: !canAddText,
+          onClick: () => {
+            if (!canAddText) return;
+
+            const id = getNextTextId();
+            const shape: Shape = {
+              id,
+              type: 'text',
+              text: '',
+              bounds: { x: 40, y: 40, width: 200, height: 100 },
+              fontSize: props.style.fontSize,
+              fontFamily: props.style.fontFamily,
+              fontWeight: props.style.fontWeight,
+              fontStyle: props.style.fontStyle,
+              textAlign: props.style.textAlign,
+              style: { ...props.style },
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+
+            props.onShapeAdd(shape);
+            props.onSelectionChange([id]);
+            props.onTextEditStart(id);
+          },
+        },
+        'Add text shape'
       ),
       React.createElement(
         'button',
-        { onClick: () => onToolChange('select') },
-        'Activate Select Tool'
+        {
+          'aria-label': 'Commit text edit',
+          disabled: !props.editingTextId,
+          onClick: () => props.onTextEditCommit(),
+        },
+        'Commit text edit'
       )
-    ),
+    );
+  },
 }));
 
 vi.mock('./components/PropertiesPanel', () => ({
@@ -166,48 +237,11 @@ vi.mock('./components/PropertiesPanel', () => ({
 }));
 
 vi.mock('./components/ZoomControls', () => ({
-  ZoomControls: () => React.createElement('div', {}, 'ZoomControls'),
+  ZoomControls: () => null,
 }));
 
-vi.mock('./components/Canvas', () => ({
-  Canvas: ({
-    shapes,
-    onShapeAdd,
-  }: {
-    shapes: Array<Record<string, unknown>>;
-    onShapeAdd: (shape: Record<string, unknown>) => void;
-  }) =>
-    React.createElement(
-      'div',
-      {},
-      React.createElement('output', { 'data-testid': 'shape-count' }, String(shapes.length)),
-      React.createElement(
-        'button',
-        {
-          onClick: () =>
-            onShapeAdd({
-              id: `text-${shapes.length + 1}`,
-              type: 'text',
-              bounds: {
-                x: 100 + shapes.length * 24,
-                y: 100,
-                width: 200,
-                height: 100,
-              },
-              text: '',
-              fontSize: shapeStyle.fontSize,
-              fontFamily: shapeStyle.fontFamily,
-              fontWeight: shapeStyle.fontWeight,
-              fontStyle: shapeStyle.fontStyle,
-              textAlign: shapeStyle.textAlign,
-              style: { ...shapeStyle },
-              createdAt: Date.now(),
-              updatedAt: Date.now(),
-            }),
-        },
-        'Add Text Shape'
-      )
-    ),
+vi.mock('./components/WorkspaceTabs', () => ({
+  WorkspaceTabs: () => null,
 }));
 
 vi.mock('./components/ImageUploadDialog', () => ({
@@ -229,27 +263,35 @@ vi.mock('./components/AgentPanel', () => ({
 import App from './App';
 
 describe('App text tool behavior', () => {
-  it('keeps the text tool active across consecutive text insertions', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Activate Text Tool' }));
-    expect(screen.getByTestId('current-tool')).toHaveTextContent('text');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add Text Shape' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Text Shape' }));
-
-    expect(screen.getByTestId('current-tool')).toHaveTextContent('text');
-    expect(screen.getByTestId('shape-count')).toHaveTextContent('2');
+  beforeEach(() => {
+    resetMockState();
   });
 
-  it('still lets the user switch away from text mode manually', () => {
+  it('returns to select after committing text insertion', () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activate Text Tool' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add Text Shape' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Activate Select Tool' }));
+    const textToolButton = screen.getByLabelText('Text (T)');
+    const selectToolButton = screen.getByLabelText('Select (V)');
+    fireEvent.click(textToolButton);
 
-    expect(screen.getByTestId('current-tool')).toHaveTextContent('select');
-    expect(screen.getByTestId('shape-count')).toHaveTextContent('1');
+    expect(textToolButton).toHaveClass('active');
+
+    const addTextButton = screen.getByLabelText('Add text shape');
+    fireEvent.click(addTextButton);
+
+    expect(screen.getByTestId('text-shape-count')).toHaveTextContent('1');
+    expect(textToolButton).toHaveClass('active');
+
+    fireEvent.click(screen.getByLabelText('Commit text edit'));
+
+    expect(textToolButton).not.toHaveClass('active');
+    expect(selectToolButton).toHaveClass('active');
+    expect(screen.getByLabelText('Add text shape')).toBeDisabled();
+
+    fireEvent.click(textToolButton);
+    fireEvent.click(screen.getByLabelText('Add text shape'));
+
+    expect(screen.getByTestId('text-shape-count')).toHaveTextContent('2');
+    expect(textToolButton).toHaveClass('active');
   });
 });

@@ -13,6 +13,7 @@ When you start working:
    - Choose the highest priority task (HIGH > MEDIUM > LOW)
    - Prefer 🔴 Not Started over 🟡 In Progress unless continuing your own work
    - Review the acceptance criteria carefully
+   - For architecture cleanup work, first pick the next item from `specs/tasks/README.md`, then promote that single item into `specs/SPECS.md`
 
 3. **Before starting**:
    - Update the task status in SPECS.md to 🟡 In Progress

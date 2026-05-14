@@ -14,8 +14,9 @@ Specs serve as:
 
 | File | Purpose | Lines | Status |
 |------|---------|-------|--------|
-| `SPECS.md` | Main task list (28 tasks) | ~1020 | Active |
+| `SPECS.md` | Main task list (41 tasks) | ~1600 | Active |
 | `TASK_WORKFLOW.md` | How to work on tasks | ~100 | Reference |
+| `tasks/README.md` | Sequenced architecture refactor backlog | ~90 | Active planning |
 | `APP_UI_PRESENTATION_SPEC.md` | Desktop shell and sidepanel inventory reference | ~160 | Reference |
 | `SELECTION_SIDEBAR_SPEC.md` | Properties panel spec | ~150 | Completed |
 | `EMBED_LAYOUT_INTERACTIONS_SPEC.md` | Embed movement, resize, and inspector layout editing rules | ~180 | Completed |
@@ -29,6 +30,21 @@ Specs serve as:
 `SPECS.md` is the source of truth for task status. Current highlights:
 
 ### Recently Completed ✅
+- **Task 4** - Add export to PNG/SVG feature
+- **Task 3** - Fix text tool auto-switch behavior
+- **Task 34** - Split canvas interaction surface
+- **Task 36** - Selection-driven inspector model
+- **Task 29** - Architecture cleanup boundary map
+- **Task 30** - Focused core type modules
+- **Task 31** - Geometry, hit-testing, and selection helper extraction
+- **Task 32** - Single canvas engine owner
+- **Task 33** - Document command layer
+- **Task 35** - Text style source of truth
+- **Task 38** - Single source group model
+- **Task 39** - Atomic workspace save and history
+- **Task 40** - Agent document application boundary
+- **Task 41** - App shell composition
+- **Task 37** - Persisted versus runtime workspace state
 - **Task 15** - Cleanup suggestions with preview/apply
 - **Task 23** - Example-driven coverage and documentation for diagram generation
 - **Task 20** - OpenCode-backed diagram provider
@@ -61,6 +77,8 @@ Understand the process for picking up and completing tasks.
 ### 2. Choose a Task
 Pick from 🔴 Not Started tasks in SPECS.md.
 
+For the structural cleanup backlog, start in `specs/tasks/README.md`, then promote one item into `SPECS.md` only when implementation begins.
+
 ### 3. Create Spec (if needed)
 For complex features, create a new spec file:
 ```
@@ -73,7 +91,10 @@ Change status from 🔴 to 🟡 and add your name.
 ### 5. Implement
 Follow the spec and implement the feature.
 
-### 6. Update SPECS.md
+### 6. Run Guardrails
+Run `npm run complexity` for structural cleanup, hook refactors, or any change that grows a component/hook significantly. Run `npm run ast-grep` and `npm run ast-grep:test` when structural AST rules are added or changed. The complexity check is advisory unless `npm run complexity:strict` is used.
+
+### 7. Update SPECS.md
 Change status to ✅ and add completion notes.
 
 ## Spec Template
@@ -184,6 +205,15 @@ Documents:
 **Status**: Reference
 
 ## Architecture Specs
+
+### `specs/tasks/`
+Planning backlog for the domain-model and app-structure refactor:
+- breaks the cleanup into small, sequential tasks
+- gives each task its own supported flow
+- records success criteria and constraints before implementation starts
+
+**Status**: Active planning / task-by-task implementation
+The sequenced architecture-cleanup backlog is now fully complete through Tasks 01 through 13, including the Task 06 canvas split and Task 08 inspector-model finish.
 
 ### AGENT_WORKFLOWS_SPEC.md
 Reference and planning document for AI agent integration:

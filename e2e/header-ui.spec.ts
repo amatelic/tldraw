@@ -100,7 +100,7 @@ test.describe('Header UI chrome', () => {
     const header = page.locator('.app-header');
     const workspaceRail = page.locator('.workspace-tabs-container');
     const activeTab = page.locator('.workspace-tab.active');
-    const agentsButton = page.getByRole('button', { name: 'Agents' });
+    const agentsButton = page.getByRole('button', { name: 'Agent' });
     const canvasContainer = page.locator('.canvas-container');
     const propertiesPanel = page.locator('.properties-panel');
 
@@ -143,8 +143,8 @@ test.describe('Header UI chrome', () => {
     expect(railStyles.backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(railStyles.boxShadow).toBe('none');
     expect(parseFloat(railStyles.gap)).toBeGreaterThanOrEqual(10);
-    expect(parseFloat(railStyles.paddingLeft)).toBeGreaterThanOrEqual(10);
-    expect(parseFloat(railStyles.paddingTop)).toBeGreaterThanOrEqual(8);
+    expect(parseFloat(railStyles.paddingLeft)).toBe(0);
+    expect(parseFloat(railStyles.paddingTop)).toBe(0);
 
     const actionButtonStyles = await agentsButton.evaluate((element) => {
       const styles = window.getComputedStyle(element);
@@ -186,20 +186,29 @@ test.describe('Header UI chrome', () => {
     expect(activeTabStyles.color).toBe('rgb(255, 255, 255)');
 
     const sharedRowMetrics = await page.evaluate(() => {
+      const header = document.querySelector('.app-header');
       const rail = document.querySelector('.workspace-tabs-container');
       const button = Array.from(document.querySelectorAll('.action-button')).find(
-        (element) => element.textContent?.includes('Agents')
+        (element) => element.textContent?.includes('Agent')
       );
 
-      if (!(rail instanceof HTMLElement) || !(button instanceof HTMLElement)) {
+      if (
+        !(header instanceof HTMLElement) ||
+        !(rail instanceof HTMLElement) ||
+        !(button instanceof HTMLElement)
+      ) {
         return null;
       }
 
+      const headerRect = header.getBoundingClientRect();
       const railRect = rail.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
 
       return {
+        headerTop: headerRect.top,
+        headerBottom: headerRect.bottom,
         railTop: railRect.top,
+        railBottom: railRect.bottom,
         railCenter: railRect.top + railRect.height / 2,
         buttonTop: buttonRect.top,
         buttonCenter: buttonRect.top + buttonRect.height / 2,
@@ -210,6 +219,12 @@ test.describe('Header UI chrome', () => {
     expect(
       Math.abs((sharedRowMetrics?.railCenter ?? 0) - (sharedRowMetrics?.buttonCenter ?? 0))
     ).toBeLessThanOrEqual(4);
+    expect(
+      Math.abs((sharedRowMetrics?.railTop ?? 0) - (sharedRowMetrics?.buttonTop ?? 0))
+    ).toBeLessThanOrEqual(4);
+    const headerHeight = (sharedRowMetrics?.headerBottom ?? 0) - (sharedRowMetrics?.headerTop ?? 0);
+    expect(headerHeight).toBeGreaterThanOrEqual(72);
+    expect(headerHeight).toBeLessThanOrEqual(73);
 
     const canvasMetrics = await canvasContainer.evaluate((element) => {
       const rect = element.getBoundingClientRect();

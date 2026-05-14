@@ -337,6 +337,18 @@ node --inspect-brk node_modules/.bin/vitest run
 5. Run tests to verify
 6. Check coverage report
 
+## Core Canvas Coverage Map
+
+The canvas app has a few high-value regression layers:
+- `src/App.tool-selection.test.tsx`: real toolbar active-state changes from keyboard shortcuts and toolbar clicks
+- `src/hooks/useCanvas.core.test.ts`: core shape CRUD, selection/delete history, camera pan/zoom, pointer-anchored zoom, zoom clamping, and selected/default style updates
+- `src/hooks/useCanvas.grouping.test.ts`: direct and keyboard-driven group/ungroup behavior for selected shapes
+- `src/hooks/useKeyboard.test.tsx`: global shortcut routing, text-entry guards, grouping shortcuts, cleanup on unmount, and preventDefault behavior
+- `src/components/Canvas.core-interactions.test.tsx`: text creation, tiny-draw rejection, pencil stroke commit, eraser topmost delete, and Space-drag panning
+- `src/components/Canvas.selection.test.tsx`: additive click selection, marquee selection, multi-select frames, resize handles, panning, and wheel zoom routing
+- `src/components/Canvas.context-menu.test.tsx`: selection menu visibility and command dispatch
+- `src/components/Canvas.text-editing.test.tsx`: text edit overlay, typing, commit/cancel, delete-empty behavior, and camera-aware positioning
+
 ## Success Criteria
 
 - [ ] All new code has tests

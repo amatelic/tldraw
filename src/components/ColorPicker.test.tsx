@@ -84,6 +84,18 @@ describe('ColorPicker', () => {
     expect(screen.getByLabelText('L')).toHaveValue(100);
   });
 
+  it('updates alpha controls when the alpha prop changes', () => {
+    const { rerender } = render(
+      <ColorPicker color="#000000" alpha={0.25} onChange={mockOnChange} showAlpha />
+    );
+
+    rerender(<ColorPicker color="#000000" alpha={0.8} onChange={mockOnChange} showAlpha />);
+
+    expect(screen.getByLabelText('Alpha')).toHaveValue(80);
+    expect(screen.getByLabelText('Hex alpha')).toHaveValue(80);
+    expect(screen.getByText('A 80%')).toBeInTheDocument();
+  });
+
   it('shows alpha controls when enabled', () => {
     render(<ColorPicker color="#000000" alpha={0.5} onChange={mockOnChange} showAlpha />);
 
@@ -117,6 +129,17 @@ describe('ColorPicker', () => {
 
     expect(hexInput).toHaveValue('');
     expect(mockOnChange).not.toHaveBeenCalled();
+  });
+
+  it('recovers from invalid hex input when a complete valid value is entered', () => {
+    render(<ColorPicker color="#000000" onChange={mockOnChange} />);
+
+    const hexInput = screen.getByLabelText('#');
+    fireEvent.change(hexInput, { target: { value: 'GGG' } });
+    fireEvent.change(hexInput, { target: { value: '00ff00' } });
+
+    expect(hexInput).toHaveValue('00FF00');
+    expect(mockOnChange).toHaveBeenCalledWith('#00FF00', 1);
   });
 
   it('enables a linear gradient directly from the picker', () => {
@@ -166,6 +189,47 @@ describe('ColorPicker', () => {
       endColor: '#00FF00',
       angle: 45,
     });
+  });
+
+  it('syncs the editor inputs when the active gradient stop or stop color changes', () => {
+    const { rerender } = render(
+      <ColorPicker
+        color="#2563EB"
+        onChange={mockOnChange}
+        showAlpha={false}
+        allowGradient
+        gradientValue={{
+          type: 'linear',
+          startColor: '#111111',
+          endColor: '#EEEEEE',
+          angle: 45,
+        }}
+        onGradientChange={mockOnGradientChange}
+      />
+    );
+
+    expect(screen.getByLabelText('#')).toHaveValue('111111');
+
+    fireEvent.click(screen.getByTitle('Edit gradient end color'));
+    expect(screen.getByLabelText('#')).toHaveValue('EEEEEE');
+
+    rerender(
+      <ColorPicker
+        color="#2563EB"
+        onChange={mockOnChange}
+        showAlpha={false}
+        allowGradient
+        gradientValue={{
+          type: 'linear',
+          startColor: '#111111',
+          endColor: '#00AA00',
+          angle: 45,
+        }}
+        onGradientChange={mockOnGradientChange}
+      />
+    );
+
+    expect(screen.getByLabelText('#')).toHaveValue('00AA00');
   });
 
   it('updates the linear gradient angle inside the picker', () => {

@@ -1,24 +1,33 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
-import type { Point, Shape, ShapeStyle, EditorState, GroupShape } from '../types';
+import type { Point, Shape, ShapeStyle, EditorState, PersistedEditorState } from '../types';
+import type { AgentGenerationProposal, AgentMutationProposal } from '../types/agents';
 import {
-  DEFAULT_STYLE,
-  createShapeId,
-  generateBounds,
-  getGroupDescendants,
-  normalizeShapeIdsForSelection,
-} from '../types';
+  addShapeToDocument,
+  alignShapesInDocument,
+  bringShapesToFrontInDocument,
+  deleteSelectedShapesFromDocument,
+  deleteShapeFromDocument,
+  distributeShapesInDocument,
+  groupShapesInDocument,
+  sendShapesToBackInDocument,
+  tidyShapesInDocument,
+  ungroupShapesInDocument,
+  updateSelectedShapeStyleInDocument,
+  updateShapeBoundsInDocument,
+  updateShapeInDocument,
+} from '../document/commands';
 import {
-  validateGenerationProposalForCanvas,
-  validateMutationProposalForCanvas,
-} from '../agents/agentOrchestrator';
-import type {
-  AgentCreateConnectorAction,
-  AgentCreateShapeAction,
-  AgentGenerationProposal,
-  AgentMutationProposal,
-} from '../types/agents';
-import { CanvasEngine } from '../canvas/CanvasEngine';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+  applyGenerationProposalToDocumentState,
+  applyMutationProposalToDocumentState,
+} from '../agents/documentApplication';
+import { normalizeDocumentShapes } from '../document/textStyle';
+import type { DistributionDirection, LayoutAlignment } from '../document/commands';
+import {
+  normalizePersistedWorkspaceState,
+  stripRuntimeStateFromShapes,
+  useWorkspaceStore,
+} from '../stores/workspaceStore';
+import { getGroupDescendants, normalizeShapeIdsForSelection } from '../types/selection';
 
 interface HistoryState {
   shapes: Shape[];
@@ -32,12 +41,11 @@ interface UseCanvasReturn {
   setEditorState: React.Dispatch<React.SetStateAction<EditorState>>;
   addShape: (shape: Shape) => void;
   updateShape: (id: string, updates: Partial<Shape>) => void;
+  updateShapeBounds: (id: string, updates: Partial<Shape['bounds']>) => void;
   deleteShape: (id: string) => void;
   deleteSelectedShapes: () => void;
   selectShapes: (ids: string[]) => void;
   clearSelection: () => void;
-  screenToWorld: (point: Point) => Point;
-  worldToScreen: (point: Point) => Point;
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
@@ -67,47 +75,13 @@ interface UseCanvasReturn {
   getAllShapesInGroup: (groupId: string) => string[];
   bringShapesToFront: (shapeIds: string[]) => void;
   sendShapesToBack: (shapeIds: string[]) => void;
+  alignShapes: (shapeIds: string[], alignment: LayoutAlignment) => void;
+  distributeShapes: (shapeIds: string[], direction: DistributionDirection) => void;
+  tidyShapes: (shapeIds: string[]) => void;
 }
 
 const MAX_HISTORY_SIZE = 50;
 const SAVE_DEBOUNCE_MS = 100;
-
-function normalizeShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): string[] {
-  return normalizeShapeIdsForSelection(shapeIds, shapes);
-}
-
-function expandShapeIdsForLayering(shapeIds: string[], shapes: Shape[]): Set<string> {
-  const expandedIds = new Set<string>();
-
-  for (const shapeId of shapeIds) {
-    expandedIds.add(shapeId);
-
-    const shape = shapes.find((candidate) => candidate.id === shapeId);
-    if (shape?.type === 'group') {
-      const descendants = getGroupDescendants(shapeId, shapes);
-      descendants.forEach((descendant) => expandedIds.add(descendant.id));
-    }
-  }
-
-  return expandedIds;
-}
-
-function reorderShapesByLayer(shapeIds: string[], shapes: Shape[], destination: 'front' | 'back'): Shape[] {
-  const normalizedIds = normalizeShapeIdsForLayering(shapeIds, shapes);
-  if (normalizedIds.length === 0) return shapes;
-
-  const idsToMove = expandShapeIdsForLayering(normalizedIds, shapes);
-  const movedShapes = shapes.filter((shape) => idsToMove.has(shape.id));
-  const stationaryShapes = shapes.filter((shape) => !idsToMove.has(shape.id));
-
-  if (movedShapes.length === 0 || stationaryShapes.length === 0) {
-    return shapes;
-  }
-
-  return destination === 'front'
-    ? stationaryShapes.concat(movedShapes)
-    : movedShapes.concat(stationaryShapes);
-}
 
 const defaultEditorState: EditorState = {
   tool: 'select',
@@ -133,178 +107,39 @@ const defaultEditorState: EditorState = {
   editingTextId: null,
 };
 
-function mergeGeneratedStyle(baseStyle: ShapeStyle, overrides?: Partial<ShapeStyle>): ShapeStyle {
+function normalizeEditorState(
+  editorState?: Partial<PersistedEditorState> | Partial<EditorState>
+): EditorState {
+  const persistedState = normalizePersistedWorkspaceState(
+    editorState
+  );
   return {
-    ...DEFAULT_STYLE,
-    ...baseStyle,
-    ...overrides,
-  };
-}
-
-function createGeneratedCanvasShape(
-  action: AgentCreateShapeAction,
-  baseStyle: ShapeStyle,
-  timestamp: number
-): Shape {
-  const style = mergeGeneratedStyle(baseStyle, action.shape.style);
-
-  if (action.shape.type === 'text') {
-    return {
-      id: action.shape.id,
-      type: 'text',
-      bounds: { ...action.shape.bounds },
-      text: action.shape.text ?? '',
-      fontSize: style.fontSize,
-      fontFamily: style.fontFamily,
-      fontWeight: style.fontWeight,
-      fontStyle: style.fontStyle,
-      textAlign: style.textAlign,
-      style,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  }
-
-  if (action.shape.type === 'circle') {
-    const { x, y, width, height } = action.shape.bounds;
-
-    return {
-      id: action.shape.id,
-      type: 'circle',
-      bounds: { ...action.shape.bounds },
-      center: {
-        x: x + width / 2,
-        y: y + height / 2,
-      },
-      radius: Math.min(width, height) / 2,
-      style,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-  }
-
-  return {
-    id: action.shape.id,
-    type: 'rectangle',
-    bounds: { ...action.shape.bounds },
-    style,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-function createGeneratedCanvasConnector(
-  action: AgentCreateConnectorAction,
-  baseStyle: ShapeStyle,
-  timestamp: number
-): Shape {
-  const style = mergeGeneratedStyle(baseStyle, action.connector.style);
-
-  return {
-    id: action.connector.id,
-    type: action.connector.type,
-    bounds: generateBounds(action.connector.start, action.connector.end),
-    start: { ...action.connector.start },
-    end: { ...action.connector.end },
-    style,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-function createGeneratedNodeLabel(
-  nodeShapeId: string,
-  label: string,
-  bounds: Shape['bounds'],
-  baseStyle: ShapeStyle,
-  timestamp: number,
-  existingIds: Set<string>
-): Shape {
-  const labelBaseId = `${nodeShapeId}-label`;
-  let labelId = labelBaseId;
-  let suffix = 1;
-
-  while (existingIds.has(labelId)) {
-    labelId = `${labelBaseId}-${suffix}`;
-    suffix += 1;
-  }
-
-  existingIds.add(labelId);
-
-  const style = mergeGeneratedStyle(baseStyle, {
-    color: baseStyle.color,
-    fillStyle: 'none',
-    textAlign: 'center',
-  });
-
-  const insetX = Math.min(12, Math.max(bounds.width * 0.12, 6));
-  const insetY = Math.min(12, Math.max(bounds.height * 0.12, 6));
-
-  return {
-    id: labelId,
-    type: 'text',
-    bounds: {
-      x: bounds.x + insetX,
-      y: bounds.y + insetY,
-      width: Math.max(bounds.width - insetX * 2, 40),
-      height: Math.max(bounds.height - insetY * 2, style.fontSize * 1.4),
-    },
-    text: label,
-    fontSize: style.fontSize,
-    fontFamily: style.fontFamily,
-    fontWeight: style.fontWeight,
-    fontStyle: style.fontStyle,
-    textAlign: style.textAlign,
-    style,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-function applyShapeBounds(shape: Shape, nextBounds: Partial<Shape['bounds']>): Shape {
-  const bounds = {
-    ...shape.bounds,
-    ...nextBounds,
-  };
-
-  if (shape.type === 'circle') {
-    return {
-      ...shape,
-      bounds,
-      center: {
-        x: bounds.x + bounds.width / 2,
-        y: bounds.y + bounds.height / 2,
-      },
-      radius: Math.min(bounds.width, bounds.height) / 2,
-    };
-  }
-
-  return {
-    ...shape,
-    bounds,
+    ...defaultEditorState,
+    ...persistedState,
+    isDragging: false,
+    isDrawing: false,
+    editingTextId: null,
   };
 }
 
 export function useCanvas(workspaceId: string): UseCanvasReturn {
   const workspaceStore = useWorkspaceStore();
   const getWorkspace = workspaceStore.getWorkspace;
-  const updateWorkspaceSnapshot = workspaceStore.updateWorkspaceSnapshot;
+  const saveWorkspaceSnapshot = workspaceStore.saveWorkspaceSnapshot;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const engineRef = useRef<CanvasEngine | null>(null);
-  const previousWorkspaceIdRef = useRef(workspaceId);
-  const isFirstRenderRef = useRef(true);
-  const currentShapeRef = useRef<Shape | null>(null);
 
   // Get current workspace data
-  const workspace = getWorkspace(workspaceId);
+  const workspace = workspaceStore.getWorkspace(workspaceId);
+  const workspaceShapes = workspace?.shapes;
+  const workspaceState = workspace?.state;
 
-  // Compute initial state only when workspaceId changes
+  // Compute the state used by the initial history snapshot.
   const initialData = useMemo(
     () => ({
-      shapes: workspace?.shapes || [],
-      editorState: workspace?.state || defaultEditorState,
+      shapes: stripRuntimeStateFromShapes(normalizeDocumentShapes(workspaceShapes || [])),
+      editorState: normalizeEditorState(workspaceState),
     }),
-    [workspace]
+    [workspaceShapes, workspaceState]
   );
 
   // History management
@@ -312,35 +147,38 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const [present, setPresent] = useState<HistoryState>(initialData);
   const [future, setFuture] = useState<HistoryState[]>([]);
   const [loadedWorkspaceId, setLoadedWorkspaceId] = useState(workspaceId);
+  const dragStartStateRef = useRef<HistoryState | null>(null);
+  const textEditStartStateRef = useRef<HistoryState | null>(null);
 
   const shapes = present.shapes;
   const editorState = present.editorState;
-  const latestPersistedSnapshotRef = useRef({ shapes, state: editorState });
+  const persistedEditorState = useMemo(
+    () =>
+      normalizePersistedWorkspaceState({
+        tool: editorState.tool,
+        selectedShapeIds: editorState.selectedShapeIds,
+        camera: editorState.camera,
+        shapeStyle: editorState.shapeStyle,
+      }),
+    [editorState.tool, editorState.selectedShapeIds, editorState.camera, editorState.shapeStyle]
+  );
+  const latestPersistedSnapshotRef = useRef({ shapes, state: persistedEditorState });
 
   useEffect(() => {
-    latestPersistedSnapshotRef.current = { shapes, state: editorState };
-  }, [editorState, shapes]);
+    latestPersistedSnapshotRef.current = { shapes, state: persistedEditorState };
+  }, [persistedEditorState, shapes]);
 
   // Handle workspace switching
   useEffect(() => {
-    // Skip on first render since initialData is already set
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
-      previousWorkspaceIdRef.current = workspaceId;
-      setLoadedWorkspaceId(workspaceId);
-      return;
-    }
-
     if (workspaceId === loadedWorkspaceId) {
-      previousWorkspaceIdRef.current = workspaceId;
       return;
     }
 
-    updateWorkspaceSnapshot(loadedWorkspaceId, latestPersistedSnapshotRef.current);
+    saveWorkspaceSnapshot(loadedWorkspaceId, latestPersistedSnapshotRef.current);
 
     const newWorkspace = getWorkspace(workspaceId);
-    const newShapes = newWorkspace?.shapes || [];
-    const newState = newWorkspace?.state || defaultEditorState;
+    const newShapes = stripRuntimeStateFromShapes(normalizeDocumentShapes(newWorkspace?.shapes || []));
+    const newState = normalizeEditorState(newWorkspace?.state);
     let didCancel = false;
 
     queueMicrotask(() => {
@@ -351,30 +189,31 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
       setPast([]);
       setPresent({ shapes: newShapes, editorState: newState });
       setFuture([]);
-      previousWorkspaceIdRef.current = workspaceId;
       setLoadedWorkspaceId(workspaceId);
+      dragStartStateRef.current = null;
+      textEditStartStateRef.current = null;
     });
 
     return () => {
       didCancel = true;
     };
-  }, [getWorkspace, loadedWorkspaceId, updateWorkspaceSnapshot, workspaceId]);
+  }, [getWorkspace, loadedWorkspaceId, saveWorkspaceSnapshot, workspaceId]);
 
-  // Persist shapes and editor state together so workspace snapshots cannot drift out of sync.
+  // Auto-save to workspace store through one coordinated snapshot path.
   useEffect(() => {
     if (loadedWorkspaceId !== workspaceId) {
       return;
     }
 
     const timeoutId = setTimeout(() => {
-      updateWorkspaceSnapshot(workspaceId, {
+      saveWorkspaceSnapshot(workspaceId, {
         shapes,
-        state: editorState,
+        state: persistedEditorState,
       });
     }, SAVE_DEBOUNCE_MS);
 
     return () => clearTimeout(timeoutId);
-  }, [editorState, loadedWorkspaceId, shapes, updateWorkspaceSnapshot, workspaceId]);
+  }, [loadedWorkspaceId, persistedEditorState, saveWorkspaceSnapshot, shapes, workspaceId]);
 
   // Helper to save current state to history
   const saveToHistory = useCallback(
@@ -395,72 +234,11 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     []
   );
 
-  // Render canvas when shapes or editor state changes
-  const render = useCallback(() => {
-    if (!engineRef.current) return;
-
-    const engine = engineRef.current;
-    engine.clear();
-    engine.drawGrid(editorState.camera);
-    engine.applyCamera(editorState.camera);
-
-    shapes.forEach((shape) => {
-      const isSelected = editorState.selectedShapeIds.includes(shape.id);
-      engine.drawShape(shape, isSelected);
-    });
-
-    // Draw preview shape while drawing
-    if (currentShapeRef.current) {
-      engine.drawShape(currentShapeRef.current, false);
-    }
-
-    engine.restoreCamera();
-  }, [shapes, editorState.camera, editorState.selectedShapeIds]);
-
-  // Initialize engine
-  useEffect(() => {
-    if (canvasRef.current && !engineRef.current) {
-      engineRef.current = new CanvasEngine(canvasRef.current);
-      render();
-    }
-
-    const handleResize = () => {
-      engineRef.current?.resize();
-      render();
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [render]);
-
-  useEffect(() => {
-    render();
-  }, [shapes, editorState.camera, editorState.selectedShapeIds, render]);
-
-  const screenToWorld = useCallback(
-    (point: Point): Point => {
-      if (!engineRef.current) return point;
-      return engineRef.current.screenToWorld(point, editorState.camera);
-    },
-    [editorState.camera]
-  );
-
-  const worldToScreen = useCallback(
-    (point: Point): Point => {
-      if (!engineRef.current) return point;
-      return engineRef.current.worldToScreen(point, editorState.camera);
-    },
-    [editorState.camera]
-  );
-
   const addShape = useCallback(
     (shape: Shape) => {
       setPresent((prev) => {
         saveToHistory(prev.shapes, prev.editorState);
-        return {
-          ...prev,
-          shapes: [...prev.shapes, shape],
-        };
+        return addShapeToDocument(prev, shape);
       });
     },
     [saveToHistory]
@@ -469,49 +247,46 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const updateShape = useCallback(
     (id: string, updates: Partial<Shape>) => {
       setPresent((prev) => {
-        // Only save to history if the update is significant (not just dragging)
-        const isSignificantUpdate = !updates.bounds || (updates.bounds && !editorState.isDragging);
+        const isEditingActiveText = prev.editorState.editingTextId === id;
+        const isSignificantUpdate =
+          !isEditingActiveText && (!updates.bounds || (updates.bounds && !prev.editorState.isDragging));
+        const nextState = updateShapeInDocument(prev, id, updates);
+        if (nextState === prev) return prev;
 
         if (isSignificantUpdate) {
           saveToHistory(prev.shapes, prev.editorState);
         }
 
-        return {
-          ...prev,
-          shapes: prev.shapes.map((shape) => {
-            if (shape.id !== id) return shape;
-            const updated = { ...shape, ...updates, updatedAt: Date.now() } as Shape;
-            return updated;
-          }),
-        };
+        return nextState;
       });
     },
-    [saveToHistory, editorState.isDragging]
+    [saveToHistory]
+  );
+
+  const updateShapeBounds = useCallback(
+    (id: string, updates: Partial<Shape['bounds']>) => {
+      setPresent((prev) => {
+        const nextState = updateShapeBoundsInDocument(prev, id, updates);
+        if (nextState === prev) return prev;
+
+        if (!prev.editorState.isDragging) {
+          saveToHistory(prev.shapes, prev.editorState);
+        }
+
+        return nextState;
+      });
+    },
+    [saveToHistory]
   );
 
   const deleteShape = useCallback(
     (id: string) => {
       setPresent((prev) => {
+        const nextState = deleteShapeFromDocument(prev, id);
+        if (nextState === prev) return prev;
+
         saveToHistory(prev.shapes, prev.editorState);
-        
-        // Get all shapes to delete (including descendants if it's a group)
-        const idsToDelete = new Set<string>([id]);
-        const shapeToDelete = prev.shapes.find((s) => s.id === id);
-        
-        if (shapeToDelete?.type === 'group') {
-          // Add all descendants
-          const descendants = getGroupDescendants(id, prev.shapes);
-          descendants.forEach((d) => idsToDelete.add(d.id));
-        }
-        
-        return {
-          ...prev,
-          shapes: prev.shapes.filter((shape) => !idsToDelete.has(shape.id)),
-          editorState: {
-            ...prev.editorState,
-            selectedShapeIds: prev.editorState.selectedShapeIds.filter((sid) => !idsToDelete.has(sid)),
-          },
-        };
+        return nextState;
       });
     },
     [saveToHistory]
@@ -521,28 +296,11 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     if (editorState.selectedShapeIds.length === 0) return;
 
     setPresent((prev) => {
+      const nextState = deleteSelectedShapesFromDocument(prev);
+      if (nextState === prev) return prev;
+
       saveToHistory(prev.shapes, prev.editorState);
-      
-      // Collect all IDs to delete (including group descendants)
-      const idsToDelete = new Set<string>();
-      
-      for (const selectedId of prev.editorState.selectedShapeIds) {
-        idsToDelete.add(selectedId);
-        const shape = prev.shapes.find((s) => s.id === selectedId);
-        if (shape?.type === 'group') {
-          const descendants = getGroupDescendants(selectedId, prev.shapes);
-          descendants.forEach((d) => idsToDelete.add(d.id));
-        }
-      }
-      
-      return {
-        ...prev,
-        shapes: prev.shapes.filter((shape) => !idsToDelete.has(shape.id)),
-        editorState: {
-          ...prev.editorState,
-          selectedShapeIds: [],
-        },
-      };
+      return nextState;
     });
   }, [saveToHistory, editorState.selectedShapeIds]);
 
@@ -648,38 +406,15 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   const updateShapeStyle = useCallback(
     (updates: Partial<ShapeStyle>) => {
       setPresent((prev) => {
-        const newShapeStyle = { ...prev.editorState.shapeStyle, ...updates };
         const hasSelection = prev.editorState.selectedShapeIds.length > 0;
+        const nextState = updateSelectedShapeStyleInDocument(prev, updates);
+        if (nextState === prev) return prev;
 
-        // If shapes are selected, apply the style immediately to them
         if (hasSelection) {
           saveToHistory(prev.shapes, prev.editorState);
-          return {
-            ...prev,
-            shapes: prev.shapes.map((shape) =>
-              prev.editorState.selectedShapeIds.includes(shape.id)
-                ? {
-                    ...shape,
-                    style: { ...shape.style, ...updates },
-                    updatedAt: Date.now(),
-                  }
-                : shape
-            ),
-            editorState: {
-              ...prev.editorState,
-              shapeStyle: newShapeStyle,
-            },
-          };
         }
 
-        // Otherwise just update the default style for new shapes
-        return {
-          ...prev,
-          editorState: {
-            ...prev.editorState,
-            shapeStyle: newShapeStyle,
-          },
-        };
+        return nextState;
       });
     },
     [saveToHistory]
@@ -712,20 +447,28 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
 
   // Text editing methods
   const startTextEdit = useCallback((id: string) => {
-    setPresent((prev) => ({
-      ...prev,
-      editorState: {
-        ...prev.editorState,
-        editingTextId: id,
-        selectedShapeIds: [id],
-      },
-    }));
+    setPresent((prev) => {
+      textEditStartStateRef.current = prev;
+
+      return {
+        ...prev,
+        editorState: {
+          ...prev.editorState,
+          editingTextId: id,
+          selectedShapeIds: [id],
+        },
+      };
+    });
   }, []);
 
   const commitTextEdit = useCallback(() => {
     setPresent((prev) => {
-      // Save to history when committing text edit
-      saveToHistory(prev.shapes, prev.editorState);
+      const textEditStartState = textEditStartStateRef.current;
+      if (textEditStartState && textEditStartState.shapes !== prev.shapes) {
+        saveToHistory(textEditStartState.shapes, textEditStartState.editorState);
+      }
+      textEditStartStateRef.current = null;
+
       return {
         ...prev,
         editorState: {
@@ -737,6 +480,8 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
   }, [saveToHistory]);
 
   const cancelTextEdit = useCallback(() => {
+    textEditStartStateRef.current = null;
+
     setPresent((prev) => ({
       ...prev,
       editorState: {
@@ -748,271 +493,97 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
 
   const applyGeneratedDiagram = useCallback(
     (proposal: AgentGenerationProposal) => {
-      if (proposal.actions.length === 0) {
-        return {
-          success: false,
-          error: 'This draft does not include any shapes or connectors to apply.',
-          appliedShapeIds: [],
-        };
-      }
-
-      const validation = validateGenerationProposalForCanvas(
+      const applicationResult = applyGenerationProposalToDocumentState(
+        {
+          shapes,
+          editorState,
+        },
         proposal,
-        shapes.map((shape) => shape.id)
+        Date.now()
       );
-
-      if (!validation.isValid) {
+      if (!applicationResult.success || !applicationResult.state) {
         return {
           success: false,
-          error: validation.error ?? 'The generated diagram is invalid.',
-          appliedShapeIds: [],
+          error: applicationResult.error,
+          appliedShapeIds: applicationResult.appliedShapeIds,
         };
       }
-
-      const timestamp = Date.now();
-      const reservedIds = new Set(shapes.map((shape) => shape.id));
-      const nextShapes = proposal.actions.flatMap((action) => {
-        if (action.type === 'create-connector') {
-          const connector = createGeneratedCanvasConnector(action, editorState.shapeStyle, timestamp);
-          reservedIds.add(connector.id);
-          return [connector];
-        }
-
-        const nodeShape = createGeneratedCanvasShape(action, editorState.shapeStyle, timestamp);
-        reservedIds.add(nodeShape.id);
-
-        if (action.shape.type === 'text' || !action.shape.text?.trim()) {
-          return [nodeShape];
-        }
-
-        const labelShape = createGeneratedNodeLabel(
-          action.shape.id,
-          action.shape.text,
-          action.shape.bounds,
-          mergeGeneratedStyle(editorState.shapeStyle, action.shape.style),
-          timestamp,
-          reservedIds
-        );
-
-        return [nodeShape, labelShape];
-      });
-      const appliedShapeIds = nextShapes.map((shape) => shape.id);
+      const nextState = applicationResult.state;
 
       setPresent((prev) => {
         saveToHistory(prev.shapes, prev.editorState);
-
-        return {
-          shapes: [...prev.shapes, ...nextShapes],
-          editorState: {
-            ...prev.editorState,
-            selectedShapeIds: appliedShapeIds,
-          },
-        };
+        return nextState;
       });
 
       return {
         success: true,
         error: null,
-        appliedShapeIds,
+        appliedShapeIds: applicationResult.appliedShapeIds,
       };
     },
-    [editorState.shapeStyle, saveToHistory, shapes]
+    [editorState, saveToHistory, shapes]
   );
 
   const applyMutationProposal = useCallback(
     (proposal: AgentMutationProposal) => {
-      if (proposal.actions.length === 0) {
-        return {
-          success: false,
-          error: 'This proposal does not include any changes to apply.',
-          appliedShapeIds: [],
-        };
-      }
-
-      const validation = validateMutationProposalForCanvas(proposal, shapes);
-      if (!validation.isValid) {
-        return {
-          success: false,
-          error: validation.error ?? 'The proposed changes are invalid.',
-          appliedShapeIds: [],
-        };
-      }
-
-      const actionLookup = new Map(proposal.actions.map((action) => [action.targetId, action]));
-      const deletedShapeIds = new Set(
-        proposal.actions
-          .filter((action): action is Extract<AgentMutationProposal['actions'][number], { type: 'delete-shape' }> =>
-            action.type === 'delete-shape'
-          )
-          .map((action) => action.targetId)
+      const applicationResult = applyMutationProposalToDocumentState(
+        {
+          shapes,
+          editorState,
+        },
+        proposal,
+        Date.now()
       );
+      if (!applicationResult.success || !applicationResult.state) {
+        return {
+          success: false,
+          error: applicationResult.error,
+          appliedShapeIds: applicationResult.appliedShapeIds,
+        };
+      }
+      const nextState = applicationResult.state;
 
       setPresent((prev) => {
         saveToHistory(prev.shapes, prev.editorState);
-
-        const nextShapes = prev.shapes
-          .filter((shape) => !deletedShapeIds.has(shape.id))
-          .map((shape) => {
-            const action = actionLookup.get(shape.id);
-            if (!action || action.type !== 'update-shape') {
-              return shape;
-            }
-
-            let nextShape: Shape = shape;
-
-            if (action.changes.bounds) {
-              nextShape = applyShapeBounds(nextShape, action.changes.bounds);
-            }
-
-            if (action.changes.style) {
-              nextShape = {
-                ...nextShape,
-                style: {
-                  ...nextShape.style,
-                  ...action.changes.style,
-                },
-              };
-            }
-
-            if (typeof action.changes.text === 'string' && nextShape.type === 'text') {
-              nextShape = {
-                ...nextShape,
-                text: action.changes.text,
-              };
-            }
-
-            return {
-              ...nextShape,
-              updatedAt: Date.now(),
-            };
-          });
-
-        const remainingSelectedIds = proposal.actions
-          .map((action) => action.targetId)
-          .filter((shapeId) => nextShapes.some((shape) => shape.id === shapeId));
-
-        return {
-          shapes: nextShapes,
-          editorState: {
-            ...prev.editorState,
-            selectedShapeIds: remainingSelectedIds,
-          },
-        };
+        return nextState;
       });
-
-      const appliedShapeIds = proposal.actions
-        .map((action) => action.targetId)
-        .filter((shapeId) => !deletedShapeIds.has(shapeId));
 
       return {
         success: true,
         error: null,
-        appliedShapeIds,
+        appliedShapeIds: applicationResult.appliedShapeIds,
       };
     },
-    [saveToHistory, shapes]
+    [editorState, saveToHistory, shapes]
   );
 
   // GROUPING METHODS
 
-  /**
-   * Group selected shapes into a new group
-   */
-  const groupShapes = useCallback((shapeIds: string[]) => {
-    setPresent((prev) => {
-      const normalizedShapeIds = normalizeShapeIdsForSelection(shapeIds, prev.shapes);
-      if (normalizedShapeIds.length < 2) return prev;
+  const groupShapes = useCallback(
+    (shapeIds: string[]) => {
+      setPresent((prev) => {
+        const nextState = groupShapesInDocument(prev, shapeIds);
+        if (nextState === prev) return prev;
 
-      // Find common parent (if all shapes have same parent)
-      const shapesToGroup = prev.shapes.filter((s) => normalizedShapeIds.includes(s.id));
-      if (shapesToGroup.length < 2) return prev;
+        saveToHistory(prev.shapes, prev.editorState);
+        return nextState;
+      });
+    },
+    [saveToHistory]
+  );
 
-      saveToHistory(prev.shapes, prev.editorState);
+  const ungroupShapes = useCallback(
+    (groupId: string) => {
+      setPresent((prev) => {
+        const nextState = ungroupShapesInDocument(prev, groupId);
+        if (nextState === prev) return prev;
 
-      const parentIds = new Set(shapesToGroup.map((s) => s.parentId));
-      const commonParentId = parentIds.size === 1 ? Array.from(parentIds)[0] : undefined;
-
-      // Calculate bounds for the group
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-
-      for (const shape of shapesToGroup) {
-        const bounds = shape.bounds;
-        minX = Math.min(minX, bounds.x);
-        minY = Math.min(minY, bounds.y);
-        maxX = Math.max(maxX, bounds.x + bounds.width);
-        maxY = Math.max(maxY, bounds.y + bounds.height);
-      }
-
-      // Create the group
-      const groupId = createShapeId();
-      const group: GroupShape = {
-        id: groupId,
-        type: 'group',
-        bounds: {
-          x: minX,
-          y: minY,
-          width: maxX - minX,
-          height: maxY - minY,
-        },
-        childrenIds: normalizedShapeIds,
-        style: { ...prev.editorState.shapeStyle },
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        parentId: commonParentId,
-      };
-
-      // Update shapes to set their parentId
-      return {
-        ...prev,
-        shapes: prev.shapes.map((shape) => {
-          if (normalizedShapeIds.includes(shape.id)) {
-            return { ...shape, parentId: groupId };
-          }
-          return shape;
-        }).concat(group),
-        editorState: {
-          ...prev.editorState,
-          selectedShapeIds: [groupId],
-        },
-      };
-    });
-  }, [saveToHistory]);
-
-  /**
-   * Ungroup a group - removes the group and makes children independent
-   */
-  const ungroupShapes = useCallback((groupId: string) => {
-    setPresent((prev) => {
-      const group = prev.shapes.find((s) => s.id === groupId);
-      if (!group || group.type !== 'group') return prev;
-
-      saveToHistory(prev.shapes, prev.editorState);
-
-      const groupShape = group as GroupShape;
-      const childrenIds = groupShape.childrenIds;
-      const grandParentId = groupShape.parentId;
-
-      // Remove parentId from children and set to grandparent (if exists)
-      return {
-        ...prev,
-        shapes: prev.shapes
-          .filter((s) => s.id !== groupId) // Remove the group
-          .map((shape) => {
-            if (childrenIds.includes(shape.id)) {
-              return { ...shape, parentId: grandParentId };
-            }
-            return shape;
-          }),
-        editorState: {
-          ...prev.editorState,
-          selectedShapeIds: childrenIds,
-        },
-      };
-    });
-  }, [saveToHistory]);
+        saveToHistory(prev.shapes, prev.editorState);
+        return nextState;
+      });
+    },
+    [saveToHistory]
+  );
 
   /**
    * Get all shape IDs within a group (including descendants)
@@ -1030,14 +601,11 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
       if (shapeIds.length === 0) return;
 
       setPresent((prev) => {
-        const reorderedShapes = reorderShapesByLayer(shapeIds, prev.shapes, 'front');
-        if (reorderedShapes === prev.shapes) return prev;
+        const nextState = bringShapesToFrontInDocument(prev, shapeIds);
+        if (nextState === prev) return prev;
 
         saveToHistory(prev.shapes, prev.editorState);
-        return {
-          ...prev,
-          shapes: reorderedShapes,
-        };
+        return nextState;
       });
     },
     [saveToHistory]
@@ -1048,14 +616,50 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
       if (shapeIds.length === 0) return;
 
       setPresent((prev) => {
-        const reorderedShapes = reorderShapesByLayer(shapeIds, prev.shapes, 'back');
-        if (reorderedShapes === prev.shapes) return prev;
+        const nextState = sendShapesToBackInDocument(prev, shapeIds);
+        if (nextState === prev) return prev;
 
         saveToHistory(prev.shapes, prev.editorState);
-        return {
-          ...prev,
-          shapes: reorderedShapes,
-        };
+        return nextState;
+      });
+    },
+    [saveToHistory]
+  );
+
+  const alignShapes = useCallback(
+    (shapeIds: string[], alignment: LayoutAlignment) => {
+      setPresent((prev) => {
+        const nextState = alignShapesInDocument(prev, shapeIds, alignment);
+        if (nextState === prev) return prev;
+
+        saveToHistory(prev.shapes, prev.editorState);
+        return nextState;
+      });
+    },
+    [saveToHistory]
+  );
+
+  const distributeShapes = useCallback(
+    (shapeIds: string[], direction: DistributionDirection) => {
+      setPresent((prev) => {
+        const nextState = distributeShapesInDocument(prev, shapeIds, direction);
+        if (nextState === prev) return prev;
+
+        saveToHistory(prev.shapes, prev.editorState);
+        return nextState;
+      });
+    },
+    [saveToHistory]
+  );
+
+  const tidyShapes = useCallback(
+    (shapeIds: string[]) => {
+      setPresent((prev) => {
+        const nextState = tidyShapesInDocument(prev, shapeIds);
+        if (nextState === prev) return prev;
+
+        saveToHistory(prev.shapes, prev.editorState);
+        return nextState;
       });
     },
     [saveToHistory]
@@ -1066,19 +670,36 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     shapes,
     editorState,
     setEditorState: (action: React.SetStateAction<EditorState>) => {
-      setPresent((prev) => ({
-        ...prev,
-        editorState: typeof action === 'function' ? action(prev.editorState) : action,
-      }));
+      setPresent((prev) => {
+        const nextEditorState = typeof action === 'function' ? action(prev.editorState) : action;
+        const isStartingDrag = !prev.editorState.isDragging && nextEditorState.isDragging;
+        const isEndingDrag = prev.editorState.isDragging && !nextEditorState.isDragging;
+
+        if (isStartingDrag) {
+          dragStartStateRef.current = prev;
+        }
+
+        if (isEndingDrag) {
+          const dragStartState = dragStartStateRef.current;
+          if (dragStartState && dragStartState.shapes !== prev.shapes) {
+            saveToHistory(dragStartState.shapes, dragStartState.editorState);
+          }
+          dragStartStateRef.current = null;
+        }
+
+        return {
+          ...prev,
+          editorState: nextEditorState,
+        };
+      });
     },
     addShape,
     updateShape,
+    updateShapeBounds,
     deleteShape,
     deleteSelectedShapes,
     selectShapes,
     clearSelection,
-    screenToWorld,
-    worldToScreen,
     zoomIn,
     zoomOut,
     resetZoom,
@@ -1100,5 +721,8 @@ export function useCanvas(workspaceId: string): UseCanvasReturn {
     getAllShapesInGroup,
     bringShapesToFront,
     sendShapesToBack,
+    alignShapes,
+    distributeShapes,
+    tidyShapes,
   };
 }

@@ -6,6 +6,11 @@ Guide for AI agents working on this TLDraw Clone repository.
 
 React + TypeScript + Vite application - a drawing/canvas clone similar to TLDraw.
 
+Current shell notes:
+- The app uses `src/styles/design-tokens.css` for shared surface, border, text, accent, radius, shadow, and spacing tokens.
+- `src/app/AppShell.tsx` composes the fixed left sidebar, header, canvas stage, floating toolbar, zoom controls, right inspector/agent rail, dialogs, and dev-only design-token panel.
+- The desktop shell reserves a 260px left sidebar. Narrow shells hide the sidebar through container-driven responsive CSS.
+
 ## Build Commands
 
 ```bash
@@ -277,12 +282,17 @@ export function Component({ currentTool, onToolChange }: ComponentProps) {
 
 ```
 src/
+├── app/            # App shell composition and root-level wiring helpers
+├── agents/         # Agent orchestration, transports, and workflow providers
 ├── components/     # React components
 ├── hooks/          # Custom React hooks
 ├── stores/         # Zustand stores
 ├── types/          # TypeScript types/interfaces
 ├── utils/          # Utility functions
 ├── canvas/         # Canvas engine/rendering
+├── document/       # Pure document command and text-style helpers
+├── features/       # Feature-specific models and UI support code
+├── styles/         # Global CSS design tokens
 ├── assets/         # Static assets
 ├── App.tsx         # Root component
 ├── main.tsx        # Entry point
@@ -307,6 +317,8 @@ src/
 - Port 5175 is hardcoded in Vite config
 - Uses localStorage for persistence via Zustand
 - Canvas rendering uses custom `CanvasEngine` class
+- Design-token overrides are available only in Vite dev mode through `DevColorTool` and persist under the `dev-tool-overrides` localStorage key
+- The left sidebar currently provides document/page placeholders plus a layer tree derived from canvas shapes
 
 ## Active Tasks Workflow
 

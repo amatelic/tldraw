@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CanvasEngine } from './CanvasEngine';
+import type { Shape, ShapeStyle } from '../types';
 
 const createMockGradient = () => ({
   addColorStop: vi.fn(),
@@ -24,8 +25,8 @@ const createMockContext = () => ({
   setLineDash: vi.fn(),
   drawImage: vi.fn(),
   fillRect: vi.fn(),
-  strokeRect: vi.fn(),
   fillText: vi.fn(),
+  strokeRect: vi.fn(),
   strokeText: vi.fn(),
   createLinearGradient: vi.fn().mockImplementation(() => createMockGradient()),
   createRadialGradient: vi.fn().mockImplementation(() => createMockGradient()),
@@ -54,6 +55,23 @@ const createMockCanvas = (
   width: 0,
   height: 0,
   style: {} as CSSStyleDeclaration,
+});
+
+const createDefaultStyle = (): ShapeStyle => ({
+  color: '#111111',
+  fillColor: '#111111',
+  fillGradient: null,
+  strokeWidth: 2,
+  strokeStyle: 'solid',
+  fillStyle: 'none',
+  opacity: 1,
+  blendMode: 'source-over',
+  shadows: [],
+  fontSize: 16,
+  fontFamily: 'sans-serif',
+  fontWeight: 'normal',
+  fontStyle: 'normal',
+  textAlign: 'left',
 });
 
 describe('CanvasEngine resize', () => {
@@ -95,6 +113,25 @@ describe('CanvasEngine resize', () => {
     expect(context.scale).toHaveBeenNthCalledWith(2, 2, 2);
     expect(canvas.width).toBe(1000);
     expect(canvas.height).toBe(640);
+  });
+});
+
+describe('CanvasEngine text measurement', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('measures text width without exposing the rendering context', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    context.font = '12px serif';
+    context.measureText = vi.fn().mockReturnValue({ width: 84 });
+    const canvas = createMockCanvas(context, 640, 480);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    expect(engine.measureTextWidth('Hello', 'bold 20px sans-serif')).toBe(84);
+    expect(context.measureText).toHaveBeenCalledWith('Hello');
+    expect(context.font).toBe('12px serif');
   });
 });
 
@@ -190,6 +227,30 @@ describe('CanvasEngine gradients', () => {
   });
 });
 
+describe('CanvasEngine grid rendering', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders grid lines in screen space after applying camera pan and zoom', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    const canvas = createMockCanvas(context, 100, 80);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    engine.drawGrid({ x: 10, y: 20, zoom: 2 }, 20);
+
+    expect(context.moveTo).toHaveBeenCalledWith(10, 0);
+    expect(context.lineTo).toHaveBeenCalledWith(10, 80);
+    expect(context.moveTo).toHaveBeenCalledWith(50, 0);
+    expect(context.lineTo).toHaveBeenCalledWith(50, 80);
+    expect(context.moveTo).toHaveBeenCalledWith(0, 20);
+    expect(context.lineTo).toHaveBeenCalledWith(100, 20);
+    expect(context.moveTo).toHaveBeenCalledWith(0, 60);
+    expect(context.lineTo).toHaveBeenCalledWith(100, 60);
+  });
+});
+
 describe('CanvasEngine arrows', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -242,128 +303,166 @@ describe('CanvasEngine arrows', () => {
   });
 });
 
-describe('CanvasEngine exports', () => {
+describe('CanvasEngine audio cards', () => {
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it('renders a shape collection onto an offscreen canvas for PNG export', () => {
-    const context = createMockContext();
-    const exportCanvas = {
-      ...createMockCanvas(context, 0, 0),
-      toDataURL: vi.fn(() => 'data:image/png;base64,exported'),
-    };
-    const originalCreateElement = document.createElement.bind(document);
-
-    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
-      if (tagName === 'canvas') {
-        return exportCanvas as unknown as HTMLCanvasElement;
-      }
-
-      return originalCreateElement(tagName);
-    }) as typeof document.createElement);
-
-    const dataUrl = CanvasEngine.exportShapesToPng(
-      [
-        {
-          id: 'rect-1',
-          type: 'rectangle',
-          bounds: { x: 10, y: 20, width: 100, height: 60 },
-          style: {
-            color: '#111111',
-            fillColor: '#2563eb',
-            fillGradient: null,
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            fillStyle: 'solid',
-            opacity: 1,
-            blendMode: 'source-over',
-            shadows: [],
-            fontSize: 16,
-            fontFamily: 'sans-serif',
-            fontWeight: 'normal',
-            fontStyle: 'normal',
-            textAlign: 'left',
-          },
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        },
-      ],
-      { padding: 12, scale: 1 }
-    );
-
-    expect(dataUrl).toBe('data:image/png;base64,exported');
-    expect(context.fillRect).toHaveBeenCalledWith(0, 0, 124, 84);
-    expect(context.translate).toHaveBeenCalledWith(2, -8);
-    expect(context.rect).toHaveBeenCalledWith(10, 20, 100, 60);
-    expect(exportCanvas.toDataURL).toHaveBeenCalledWith('image/png');
+  const createAudioShape = (
+    overrides: Partial<Extract<Shape, { type: 'audio' }>> = {}
+  ): Extract<Shape, { type: 'audio' }> => ({
+    id: 'audio-1',
+    type: 'audio' as const,
+    bounds: { x: 10, y: 20, width: 300, height: 100 },
+    src: 'audio.mp3',
+    duration: 65,
+    isPlaying: false,
+    waveformData: [0.2, 0.8, 0.45, 1],
+    isBase64: false,
+    style: createDefaultStyle(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...overrides,
   });
 
-  it('serializes the provided shapes into SVG markup', () => {
-    const svg = CanvasEngine.exportShapesToSvg(
+  it('draws audio shapes as rounded media cards', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    const canvas = createMockCanvas(context, 640, 480);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    engine.drawShape(createAudioShape());
+
+    expect(context.quadraticCurveTo).toHaveBeenCalled();
+    expect(context.arc).toHaveBeenCalledWith(160, 70, expect.any(Number), 0, Math.PI * 2);
+    expect(context.measureText).toHaveBeenCalledWith('1:05');
+    expect(context.fillText).toHaveBeenCalledWith('1:05', expect.any(Number), expect.any(Number));
+    expect(context.fillRect).toHaveBeenCalledTimes(4);
+  });
+
+  it('draws pause bars over the card button while audio is playing', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    const canvas = createMockCanvas(context, 640, 480);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    engine.drawShape(createAudioShape({ isPlaying: true, waveformData: [0.5] }));
+
+    expect(context.fillRect).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('CanvasEngine text typography', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses style typography as a compatibility fallback for legacy text shapes', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    const canvas = createMockCanvas(context, 640, 480);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    engine.drawShape({
+      id: 'text-legacy',
+      type: 'text',
+      bounds: { x: 40, y: 50, width: 180, height: 60 },
+      text: 'Legacy text',
+      style: {
+        color: '#111111',
+        fillColor: '#ffffff',
+        fillGradient: null,
+        strokeWidth: 2,
+        strokeStyle: 'solid',
+        fillStyle: 'none',
+        opacity: 1,
+        blendMode: 'source-over',
+        shadows: [],
+        fontSize: 24,
+        fontFamily: 'Georgia',
+        fontWeight: 'bold',
+        fontStyle: 'italic',
+        textAlign: 'center',
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    } as unknown as Parameters<CanvasEngine['drawShape']>[0]);
+
+    expect(context.font).toBe('italic bold 24px Georgia');
+    expect(context.textAlign).toBe('center');
+  });
+});
+
+describe('CanvasEngine groups', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('derives the group label count from parent relationships', () => {
+    vi.stubGlobal('devicePixelRatio', 1);
+    const context = createMockContext();
+    const canvas = createMockCanvas(context, 640, 480);
+    const engine = new CanvasEngine(canvas as unknown as HTMLCanvasElement);
+
+    const now = Date.now();
+    const groupStyle = {
+      color: '#111111',
+      fillColor: '#ffffff',
+      fillGradient: null,
+      strokeWidth: 2,
+      strokeStyle: 'solid',
+      fillStyle: 'none',
+      opacity: 1,
+      blendMode: 'source-over' as const,
+      shadows: [],
+      fontSize: 16,
+      fontFamily: 'sans-serif',
+      fontWeight: 'normal' as const,
+      fontStyle: 'normal' as const,
+      textAlign: 'left' as const,
+    };
+
+    engine.drawShape(
+      {
+        id: 'group-1',
+        type: 'group',
+        bounds: { x: 10, y: 20, width: 200, height: 120 },
+        style: groupStyle,
+        createdAt: now,
+        updatedAt: now,
+      },
+      false,
+      true,
       [
+        {
+          id: 'group-1',
+          type: 'group',
+          bounds: { x: 10, y: 20, width: 200, height: 120 },
+          style: groupStyle,
+          createdAt: now,
+          updatedAt: now,
+        },
         {
           id: 'rect-1',
           type: 'rectangle',
-          bounds: { x: 20, y: 20, width: 120, height: 80 },
-          style: {
-            color: '#111111',
-            fillColor: '#fde68a',
-            fillGradient: null,
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            fillStyle: 'solid',
-            opacity: 1,
-            blendMode: 'source-over',
-            shadows: [],
-            fontSize: 16,
-            fontFamily: 'sans-serif',
-            fontWeight: 'normal',
-            fontStyle: 'normal',
-            textAlign: 'left',
-          },
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+          bounds: { x: 20, y: 30, width: 40, height: 40 },
+          style: groupStyle,
+          createdAt: now,
+          updatedAt: now,
+          parentId: 'group-1',
         },
         {
-          id: 'text-1',
-          type: 'text',
-          bounds: { x: 40, y: 40, width: 100, height: 30 },
-          text: 'Quarterly Plan',
-          fontSize: 18,
-          fontFamily: 'Georgia',
-          fontWeight: 'bold',
-          fontStyle: 'italic',
-          textAlign: 'center',
-          style: {
-            color: '#1f2937',
-            fillColor: '#ffffff',
-            fillGradient: null,
-            strokeWidth: 2,
-            strokeStyle: 'solid',
-            fillStyle: 'none',
-            opacity: 1,
-            blendMode: 'source-over',
-            shadows: [],
-            fontSize: 18,
-            fontFamily: 'Georgia',
-            fontWeight: 'bold',
-            fontStyle: 'italic',
-            textAlign: 'center',
-          },
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+          id: 'rect-2',
+          type: 'rectangle',
+          bounds: { x: 80, y: 30, width: 40, height: 40 },
+          style: groupStyle,
+          createdAt: now,
+          updatedAt: now,
+          parentId: 'group-1',
         },
-      ],
-      { padding: 10 }
+      ]
     );
 
-    expect(svg).toContain('<?xml version="1.0" encoding="UTF-8"?>');
-    expect(svg).toContain('<svg');
-    expect(svg).toContain('viewBox="0 0 140 100"');
-    expect(svg).toContain('<rect width="140" height="100" fill="#ffffff" />');
-    expect(svg).toContain('Quarterly Plan');
-    expect(svg).toContain('font-family="Georgia"');
+    expect(context.fillText).toHaveBeenCalledWith('Group (2)', 14, 4);
   });
 });

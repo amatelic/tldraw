@@ -1,0 +1,45 @@
+id: hook-no-inline-shape-literals
+valid:
+  - |
+    export function useCreateShape() {
+      return createImageShapeFromUpload({
+        center,
+        src,
+        isBase64: false,
+        originalWidth: 600,
+        originalHeight: 300,
+        style,
+      });
+    }
+  - |
+    export function createShapeOutsideHook() {
+      const shape = {
+        id: createShapeId(),
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style,
+      };
+      return shape;
+    }
+invalid:
+  - |
+    export function useCreateShape() {
+      const shape = {
+        id: createShapeId(),
+        type: 'rectangle',
+        bounds: { x: 0, y: 0, width: 100, height: 100 },
+        style,
+      };
+      return shape;
+    }
+  - |
+    export function useCreateTextShape() {
+      const shape: Shape = {
+        id: createShapeId(),
+        type: 'text',
+        bounds: { x: 0, y: 0, width: 200, height: 100 },
+        text: '',
+        style,
+      };
+      return shape;
+    }

@@ -1,19 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Canvas } from './Canvas';
-import type { Shape, ShapeStyle, TextShape, Point } from '../types';
+import type { CameraState, Shape, ShapeStyle, TextShape, Point } from '../types';
 
 // Mock the CanvasEngine
 vi.mock('../canvas/CanvasEngine', () => ({
+  screenToWorldPoint: (point: Point, camera: CameraState) => ({
+    x: (point.x - camera.x) / camera.zoom,
+    y: (point.y - camera.y) / camera.zoom,
+  }),
+  worldToScreenPoint: (point: Point, camera: CameraState) => ({
+    x: point.x * camera.zoom + camera.x,
+    y: point.y * camera.zoom + camera.y,
+  }),
   CanvasEngine: class {
     clear = vi.fn();
     drawGrid = vi.fn();
     applyCamera = vi.fn();
     restoreCamera = vi.fn();
     drawShape = vi.fn();
-    screenToWorld = vi.fn((point: Point) => point);
-    worldToScreen = vi.fn((point: Point) => point);
+    screenToWorld = vi.fn((point: Point, camera: CameraState) => ({
+      x: (point.x - camera.x) / camera.zoom,
+      y: (point.y - camera.y) / camera.zoom,
+    }));
+    worldToScreen = vi.fn((point: Point, camera: CameraState) => ({
+      x: point.x * camera.zoom + camera.x,
+      y: point.y * camera.zoom + camera.y,
+    }));
     resize = vi.fn();
+    measureTextWidth = vi.fn(() => 100);
     ctx = {
       font: '',
       measureText: vi.fn(() => ({ width: 100 })),
@@ -73,8 +88,6 @@ describe('Canvas Text Editing', () => {
     onDrawingChange: vi.fn(),
     onPan: vi.fn(),
     onZoomAt: vi.fn(),
-    screenToWorld: vi.fn((point) => point),
-    worldToScreen: vi.fn((point) => point),
     onTextEditStart: vi.fn(),
     onTextEditCommit: vi.fn(),
     onTextEditCancel: vi.fn(),
@@ -169,6 +182,44 @@ describe('Canvas Text Editing', () => {
         textAlign: 'center',
       });
       
+      render(
+        <Canvas
+          {...defaultProps}
+          shapes={[textShape]}
+          selectedIds={[textShape.id]}
+          editingTextId={textShape.id}
+        />
+      );
+
+      const textarea = screen.getByRole('textbox');
+      expect(textarea).toHaveStyle({
+        fontSize: '24px',
+        fontFamily: 'Arial',
+        fontWeight: 'bold',
+        fontStyle: 'italic',
+        textAlign: 'center',
+      });
+    });
+
+    it('should fall back to style typography for legacy text shapes missing top-level fields', () => {
+      const textShape = {
+        ...createTextShape(),
+        style: {
+          ...mockShapeStyle,
+          fontSize: 24,
+          fontFamily: 'Arial',
+          fontWeight: 'bold',
+          fontStyle: 'italic',
+          textAlign: 'center',
+        },
+      } as TextShape;
+
+      delete (textShape as Partial<TextShape>).fontSize;
+      delete (textShape as Partial<TextShape>).fontFamily;
+      delete (textShape as Partial<TextShape>).fontWeight;
+      delete (textShape as Partial<TextShape>).fontStyle;
+      delete (textShape as Partial<TextShape>).textAlign;
+
       render(
         <Canvas
           {...defaultProps}
@@ -461,12 +512,7 @@ describe('Canvas Text Editing', () => {
       const textShape = createTextShape({
         bounds: { x: 100, y: 100, width: 200, height: 100 },
       });
-      
-      const worldToScreen = vi.fn((point) => ({
-        x: (point.x * 2) + 50, // zoom: 2, pan: 50
-        y: (point.y * 2) + 30, // zoom: 2, pan: 30
-      }));
-      
+
       render(
         <Canvas
           {...defaultProps}
@@ -474,7 +520,6 @@ describe('Canvas Text Editing', () => {
           selectedIds={[textShape.id]}
           editingTextId={textShape.id}
           camera={{ x: 50, y: 30, zoom: 2 }}
-          worldToScreen={worldToScreen}
         />
       );
 

@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Workspace } from '../stores/workspaceStore';
 import type { ShapeStyle } from '../types';
 import {
-  createCanvasExportFilename,
   createWorkspaceExportFilename,
-  downloadDataUrlExport,
-  downloadStringExport,
   downloadWorkspaceExport,
   serializeWorkspaceForExport,
 } from './workspaceExport';
@@ -35,10 +32,7 @@ function createWorkspaceFixture(): Workspace {
       tool: 'select',
       selectedShapeIds: ['group-root'],
       camera: { x: 120, y: 48, zoom: 1.5 },
-      isDragging: true,
-      isDrawing: false,
       shapeStyle: { ...baseStyle },
-      editingTextId: 'text-1',
     },
     shapes: [
       {
@@ -48,7 +42,6 @@ function createWorkspaceFixture(): Workspace {
         style: { ...baseStyle },
         createdAt: 10,
         updatedAt: 20,
-        childrenIds: ['rect-1', 'group-nested'],
       },
       {
         id: 'rect-1',
@@ -67,7 +60,6 @@ function createWorkspaceFixture(): Workspace {
         createdAt: 12,
         updatedAt: 22,
         parentId: 'group-root',
-        childrenIds: ['text-1'],
       },
       {
         id: 'text-1',
@@ -176,15 +168,44 @@ describe('workspaceExport', () => {
     expect(fileName).toBe('api-review-v2-final-2026-04-16T09-15-30Z.json');
   });
 
-  it('should generate scoped filenames for canvas asset exports', () => {
-    const fileName = createCanvasExportFilename(
-      '  API Review: v2 / Final  ',
-      'svg',
-      'selection',
-      new Date('2026-04-16T09:15:30.000Z')
-    );
+  it('should export text typography from the canonical text fields even for legacy style-only shapes', () => {
+    const workspace = createWorkspaceFixture();
+    workspace.shapes[3] = {
+      id: 'text-legacy',
+      type: 'text',
+      bounds: { x: 130, y: 40, width: 80, height: 30 },
+      text: 'Queue',
+      style: {
+        ...baseStyle,
+        fontSize: 22,
+        fontFamily: 'Georgia',
+        fontWeight: 'bold',
+        fontStyle: 'italic',
+        textAlign: 'center',
+      },
+      createdAt: 13,
+      updatedAt: 23,
+      parentId: 'group-nested',
+    } as Workspace['shapes'][number];
 
-    expect(fileName).toBe('api-review-v2-final-selection-2026-04-16T09-15-30Z.svg');
+    const result = serializeWorkspaceForExport(workspace);
+    const textNode = result.content.nodes.find((node) => node.id === 'text-legacy');
+
+    expect(textNode).toMatchObject({
+      type: 'text',
+      fontSize: 22,
+      fontFamily: 'Georgia',
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      textAlign: 'center',
+      style: {
+        fontSize: 22,
+        fontFamily: 'Georgia',
+        fontWeight: 'bold',
+        fontStyle: 'italic',
+        textAlign: 'center',
+      },
+    });
   });
 
   it('should download the serialized export document as JSON', async () => {
@@ -215,52 +236,5 @@ describe('workspaceExport', () => {
     expect(blob).toBeInstanceOf(Blob);
     await expect(blob?.text()).resolves.toContain('"format": "tldraw-workspace-export"');
     await expect(blob?.text()).resolves.toContain('"rootNodeIds": [');
-  });
-
-  it('should download data-url based canvas exports without creating a blob', () => {
-    const clickSpy = vi.fn();
-
-    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
-      if (tagName !== 'a') {
-        return document.createElement(tagName);
-      }
-
-      return {
-        href: '',
-        download: '',
-        click: clickSpy,
-      } as unknown as HTMLAnchorElement;
-    }) as typeof document.createElement);
-
-    downloadDataUrlExport('data:image/png;base64,AAA', 'diagram-viewport.png');
-
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('should download string-based canvas exports as blobs', async () => {
-    const createObjectURLSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:svg');
-    const revokeObjectURLSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const clickSpy = vi.fn();
-
-    vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
-      if (tagName !== 'a') {
-        return document.createElement(tagName);
-      }
-
-      return {
-        href: '',
-        download: '',
-        click: clickSpy,
-      } as unknown as HTMLAnchorElement;
-    }) as typeof document.createElement);
-
-    downloadStringExport('<svg />', 'diagram-selection.svg', 'image/svg+xml');
-
-    expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:svg');
-
-    const blob = createObjectURLSpy.mock.calls[0]?.[0];
-    expect(blob).toBeInstanceOf(Blob);
-    await expect(blob?.text()).resolves.toBe('<svg />');
   });
 });

@@ -3,45 +3,48 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentGenerationProposal } from '../types/agents';
 import { useCanvas } from './useCanvas';
 
-vi.mock('../stores/workspaceStore', () => ({
-  useWorkspaceStore: () => ({
-    workspaces: [],
-    activeWorkspaceId: 'test-workspace',
-    getWorkspace: vi.fn(() => ({
-      id: 'test-workspace',
-      name: 'Test',
-      shapes: [],
-      state: {
-        tool: 'select',
-        selectedShapeIds: [],
-        camera: { x: 0, y: 0, zoom: 1 },
-        isDragging: false,
-        isDrawing: false,
-        shapeStyle: {
-          color: '#000000',
-          fillColor: '#ffffff',
-          strokeWidth: 2,
-          strokeStyle: 'solid',
-          fillStyle: 'none',
-          opacity: 1,
-          blendMode: 'source-over',
-          shadows: [],
-          fontSize: 16,
-          fontFamily: 'sans-serif',
-          fontWeight: 'normal',
-          fontStyle: 'normal',
-          textAlign: 'left',
+vi.mock('../stores/workspaceStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../stores/workspaceStore')>();
+
+  return {
+    ...actual,
+    useWorkspaceStore: () => ({
+      workspaces: [],
+      activeWorkspaceId: 'test-workspace',
+      getWorkspace: vi.fn(() => ({
+        id: 'test-workspace',
+        name: 'Test',
+        shapes: [],
+        state: {
+          tool: 'select',
+          selectedShapeIds: [],
+          camera: { x: 0, y: 0, zoom: 1 },
+          isDragging: false,
+          isDrawing: false,
+          shapeStyle: {
+            color: '#000000',
+            fillColor: '#ffffff',
+            strokeWidth: 2,
+            strokeStyle: 'solid',
+            fillStyle: 'none',
+            opacity: 1,
+            blendMode: 'source-over',
+            shadows: [],
+            fontSize: 16,
+            fontFamily: 'sans-serif',
+            fontWeight: 'normal',
+            fontStyle: 'normal',
+            textAlign: 'left',
+          },
+          editingTextId: null,
         },
-        editingTextId: null,
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })),
-    updateWorkspaceSnapshot: vi.fn(),
-    updateWorkspaceShapes: vi.fn(),
-    updateWorkspaceState: vi.fn(),
-  }),
-}));
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })),
+      saveWorkspaceSnapshot: vi.fn(),
+    }),
+  };
+});
 
 const workspaceId = 'test-workspace';
 
